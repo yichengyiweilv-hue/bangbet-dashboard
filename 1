@@ -12052,6 +12052,10 @@
       // 1. 配色与基础工具函数
       // ===========================
 
+      // ===========================
+      // 1. 配色与基础工具函数
+      // ===========================
+
       const MONTH_COLOR_MAP = {
         "2025-09": "#f97316",
         "2025-10": "#2563eb",
@@ -12071,6 +12075,21 @@
 
       function getColorForMonth(month, idx) {
         if (MONTH_COLOR_MAP[month]) return MONTH_COLOR_MAP[month];
+        return DEFAULT_COLOR_PALETTE[idx % DEFAULT_COLOR_PALETTE.length];
+      }
+
+      // 新增：国家固定配色（所有日折线用这个）
+      const COUNTRY_COLOR_MAP = {
+        GH: "#2563eb",
+        KE: "#16a34a",
+        NG: "#f97316",
+        TZ: "#7c3aed",
+        UG: "#ef4444",
+      };
+
+      // 如果以后有新国家，自动 fallback 到默认调色板
+      function getColorForCountry(country, idx) {
+        if (COUNTRY_COLOR_MAP[country]) return COUNTRY_COLOR_MAP[country];
         return DEFAULT_COLOR_PALETTE[idx % DEFAULT_COLOR_PALETTE.length];
       }
 
@@ -12255,47 +12274,72 @@
       }
 
       // 通用：按日生成折线 series
+      // 通用：按日生成折线 series（按国家聚合，跨月不断线）
       function buildDailySeries(months, countries, metricDefs) {
+        // 1）先收集所有日期 & 按国家聚合行
         const dateSet = new Set();
+        const rowsByCountry = {};
+
         months.forEach((month) => {
           const rows = RAW_ORGANIC_BY_MONTH[month] || [];
           rows.forEach((row) => {
+            if (!row.date) return;
             if (countries.indexOf(row.country) === -1) return;
-            if (row.date) dateSet.add(row.date);
+
+            dateSet.add(row.date);
+
+            const c = row.country;
+            if (!rowsByCountry[c]) rowsByCountry[c] = [];
+            rowsByCountry[c].push(row);
           });
         });
+
+        // x 轴：所有选中月份内的日期，排序后当成连续时间轴
         const dates = Array.from(dateSet).sort();
         const dateIndex = new Map();
         dates.forEach((d, i) => dateIndex.set(d, i));
 
         const series = [];
-        months.forEach((month, mi) => {
-          const rowsMonth = RAW_ORGANIC_BY_MONTH[month] || [];
-          countries.forEach((country) => {
-            const rows = rowsMonth.filter((r) => r.country === country);
-            if (!rows.length) return;
 
-            metricDefs.forEach((metric) => {
-              const data = new Array(dates.length).fill(null);
-              rows.forEach((row) => {
-                const idx = dateIndex.get(row.date);
-                if (idx == null) return;
-                let value = metric.getValue(row);
-                if (value == null || Number.isNaN(value)) {
-                  data[idx] = null;
-                } else {
-                  data[idx] = Number(value.toFixed(2));
-                }
-              });
-              series.push({
-                name: country + " · " + month + " · " + metric.label,
-                type: "line",
-                smooth: true,
-                symbolSize: 3,
-                connectNulls: false,
-                lineStyle: Object.assign({ width: 2 }, metric.lineStyle || {}),
-                data,
-              });
+        // 2）每个「国家 × 指标」是一条连续曲线（跨月合并）
+        countries.forEach((country, ci) => {
+          const rows = rowsByCountry[country] || [];
+          if (!rows.length) return;
+
+          const baseColor = getColorForCountry(country, ci);
+
+          metricDefs.forEach((metric) => {
+            const data = new Array(dates.length).fill(null);
+
+            rows.forEach((row) => {
+              const idx = dateIndex.get(row.date);
+              if (idx == null) return;
+              let value = metric.getValue(row);
+              if (value == null || Number.isNaN(value)) {
+                data[idx] = null;
+              } else {
+                data[idx] = Number(value.toFixed(2));
+              }
+            });
+
+            const lineStyle = Object.assign(
+              { width: 2, color: baseColor },
+              metric.lineStyle || {}
+            );
+
+            series.push({
+              // 图例不再拆到“国家 × 月份”，只保留“国家 × 指标”
+              // 例如：GH · D0、GH · D7
+              name: country + " · " + metric.label,
+              type: "line",
+              smooth: true,
+              symbolSize: 3,
+              // 关键：跨缺失点也连线，9-30 到 10-01 不再断
+              connectNulls: true,
+              color: baseColor,
+              itemStyle: { color: baseColor },
+              lineStyle,
+              data,
             });
           });
         });
