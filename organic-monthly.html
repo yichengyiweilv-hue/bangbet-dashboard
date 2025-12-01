@@ -510,6 +510,67 @@
           text-align: left;
         }
       }
+      /* ========= 图下方数据表 ========= */
+      .chart-table-section {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px dashed rgba(148, 163, 184, 0.5);
+      }
+
+      .chart-table-title {
+        font-size: 11px;
+        color: var(--text-sub);
+        margin-bottom: 4px;
+      }
+
+      .chart-table-wrapper {
+        max-height: 260px;
+        overflow: auto;
+        border-radius: 6px;
+        border: 1px solid rgba(209, 213, 219, 0.9);
+        background: #ffffff;
+      }
+
+      table.chart-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+
+      .chart-table thead th,
+      .chart-table tbody td {
+        padding: 4px 8px;
+        border-bottom: 1px solid #f3f4f6;
+        white-space: nowrap;
+      }
+
+      .chart-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #f9fafb;
+        text-align: center;
+        font-weight: 500;
+        color: var(--text-sub);
+      }
+
+      .chart-table tbody tr:nth-child(odd) td {
+        background: #fcfcff;
+      }
+
+      .chart-table tbody tr:hover td {
+        background: #eef2ff;
+      }
+
+      .chart-table td.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .chart-table td.highlight {
+        color: #d4380d;
+        font-weight: 600;
+      }
     </style>
   </head>
 
@@ -609,6 +670,15 @@
             <strong>示例用途：</strong>
             对比各国家自然盘体量变化，结合日维度折线快速定位峰值与异常波动，追溯具体日期的活动或外部事件。
           </div>
+          <div class="chart-table-section">
+            <div class="chart-table-title">
+              当前筛选 · 自然新增注册（月度汇总）
+            </div>
+            <div class="chart-table-wrapper">
+              <table id="table-registrations" class="chart-table"></table>
+            </div>
+          </div>
+
           <div class="chart-comment" data-comment-key="organic-registrations">
             <div class="chart-comment-label">
               <span>我的备注（注册规模 &amp; 日期波动）</span>
@@ -689,6 +759,15 @@
             判断各国家自然盘变现质量是否稳定，D0 更敏感于首日活动刺激，D7
             更反映整体价值密度。
           </div>
+          <div class="chart-table-section">
+            <div class="chart-table-title">
+              当前筛选 · 自然用户 D0 / D7 付费率（月度）
+            </div>
+            <div class="chart-table-wrapper">
+              <table id="table-payrate" class="chart-table"></table>
+            </div>
+          </div>
+
           <div class="chart-comment" data-comment-key="organic-payrate">
             <div class="chart-comment-label">
               <span>我的备注（付费率变化 &amp; 背景）</span>
@@ -767,6 +846,15 @@
             观察自然盘高价值付费用户的贡献情况，叠加付费率一起看，可以拆出“更多人付费”
             还是“同样人付得更多”。
           </div>
+          <div class="chart-table-section">
+            <div class="chart-table-title">
+              当前筛选 · 自然用户 D0 / D7 ARPPU（月度）
+            </div>
+            <div class="chart-table-wrapper">
+              <table id="table-arppu" class="chart-table"></table>
+            </div>
+          </div>
+
           <div class="chart-comment" data-comment-key="organic-arppu">
             <div class="chart-comment-label">
               <span>我的备注（高价值付费用户 &amp; 国家差异）</span>
@@ -947,6 +1035,15 @@
             <strong>示例用途：</strong>
             判断各国家自然盘更偏向体育还是游戏，为后续素材方向与产品推荐策略提供依据。
           </div>
+          <div class="chart-table-section">
+            <div class="chart-table-title">
+              当前筛选 · 体育 vs 游戏玩家比例（月度）
+            </div>
+            <div class="chart-table-wrapper">
+              <table id="table-ratio" class="chart-table"></table>
+            </div>
+          </div>
+
           <div class="chart-comment" data-comment-key="organic-ratio">
             <div class="chart-comment-label">
               <span>我的备注（体育/游戏结构 &amp; 投放素材方向）</span>
@@ -1003,6 +1100,16 @@
             识别“拉新有效性”和“短期粘性”，同时看 D1 和
             D7，能拆出是注册当天质量问题还是后续运营跟进不足。
           </div>
+
+          <div class="chart-table-section">
+            <div class="chart-table-title">
+              当前筛选 · 次日 / 7 日留存率 &amp; 次日至七日流失率（月度）
+            </div>
+            <div class="chart-table-wrapper">
+              <table id="table-retention" class="chart-table"></table>
+            </div>
+          </div>
+
           <div class="chart-comment" data-comment-key="organic-retention">
             <div class="chart-comment-label">
               <span>我的备注（留存问题 &amp; 动作）</span>
@@ -12501,6 +12608,358 @@
           which === "D1" ? row.D1_retained_users : row.D7_retained_users;
         return safeDivide(retained, row.registration, 100);
       }
+      // ===========================
+      // 3. 图下方数据表渲染工具
+      // ===========================
+
+      function formatMonthShort(month) {
+        if (!month) return "";
+        var parts = String(month).split("-");
+        if (parts.length === 2) {
+          var m = parseInt(parts[1], 10);
+          if (!isNaN(m)) return m + "月";
+        }
+        return String(month);
+      }
+
+      function formatPercent(v) {
+        if (v == null || !isFinite(v)) return "-";
+        return v.toFixed(1) + "%";
+      }
+
+      function formatNumber1(v) {
+        if (v == null || !isFinite(v)) return "-";
+        return v.toFixed(1);
+      }
+
+      function formatInteger(v) {
+        if (v == null || !isFinite(v)) return "-";
+        return Math.round(v).toLocaleString();
+      }
+
+      function getAgg(month, country) {
+        var byMonth = AGG_MONTH[month];
+        if (!byMonth) return null;
+        return byMonth[country] || null;
+      }
+
+      function renderEmptyTable(tableEl) {
+        if (!tableEl) return;
+        tableEl.innerHTML =
+          "<tbody><tr><td>无数据：请先在上方选择国家和月份</td></tr></tbody>";
+      }
+
+      // 1）自然注册量表：国家 × 月注册总数
+      function updateRegTable(months, countries) {
+        var table = document.getElementById("table-registrations");
+        if (!table) return;
+
+        var ms = months && months.length ? months : [];
+        var cs = countries && countries.length ? countries : [];
+        if (!ms.length || !cs.length) {
+          renderEmptyTable(table);
+          return;
+        }
+
+        var thead = document.createElement("thead");
+        var headRow = document.createElement("tr");
+        var headHtml = "<th>国家</th>";
+        ms.forEach(function (m) {
+          headHtml += "<th>" + formatMonthShort(m) + " 注册</th>";
+        });
+        headRow.innerHTML = headHtml;
+        thead.appendChild(headRow);
+
+        var tbody = document.createElement("tbody");
+        var sortedCountries = Array.from(cs).sort();
+
+        sortedCountries.forEach(function (c) {
+          var tr = document.createElement("tr");
+          var tdCountry = document.createElement("td");
+          tdCountry.textContent = c;
+          tr.appendChild(tdCountry);
+
+          ms.forEach(function (m) {
+            var td = document.createElement("td");
+            td.className = "num";
+            var agg = getAgg(m, c);
+            var v = agg ? Number(agg.registration || 0) : null;
+            td.textContent = v == null ? "-" : formatInteger(v);
+            tr.appendChild(td);
+          });
+
+          tbody.appendChild(tr);
+        });
+
+        table.innerHTML = "";
+        table.appendChild(thead);
+        table.appendChild(tbody);
+      }
+
+      // 2）付费率表：国家 × (每月 D0 / D7 付费率)
+      function updatePayTable(months, countries) {
+        var table = document.getElementById("table-payrate");
+        if (!table) return;
+
+        var ms = months && months.length ? months : [];
+        var cs = countries && countries.length ? countries : [];
+        if (!ms.length || !cs.length) {
+          renderEmptyTable(table);
+          return;
+        }
+
+        var thead = document.createElement("thead");
+        var headRow = document.createElement("tr");
+        var headHtml = "<th>国家</th>";
+        ms.forEach(function (m) {
+          var label = formatMonthShort(m);
+          headHtml += "<th>" + label + " D0</th><th>" + label + " D7</th>";
+        });
+        headRow.innerHTML = headHtml;
+        thead.appendChild(headRow);
+
+        var tbody = document.createElement("tbody");
+        var sortedCountries = Array.from(cs).sort();
+
+        sortedCountries.forEach(function (c) {
+          var tr = document.createElement("tr");
+          var tdCountry = document.createElement("td");
+          tdCountry.textContent = c;
+          tr.appendChild(tdCountry);
+
+          ms.forEach(function (m) {
+            var agg = getAgg(m, c);
+            var d0 = null;
+            var d7 = null;
+            if (agg && agg.registration > 0) {
+              d0 = payRateFromAgg(agg, "D0"); // 0–100
+              d7 = payRateFromAgg(agg, "D7");
+            }
+
+            var td0 = document.createElement("td");
+            td0.className = "num";
+            td0.textContent = d0 == null ? "-" : formatPercent(d0);
+            tr.appendChild(td0);
+
+            var td7 = document.createElement("td");
+            td7.className = "num";
+            td7.textContent = d7 == null ? "-" : formatPercent(d7);
+            tr.appendChild(td7);
+          });
+
+          tbody.appendChild(tr);
+        });
+
+        table.innerHTML = "";
+        table.appendChild(thead);
+        table.appendChild(tbody);
+      }
+
+      // 3）ARPPU 表：国家 × (每月 D0 / D7 ARPPU)
+      function updateArppuTable(months, countries) {
+        var table = document.getElementById("table-arppu");
+        if (!table) return;
+
+        var ms = months && months.length ? months : [];
+        var cs = countries && countries.length ? countries : [];
+        if (!ms.length || !cs.length) {
+          renderEmptyTable(table);
+          return;
+        }
+
+        var thead = document.createElement("thead");
+        var headRow = document.createElement("tr");
+        var headHtml = "<th>国家</th>";
+        ms.forEach(function (m) {
+          var label = formatMonthShort(m);
+          headHtml += "<th>" + label + " D0</th><th>" + label + " D7</th>";
+        });
+        headRow.innerHTML = headHtml;
+        thead.appendChild(headRow);
+
+        var tbody = document.createElement("tbody");
+        var sortedCountries = Array.from(cs).sort();
+
+        sortedCountries.forEach(function (c) {
+          var tr = document.createElement("tr");
+          var tdCountry = document.createElement("td");
+          tdCountry.textContent = c;
+          tr.appendChild(tdCountry);
+
+          ms.forEach(function (m) {
+            var agg = getAgg(m, c);
+            var d0 = null;
+            var d7 = null;
+            if (agg) {
+              d0 = arppuFromAgg(agg, "D0");
+              d7 = arppuFromAgg(agg, "D7");
+            }
+
+            var td0 = document.createElement("td");
+            td0.className = "num";
+            td0.textContent = d0 == null ? "-" : formatNumber1(d0);
+            tr.appendChild(td0);
+
+            var td7 = document.createElement("td");
+            td7.className = "num";
+            td7.textContent = d7 == null ? "-" : formatNumber1(d7);
+            tr.appendChild(td7);
+          });
+
+          tbody.appendChild(tr);
+        });
+
+        table.innerHTML = "";
+        table.appendChild(thead);
+        table.appendChild(tbody);
+      }
+
+      // 4）体育 vs 游戏比例表：国家 × (每月 D0 / D7 比例，>1 标红)
+      function updateRatioTable(months, countries) {
+        var table = document.getElementById("table-ratio");
+        if (!table) return;
+
+        var ms = months && months.length ? months : [];
+        var cs = countries && countries.length ? countries : [];
+        if (!ms.length || !cs.length) {
+          renderEmptyTable(table);
+          return;
+        }
+
+        var thead = document.createElement("thead");
+        var headRow = document.createElement("tr");
+        var headHtml = "<th>国家</th>";
+        ms.forEach(function (m) {
+          var label = formatMonthShort(m);
+          headHtml += "<th>" + label + " D0</th><th>" + label + " D7</th>";
+        });
+        headRow.innerHTML = headHtml;
+        thead.appendChild(headRow);
+
+        var tbody = document.createElement("tbody");
+        var sortedCountries = Array.from(cs).sort();
+
+        sortedCountries.forEach(function (c) {
+          var tr = document.createElement("tr");
+          var tdCountry = document.createElement("td");
+          tdCountry.textContent = c;
+          tr.appendChild(tdCountry);
+
+          ms.forEach(function (m) {
+            var agg = getAgg(m, c);
+            var d0 = null;
+            var d7 = null;
+            if (agg) {
+              d0 = ratioFromAgg(agg, "D0");
+              d7 = ratioFromAgg(agg, "D7");
+            }
+
+            var td0 = document.createElement("td");
+            td0.className = "num";
+            if (d0 == null || !isFinite(d0)) {
+              td0.textContent = "-";
+            } else {
+              td0.textContent = d0.toFixed(1);
+              if (d0 > 1) td0.className += " highlight";
+            }
+            tr.appendChild(td0);
+
+            var td7 = document.createElement("td");
+            td7.className = "num";
+            if (d7 == null || !isFinite(d7)) {
+              td7.textContent = "-";
+            } else {
+              td7.textContent = d7.toFixed(1);
+              if (d7 > 1) td7.className += " highlight";
+            }
+            tr.appendChild(td7);
+          });
+
+          tbody.appendChild(tr);
+        });
+
+        table.innerHTML = "";
+        table.appendChild(thead);
+        table.appendChild(tbody);
+      }
+
+      // 5）留存表：国家 × (每月 D1 / D7 留存率 + D1→D7 流失率)
+      function updateRetentionTable(months, countries) {
+        var table = document.getElementById("table-retention");
+        if (!table) return;
+
+        var ms = months && months.length ? months : [];
+        var cs = countries && countries.length ? countries : [];
+        if (!ms.length || !cs.length) {
+          renderEmptyTable(table);
+          return;
+        }
+
+        var thead = document.createElement("thead");
+        var headRow = document.createElement("tr");
+        var headHtml = "<th>国家</th>";
+        ms.forEach(function (m) {
+          var label = formatMonthShort(m);
+          headHtml +=
+            "<th>" +
+            label +
+            " 次日留存</th><th>" +
+            label +
+            " 7日留存</th><th>" +
+            label +
+            " 次日至7日流失率</th>";
+        });
+        headRow.innerHTML = headHtml;
+        thead.appendChild(headRow);
+
+        var tbody = document.createElement("tbody");
+        var sortedCountries = Array.from(cs).sort();
+
+        sortedCountries.forEach(function (c) {
+          var tr = document.createElement("tr");
+          var tdCountry = document.createElement("td");
+          tdCountry.textContent = c;
+          tr.appendChild(tdCountry);
+
+          ms.forEach(function (m) {
+            var agg = getAgg(m, c);
+            var d1 = null;
+            var d7 = null;
+            var churn = null;
+
+            if (agg && agg.registration > 0) {
+              d1 = retentionFromAgg(agg, "D1"); // 0–100
+              d7 = retentionFromAgg(agg, "D7");
+              var d1User = Number(agg.D1_retained_users || 0);
+              var d7User = Number(agg.D7_retained_users || 0);
+              if (d1User > 0) {
+                churn = safeDivide(d1User - d7User, d1User, 100);
+              }
+            }
+
+            var tdD1 = document.createElement("td");
+            tdD1.className = "num";
+            tdD1.textContent = d1 == null ? "-" : formatPercent(d1);
+            tr.appendChild(tdD1);
+
+            var tdD7 = document.createElement("td");
+            tdD7.className = "num";
+            tdD7.textContent = d7 == null ? "-" : formatPercent(d7);
+            tr.appendChild(tdD7);
+
+            var tdChurn = document.createElement("td");
+            tdChurn.className = "num";
+            tdChurn.textContent = churn == null ? "-" : formatPercent(churn);
+            tr.appendChild(tdChurn);
+          });
+
+          tbody.appendChild(tr);
+        });
+
+        table.innerHTML = "";
+        table.appendChild(thead);
+        table.appendChild(tbody);
+      }
 
       // ===========================
       // 4. 各图表 init + update
@@ -12515,7 +12974,7 @@
             : ALL_MONTHS.slice(-3);
         const countries =
           st.countries && st.countries.length ? st.countries : ALL_COUNTRIES;
-
+        updateRegTable(months, countries);
         if (st.view === "line") {
           const metricDefs = [
             {
@@ -12625,6 +13084,8 @@
         const countries =
           st.countries && st.countries.length ? st.countries : ALL_COUNTRIES;
         const dayType = st.dayType || "both";
+
+        updatePayTable(months, countries);
 
         if (st.view === "line") {
           const metricDefs = [];
@@ -12767,7 +13228,7 @@
         const countries =
           st.countries && st.countries.length ? st.countries : ALL_COUNTRIES;
         const dayType = st.dayType || "both";
-
+        updateArppuTable(months, countries);
         if (st.view === "line") {
           const metricDefs = [];
           if (dayType === "both" || dayType === "D0") {
@@ -13064,7 +13525,7 @@
         const countries =
           st.countries && st.countries.length ? st.countries : ALL_COUNTRIES;
         const dayType = st.dayType || "both";
-
+        updateRatioTable(months, countries);
         if (st.view === "line") {
           const metricDefs = [];
           if (dayType === "both" || dayType === "D0") {
@@ -13207,7 +13668,7 @@
             : ALL_MONTHS.slice(-3);
         const countries =
           st.countries && st.countries.length ? st.countries : ALL_COUNTRIES;
-
+        updateRetentionTable(months, countries);
         if (st.view === "line") {
           const metricDefs = [
             {
