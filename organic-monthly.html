@@ -374,6 +374,77 @@
       .chart-summary strong {
         color: var(--text-main);
       }
+      /* 图表下方：按月份切换的数据分析块 */
+      .chart-analysis-box {
+        margin-top: 4px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(209, 213, 219, 0.9);
+        background: rgba(249, 250, 251, 0.96);
+        display: flex;
+        align-items: stretch;
+        overflow: hidden;
+      }
+
+      .chart-analysis-months {
+        flex: 0 0 70px;
+        border-right: 1px solid rgba(209, 213, 219, 0.9);
+        padding: 6px 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        background: rgba(243, 244, 246, 0.95);
+      }
+
+      .chart-analysis-months-title {
+        font-size: 11px;
+        color: var(--text-sub);
+        margin-bottom: 2px;
+      }
+
+      .chart-analysis-month-btn {
+        width: 100%;
+        font-size: 11px;
+        border-radius: var(--radius-sm);
+        border: 1px solid transparent;
+        padding: 3px 6px;
+        background: transparent;
+        color: var(--text-sub);
+        text-align: left;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .chart-analysis-month-btn:hover {
+        background: rgba(229, 231, 235, 0.9);
+      }
+
+      .chart-analysis-month-btn.active {
+        background: rgba(129, 140, 248, 0.08);
+        border-color: var(--accent-strong);
+        color: var(--text-main);
+        font-weight: 500;
+      }
+
+      .chart-analysis-body {
+        flex: 1;
+        padding: 6px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .chart-analysis-title {
+        font-size: 11px;
+        color: var(--text-sub);
+        font-weight: 500;
+      }
+
+      .chart-analysis-text {
+        font-size: 11px;
+        color: var(--text-main);
+        line-height: 1.6;
+        white-space: pre-wrap;
+      }
 
       .chart-comment {
         margin-top: 4px;
@@ -666,10 +737,7 @@
             </div>
           </header>
           <div class="chart" id="chart-registrations"></div>
-          <div class="chart-summary">
-            <strong>示例用途：</strong>
-            对比各国家自然盘体量变化，结合日维度折线快速定位峰值与异常波动，追溯具体日期的活动或外部事件。
-          </div>
+          <div class="chart-summary" data-analysis-key="reg"></div>
           <div class="chart-table-section">
             <div class="chart-table-title">
               当前筛选 · 自然新增注册（月度汇总）
@@ -754,11 +822,7 @@
             </div>
           </header>
           <div class="chart" id="chart-payrate"></div>
-          <div class="chart-summary">
-            <strong>示例用途：</strong>
-            判断各国家自然盘变现质量是否稳定，D0 更敏感于首日活动刺激，D7
-            更反映整体价值密度。
-          </div>
+          <div class="chart-summary" data-analysis-key="pay"></div>
           <div class="chart-table-section">
             <div class="chart-table-title">
               当前筛选 · 自然用户 D0 / D7 付费率（月度）
@@ -841,11 +905,7 @@
             </div>
           </header>
           <div class="chart" id="chart-arppu"></div>
-          <div class="chart-summary">
-            <strong>示例用途：</strong>
-            观察自然盘高价值付费用户的贡献情况，叠加付费率一起看，可以拆出“更多人付费”
-            还是“同样人付得更多”。
-          </div>
+          <div class="chart-summary" data-analysis-key="arppu"></div>
           <div class="chart-table-section">
             <div class="chart-table-title">
               当前筛选 · 自然用户 D0 / D7 ARPPU（月度）
@@ -952,11 +1012,7 @@
             </div>
           </header>
           <div class="chart" id="chart-flow"></div>
-          <div class="chart-summary">
-            <strong>示例用途：</strong>
-            体育/游戏/总人均流水由原始流水与对应玩法下注人数自动计算，建议结合
-            GGR 看质量，防止“高流水、低盈利”错判。
-          </div>
+          <div class="chart-summary" data-analysis-key="flow"></div>
           <div class="chart-comment" data-comment-key="organic-flow">
             <div class="chart-comment-label">
               <span>我的备注（体育/游戏深度 &amp; 国家策略）</span>
@@ -1031,10 +1087,7 @@
             </div>
           </header>
           <div class="chart" id="chart-ratio"></div>
-          <div class="chart-summary">
-            <strong>示例用途：</strong>
-            判断各国家自然盘更偏向体育还是游戏，为后续素材方向与产品推荐策略提供依据。
-          </div>
+          <div class="chart-summary" data-analysis-key="ratio"></div>
           <div class="chart-table-section">
             <div class="chart-table-title">
               当前筛选 · 体育 vs 游戏玩家比例（月度）
@@ -1095,12 +1148,7 @@
             </div>
           </header>
           <div class="chart" id="chart-retention"></div>
-          <div class="chart-summary">
-            <strong>示例用途：</strong>
-            识别“拉新有效性”和“短期粘性”，同时看 D1 和
-            D7，能拆出是注册当天质量问题还是后续运营跟进不足。
-          </div>
-
+          <div class="chart-summary" data-analysis-key="retention"></div>
           <div class="chart-table-section">
             <div class="chart-table-title">
               当前筛选 · 次日 / 7 日留存率 &amp; 次日至七日流失率（月度）
@@ -12154,6 +12202,54 @@
         // "2025-11": [ ... ],
         // "2025-12": [ ... ]
       };
+      // ===========================
+      // 0.1 数据分析文案入口（按图表 × 月份）
+      // ===========================
+      //
+      // 用法说明：
+      // - key 对应图表：
+      //   reg       → 自然注册量 · 月度 / 日度对比（card-registrations）
+      //   pay       → 自然用户 D0 / D7 付费率（card-payrate）
+      //   arppu     → 自然用户 D0 / D7 ARPPU（card-arppu）
+      //   flow      → 自然用户 D0 / D7 人均流水（card-flow）
+      //   ratio     → 体育 vs 游戏玩家比例（自然量）（card-ratio）
+      //   retention → 自然用户次日 / 7 日留存率（card-retention）
+      //
+      // - 内层 key 是月份 "YYYY-MM"，例如 "2025-09"。
+      // - value 是一整段字符串，可以多行，后续你按月补充即可。
+
+      const ANALYSIS_TEXT = {
+        // 1. 自然注册量 · 月度 / 日度对比
+        reg: {
+          // "2025-09": "这里写 2025-09 的自然注册盘分析……",
+          // "2025-10": "这里写 2025-10 的自然注册盘分析……",
+        },
+
+        // 2. 自然用户 D0 / D7 付费率
+        pay: {
+          // "2025-09": "这里写 2025-09 的自然付费率分析……",
+        },
+
+        // 3. 自然用户 D0 / D7 ARPPU
+        arppu: {
+          // "2025-09": "这里写 2025-09 的 ARPPU 分析……",
+        },
+
+        // 4. 自然用户 D0 / D7 人均流水（体育 / 游戏 / 总）
+        flow: {
+          // "2025-09": "这里写 2025-09 的人均流水 / 深度分析……",
+        },
+
+        // 5. 体育 vs 游戏玩家比例（自然量）
+        ratio: {
+          // "2025-09": "这里写 2025-09 的体育 / 游戏结构分析……",
+        },
+
+        // 6. 自然用户次日 / 7 日留存率
+        retention: {
+          // "2025-09": "这里写 2025-09 的留存 & 流失分析……",
+        },
+      };
 
       // ===========================
       // 1. 配色与基础工具函数
@@ -13886,9 +13982,131 @@
           });
         });
       }
+      // ===========================
+      // 6. 图表下方：按月份的数据分析块
+      // ===========================
+
+      // 把 "2025-09" 转成 "9月"
+      function formatMonthLabel(monthKey) {
+        if (!monthKey || typeof monthKey !== "string") return monthKey || "";
+        const parts = monthKey.split("-");
+        const mm = parts[1] || "";
+        const mNum = Number(mm) || 0;
+        return (mNum > 0 ? mNum : mm) + "月";
+      }
+
+      // 默认展示的月份：电脑当前月份的上一个月；若没有该月数据，则用最近一月
+      function getDefaultAnalysisMonth() {
+        if (!Array.isArray(ALL_MONTHS) || ALL_MONTHS.length === 0) return null;
+
+        const now = new Date();
+        // JS 月份从 0 开始，这里取「当前月份 - 1」
+        const prevMonthDate = new Date(
+          now.getFullYear(),
+          now.getMonth() - 1,
+          1
+        );
+        const prevKey = prevMonthDate.toISOString().slice(0, 7); // YYYY-MM
+
+        if (ALL_MONTHS.includes(prevKey)) return prevKey;
+
+        // 找到 <= prevKey 的最新一月
+        let candidate = null;
+        ALL_MONTHS.forEach((m) => {
+          if (m <= prevKey) candidate = m;
+        });
+
+        return candidate || ALL_MONTHS[ALL_MONTHS.length - 1];
+      }
+
+      function initAnalysisBlocks() {
+        const defaultMonth = getDefaultAnalysisMonth();
+        const summaries = document.querySelectorAll(
+          ".chart-summary[data-analysis-key]"
+        );
+
+        summaries.forEach((summaryEl) => {
+          const key = summaryEl.getAttribute("data-analysis-key");
+          if (!key) return;
+
+          // 清空原有示例文案
+          summaryEl.innerHTML = "";
+
+          const box = document.createElement("div");
+          box.className = "chart-analysis-box";
+
+          const monthsCol = document.createElement("div");
+          monthsCol.className = "chart-analysis-months";
+
+          const titleCol = document.createElement("div");
+          titleCol.className = "chart-analysis-body";
+
+          const title = document.createElement("div");
+          title.className = "chart-analysis-title";
+          title.textContent = "数据分析";
+
+          const text = document.createElement("div");
+          text.className = "chart-analysis-text";
+
+          titleCol.appendChild(title);
+          titleCol.appendChild(text);
+
+          box.appendChild(monthsCol);
+          box.appendChild(titleCol);
+          summaryEl.appendChild(box);
+
+          // 按 ALL_MONTHS 生成所有月份按钮，新月份自动出现
+          const btns = [];
+
+          ALL_MONTHS.forEach((monthKey) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "chart-analysis-month-btn";
+            btn.dataset.month = monthKey;
+            btn.textContent = formatMonthLabel(monthKey);
+            btn.title = monthKey;
+
+            btn.addEventListener("click", () => {
+              btns.forEach((b) => b.classList.remove("active"));
+              btn.classList.add("active");
+
+              const content =
+                ANALYSIS_TEXT[key] &&
+                typeof ANALYSIS_TEXT[key][monthKey] === "string" &&
+                ANALYSIS_TEXT[key][monthKey].trim()
+                  ? ANALYSIS_TEXT[key][monthKey]
+                  : "暂未填写该月份的数据分析文案。";
+
+              text.textContent = content;
+            });
+
+            monthsCol.appendChild(btn);
+            btns.push(btn);
+          });
+
+          if (btns.length === 0) {
+            text.textContent =
+              "当前没有可用月份；请确认 RAW_ORGANIC_BY_MONTH 是否已填入数据。";
+            return;
+          }
+
+          // 默认选中：优先 defaultMonth，否则最后一个月
+          const initialMonth =
+            (defaultMonth &&
+              ALL_MONTHS.includes(defaultMonth) &&
+              defaultMonth) ||
+            ALL_MONTHS[ALL_MONTHS.length - 1];
+
+          const initialBtn =
+            btns.find((b) => b.dataset.month === initialMonth) ||
+            btns[btns.length - 1];
+
+          initialBtn.click();
+        });
+      }
 
       // ===========================
-      // 6. 新功能入口（扩展用）
+      // 8. 新功能入口（扩展用）
       // ===========================
       //
       // 以后如果想新增一张图（例如“自然 GGR 趋势”）：
@@ -13914,6 +14132,7 @@
         initFlowCard();
         initRatioCard();
         initRetentionCard();
+        initAnalysisBlocks();
         initCommentBlocks();
 
         window.addEventListener("resize", () => {
