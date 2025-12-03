@@ -1233,6 +1233,31 @@
         };
 
         document.addEventListener("DOMContentLoaded", function () {
+          // ===================
+          // ✅ 新增修复代码 START
+          // ===================
+          // 预处理：为原始数据自动追加 'month' 字段，供筛选器使用
+          function fixDataAttributes(dataset) {
+            if (!Array.isArray(dataset)) return;
+            dataset.forEach(function(row) {
+                // 如果有 date 但没有 month，自动截取前7位 (YYYY-MM)
+                if (row.date && !row.month) {
+                    row.month = row.date.substring(0, 7); 
+                }
+                // 兼容处理：自然量数据中有些人写了 regs 而不是 registration (根据 index.html 这里的代码逻辑)
+                // 如果你的源数据全是 registration，这行可以忽略，但加上为了保险：
+                if (row.registration && !row.regs) {
+                    row.regs = row.registration;
+                }
+            });
+          }
+
+          // 执行修复
+          if (typeof RAW_ORGANIC !== 'undefined') fixDataAttributes(RAW_ORGANIC);
+          if (typeof RAW_PAID !== 'undefined') fixDataAttributes(RAW_PAID);
+          // ===================
+          // ✅ 新增修复代码 END
+          // ===================
           initGlobalMonthFilter();
           initModuleFilters();
           initCharts();
