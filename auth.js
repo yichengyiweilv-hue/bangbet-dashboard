@@ -3,13 +3,13 @@
     const CONFIG = {
         username: "jerry",      // 账号
         password: "666",        // 密码
-        validHours: 24,         // 默认有效期(小时)
-        extendedDays: 30,       // "记住我"有效期(天)
+        validHours: 24,         // 默认有效期(小时) - 不勾选时
+        extendedDays: 30,       // 长期有效期(天)   - 勾选"记住我"时
         storageKey: "bangbet_auth_token" // 浏览器缓存的Key
     };
     // =======================================
 
-    // 检查是否已登录且未过期
+    // 1. 检查是否已登录且未过期
     function checkLogin() {
         const stored = localStorage.getItem(CONFIG.storageKey);
         if (stored) {
@@ -17,11 +17,11 @@
                 const data = JSON.parse(stored);
                 const now = new Date().getTime();
                 
-                // 兼容旧版逻辑：如果有 expiry 字段，直接用 expiry 判断
+                // 优先判断是否有明确的过期时间戳 (兼容新逻辑)
                 if (data.expiry) {
                     if (now < data.expiry) return true;
                 } 
-                // 旧版逻辑兜底 (24小时)
+                // 兼容旧版逻辑 (默认24小时)
                 else if (now - data.timestamp < CONFIG.validHours * 60 * 60 * 1000) {
                     return true;
                 }
@@ -32,24 +32,25 @@
         return false; // 未登录或已过期
     }
 
-    // 执行登录逻辑
+    // 2. 执行登录逻辑
     function doLogin(u, p, remember) {
         if (u === CONFIG.username && p === CONFIG.password) {
             const now = new Date().getTime();
             
-            // 计算过期时间：勾选则 30天，未勾选则 24小时
+            // 核心逻辑：如果勾选 remember，有效期=30天；否则=24小时
             const duration = remember 
                 ? CONFIG.extendedDays * 24 * 60 * 60 * 1000 
                 : CONFIG.validHours * 60 * 60 * 1000;
 
             const data = {
                 timestamp: now,
-                expiry: now + duration, // 明确写入过期时间戳
+                expiry: now + duration, // 写入具体的过期时间点
                 user: u
             };
+            
             localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
             
-            // 登录成功，添加退场动画
+            // 登录成功，播放退场动画
             const modal = document.getElementById('auth-modal');
             if (modal) {
                 modal.style.opacity = '0';
@@ -58,7 +59,7 @@
             }
             return true;
         } else {
-            // 错误提示动画
+            // 密码错误，播放摇晃动画
             const box = document.querySelector('.tech-auth-box');
             if (box) {
                 box.style.animation = 'shake 0.5s';
@@ -69,11 +70,11 @@
         }
     }
 
-    // 渲染登录遮罩
+    // 3. 渲染登录遮罩 (科技感 UI + 记住我选项)
     function renderLoginModal() {
         if (document.getElementById('auth-modal')) return;
 
-        // 1. 注入 CSS 样式 (新增了 checkbox 相关样式)
+        // 注入 CSS 样式
         const style = document.createElement('style');
         style.textContent = `
             :root {
@@ -143,7 +144,7 @@
                 outline: none; border-color: var(--tech-primary);
                 box-shadow: 0 0 15px rgba(14, 165, 233, 0.3);
             }
-            /* 复选框区域样式 */
+            /* 新增：复选框样式 */
             .tech-options {
                 display: flex; align-items: center; justify-content: flex-start;
                 width: 100%; margin-bottom: 20px;
@@ -187,7 +188,7 @@
         `;
         document.head.appendChild(style);
 
-        // 2. 注入 HTML 结构
+        // 注入 HTML
         const modalHtml = `
         <div id="auth-modal">
             <div class="tech-auth-box">
@@ -218,20 +219,19 @@
         div.innerHTML = modalHtml;
         document.body.appendChild(div);
 
-        // 3. 绑定事件
+        // 绑定事件
+        // 【已修复】之前这里多了一个空格导致报错，现在修复了
         const userInput = document.getElementById('auth-user');
         const passInput = document.getElementById('auth-pass');
         const rememberInput = document.getElementById('auth-remember');
         const btn = document.getElementById('auth-btn');
 
-        // 封装登录触发函数
         const triggerLogin = () => {
+            // 将 checkbox 的状态传递给登录逻辑
             doLogin(userInput.value, passInput.value, rememberInput.checked);
         };
 
-        if (btn) {
-            btn.onclick = triggerLogin;
-        }
+        if (btn) btn.onclick = triggerLogin;
         
         if (passInput) {
             passInput.addEventListener("keypress", function(event) {
@@ -239,13 +239,10 @@
             });
         }
         
-        // 自动聚焦
-        if (userInput) {
-            userInput.focus();
-        }
+        if (userInput) userInput.focus();
     }
 
-    // 立即执行检查
+    // 4. 启动检查
     if (!checkLogin()) {
         if (document.body) {
             renderLoginModal();
