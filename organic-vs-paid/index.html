@@ -1,1 +1,3197 @@
 
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Bangbet 自然量 vs 买量 月度数据对比</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Bangbet 海外自然量 & 买量月度数据对比看板"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    />
+    <style>
+      :root {
+        --bg-page: #ffffff;
+        --bg-card: #ffffff;
+        --bg-subtle: #f3f4f6;
+        --border-subtle: rgba(148, 163, 184, 0.5);
+        --accent-main: #2563eb;
+        --accent-soft: rgba(37, 99, 235, 0.08);
+        --accent-strong: #1d4ed8;
+        --accent-orange: #f97316;
+        --accent-blue: #2563eb;
+        --text-main: #0f172a;
+        --text-sub: #6b7280;
+        --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.08);
+        --radius-lg: 16px;
+        --radius-md: 12px;
+        --radius-sm: 8px;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
+      body {
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        background-color: var(--bg-page);
+        color: var(--text-main);
+      }
+      .app {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .app-main {
+        flex: 1;
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 24px 24px 40px;
+      }
+      .app-header {
+        border-bottom: 1px solid var(--border-subtle);
+        background-color: #ffffff;
+        position: sticky;
+        top: 0;
+        z-index: 20;
+      }
+      .app-header-inner {
+        max-width: 1280px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 24px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .brand-logo {
+        width: 32px;
+        height: 32px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #2563eb, #22c55e);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 18px;
+        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.55);
+      }
+      .brand-text-main {
+        font-weight: 600;
+        font-size: 16px;
+      }
+      .brand-text-sub {
+        font-size: 12px;
+        color: var(--text-sub);
+      }
+      .header-meta {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 12px;
+        color: var(--text-sub);
+      }
+      .hero {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 20px;
+        margin-top: 20px;
+        margin-bottom: 16px;
+      }
+      .hero-main {
+        flex: 1 1 55%;
+      }
+      .hero-title {
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        margin-bottom: 6px;
+      }
+      .hero-subtitle {
+        font-size: 13px;
+        color: var(--text-sub);
+        max-width: 480px;
+      }
+      .hero-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .hero-tag {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background-color: var(--bg-subtle);
+        color: var(--text-sub);
+      }
+      .hero-side {
+        flex: 1 1 35%;
+        min-width: 260px;
+      }
+      .hero-side-card {
+        background: linear-gradient(135deg, #eff6ff, #ecfeff);
+        border-radius: var(--radius-lg);
+        padding: 14px 16px;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+      }
+      .hero-side-title {
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 4px;
+      }
+      .hero-side-month {
+        font-size: 12px;
+        color: var(--text-sub);
+        margin-bottom: 12px;
+      }
+      .hero-metrics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .hero-metric {
+        flex: 1 1 100px;
+      }
+      .hero-metric-label {
+        font-size: 11px;
+        color: var(--text-sub);
+        margin-bottom: 2px;
+      }
+      .hero-metric-value {
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .hero-metric-sub {
+        font-size: 11px;
+        color: var(--text-sub);
+      }
+      .global-filters {
+        background-color: #ffffff;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-soft);
+        padding: 10px 16px;
+        margin-bottom: 16px;
+        border: 1px solid var(--border-subtle);
+      }
+      .filter-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+      }
+      .filter-label {
+        font-size: 12px;
+        color: var(--text-sub);
+        margin-right: 4px;
+      }
+      .filter-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .filter-chip {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 4px 8px;
+        border: 1px solid var(--border-subtle);
+        background-color: var(--bg-subtle);
+        font-size: 12px;
+        color: var(--text-sub);
+        cursor: pointer;
+        transition: all 0.15s ease-out;
+      }
+      .filter-chip input {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 4px;
+        margin-right: 4px;
+        border: 1px solid var(--border-subtle);
+        background-color: #ffffff;
+        position: relative;
+      }
+      .filter-chip input::after {
+        content: "";
+        position: absolute;
+        inset: 2px;
+        background: none;
+      }
+      .filter-chip input:checked {
+        border-color: var(--accent-main);
+        background-color: var(--accent-main);
+      }
+      .filter-chip input:checked::after {
+        background-color: #ffffff;
+      }
+      .filter-chip span {
+        line-height: 1;
+      }
+      .filter-chip:hover {
+        border-color: var(--accent-main);
+        background-color: var(--accent-soft);
+      }
+      .charts-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        margin-top: 6px;
+        margin-bottom: 24px;
+      }
+      .chart-card {
+        background-color: #ffffff;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        overflow: hidden;
+      }
+      .chart-card-header {
+        padding: 14px 18px 8px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .chart-title-block {
+        max-width: 70%;
+      }
+      .chart-kicker {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--accent-main);
+        margin-bottom: 2px;
+      }
+      .chart-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .chart-sub {
+        font-size: 12px;
+        color: var(--text-sub);
+      }
+      .chart-header-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
+        font-size: 11px;
+        color: var(--text-sub);
+      }
+      .chart-card-body {
+        padding: 12px 18px 16px;
+      }
+      .chart-controls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .chart-badge {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background-color: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+      .chart-filter-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+      .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+      }
+      .chart-mini-filter {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+      }
+      .chart-mini-label {
+        color: var(--text-sub);
+      }
+      .chart-mini-radio {
+        display: flex;
+        gap: 4px;
+      }
+      .mini-radio-btn {
+        border-radius: 999px;
+        padding: 3px 10px;
+        border: 1px solid transparent;
+        background-color: transparent;
+        font-size: 11px;
+        cursor: pointer;
+        color: var(--text-sub);
+      }
+      .mini-radio-btn.is-active {
+        background-color: var(--accent-soft);
+        color: var(--accent-strong);
+        border-color: var(--accent-main);
+      }
+      .chart-main {
+        margin-top: 8px;
+      }
+      .chart-container {
+        width: 100%;
+        height: 320px;
+      }
+      .chart-table-wrapper {
+        margin-top: 12px;
+      }
+      .chart-table-title {
+        font-size: 12px;
+        font-weight: 500;
+        margin-bottom: 4px;
+        color: var(--text-sub);
+      }
+      .chart-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .chart-table thead {
+        background-color: var(--bg-subtle);
+      }
+      .chart-table th,
+      .chart-table td {
+        border-bottom: 1px solid rgba(148, 163, 184, 0.4);
+        padding: 6px 8px;
+        text-align: right;
+      }
+      .chart-table th:first-child,
+      .chart-table td:first-child {
+        text-align: left;
+      }
+      .chart-table tbody tr:nth-child(even) {
+        background-color: #f9fafb;
+      }
+      .chart-table td.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .chart-table td.highlight {
+        color: #dc2626; /* 红色 */
+        font-weight: 600; /* 加粗 */
+      }
+
+      .analysis-block {
+        margin-top: 12px;
+        padding: 10px 10px;
+        border-radius: var(--radius-md);
+        background-color: var(--bg-subtle);
+      }
+      .analysis-title {
+        font-size: 12px;
+        font-weight: 500;
+        margin-bottom: 4px;
+      }
+      .analysis-body {
+        font-size: 12px;
+        color: var(--text-sub);
+        white-space: pre-line;
+      }
+      .comment-block {
+        margin-top: 10px;
+      }
+      .chart-comment-label {
+        font-size: 12px;
+        color: var(--text-sub);
+        margin-bottom: 4px;
+      }
+      .chart-comment-input {
+        width: 100%;
+        min-height: 60px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(148, 163, 184, 0.7);
+        padding: 6px 8px;
+        font-size: 12px;
+        resize: vertical;
+      }
+      .app-footer {
+        border-top: 1px solid rgba(148, 163, 184, 0.4);
+        padding: 10px 24px;
+        font-size: 11px;
+        color: var(--text-sub);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        background-color: #ffffff;
+      }
+      @media (max-width: 900px) {
+        .chart-card-header {
+          flex-direction: column;
+        }
+        .chart-title-block {
+          max-width: 100%;
+        }
+        .hero {
+          flex-direction: column;
+        }
+        .app-main {
+          padding: 16px 12px 32px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="app-header">
+        <div class="app-header-inner">
+          <div class="brand">
+            <div class="brand-logo">B</div>
+            <div>
+              <div class="brand-text-main">Bangbet 数据看板</div>
+              <div class="brand-text-sub">自然量 &amp; 买量 · 月度对比</div>
+            </div>
+          </div>
+          <div class="header-meta">
+            <span>环境：内部自研 BI 面板</span>
+            <span>版本：v3.1</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="app-main">
+        <section class="hero">
+          <div class="hero-main">
+            <div class="hero-title">自然量 vs 买量 · 月度数据对比</div>
+            <div class="hero-subtitle">
+              单月维度对比自然量与买量在注册、付费率、ARPPU、人均流水、玩法结构、留存等核心指标上的表现，用于评估买量质量与自然盘健康度。
+            </div>
+            <div class="hero-tags">
+              <span class="hero-tag">范围：GH / KE / NG / TZ / UG</span>
+              <span class="hero-tag"
+                >指标：注册 · 付费率 · ARPPU · 人均流水 · 玩法结构 · 留存</span
+              >
+              <span class="hero-tag"
+                >来源：自然渠道 &amp; 付费渠道（买量）</span
+              >
+            </div>
+          </div>
+          <div class="hero-side">
+            <div class="hero-side-card">
+              <div class="hero-side-title">当前总览</div>
+              <div class="hero-side-month">
+                当前月份：<span id="hero-month-label"></span>
+              </div>
+              <div class="hero-metrics">
+                <div class="hero-metric">
+                  <div class="hero-metric-label">自然注册</div>
+                  <div class="hero-metric-value" id="hero-organic-reg"></div>
+                  <div class="hero-metric-sub">所选月 · 全国家</div>
+                </div>
+                <div class="hero-metric">
+                  <div class="hero-metric-label">买量注册</div>
+                  <div class="hero-metric-value" id="hero-paid-reg"></div>
+                  <div class="hero-metric-sub">所选月 · 全国家</div>
+                </div>
+                <div class="hero-metric">
+                  <div class="hero-metric-label">买量 / 自然注册比</div>
+                  <div class="hero-metric-value" id="hero-reg-ratio"></div>
+                  <div class="hero-metric-sub">&gt; 1 说明买量规模大于自然</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 全局月份筛选（单选） -->
+        <section class="global-filters">
+          <div class="filter-row" id="global-month-filter">
+            <div class="filter-label">全局数据月份（单选）：</div>
+            <div class="filter-chips js-global-month-chips"></div>
+          </div>
+        </section>
+
+        <section class="charts-grid">
+          <!-- 1. 注册量 -->
+          <article class="chart-card" id="card-reg">
+            <header class="chart-card-header">
+              <div class="chart-title-block">
+                <div class="chart-kicker">Scale</div>
+                <div class="chart-title">
+                  自然量 vs 买量注册量 · 月度 / 日度
+                </div>
+                <div class="chart-sub">
+                  按国家对比单月注册规模，可切换到日度折线查看自然量与买量的每日走势。
+                </div>
+              </div>
+              <div class="chart-header-meta">
+                <span>维度：国家 × 日 / 月</span>
+                <span>说明：月份与国家选择将同步影响下方表格</span>
+              </div>
+            </header>
+            <div class="chart-card-body">
+              <div class="chart-controls">
+                <span class="chart-badge">单位：人（注册）</span>
+                <div class="chart-filter-row">
+                  <div
+                    class="filter-group"
+                    data-module="reg"
+                    data-filter-kind="country"
+                  >
+                    <div class="filter-label">国家：</div>
+                    <div class="filter-chips js-filter-chips"></div>
+                  </div>
+                  <div
+                    class="filter-group"
+                    data-module="reg"
+                    data-filter-kind="month"
+                  >
+                    <div class="filter-label">月份：</div>
+                    <div class="filter-chips js-filter-chips"></div>
+                  </div>
+                  <div class="chart-mini-filter">
+                    <span class="chart-mini-label">视图：</span>
+                    <div class="chart-mini-radio" data-module="reg">
+                      <button
+                        type="button"
+                        class="mini-radio-btn is-active"
+                        data-view="monthly"
+                      >
+                        月度柱状
+                      </button>
+                      <button
+                        type="button"
+                        class="mini-radio-btn"
+                        data-view="daily"
+                      >
+                        日度折线
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="chart-main">
+                <div id="chart-reg" class="chart-container"></div>
+              </div>
+              <div class="chart-table-wrapper">
+                <div class="chart-table-title">
+                  自然量 vs 买量注册量 · 国家拆分
+                </div>
+                <table class="chart-table" id="table-reg">
+                  <thead>
+                    <tr>
+                      <th>国家</th>
+                      <th>自然量注册占比 (%)</th>
+                      <th>买量注册占比 (%)</th>
+                      <th>自然量注册数</th>
+                      <th>买量注册数</th>
+                      <th>总注册数</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="analysis-block">
+                <div class="analysis-title">
+                  数据分析 · <span data-analysis-month-label="reg"></span>
+                </div>
+                <div class="analysis-body" data-analysis-for="reg"></div>
+              </div>
+              <div class="comment-block">
+                <div class="chart-comment-label">
+                  <span>我的备注（注册规模 &amp; 日度波动）</span>
+                </div>
+                <textarea
+                  class="chart-comment-input"
+                  placeholder="在这里补充你对本月自然量 vs 买量注册表现的观察和结论，例如异常峰值、媒体策略变化、SEO 波动等。"
+                ></textarea>
+              </div>
+            </div>
+          </article>
+
+          <!-- 2. D0 / D7 付费率 -->
+          <article class="chart-card" id="card-payrate">
+            <header class="chart-card-header">
+              <div class="chart-title-block">
+                <div class="chart-kicker">Quality · Conversion</div>
+                <div class="chart-title">D0 / D7 付费率 · 自然量 vs 买量</div>
+                <div class="chart-sub">
+                  对比自然量和买量在不同国家的首日与 7
+                  日付费率，用于衡量买量用户质量与留存转化。
+                </div>
+              </div>
+              <div class="chart-header-meta">
+                <span>维度：国家 × 日 / 月</span>
+                <span>D0 为注册当日付费率，D7 为 7 日内累计付费率</span>
+              </div>
+            </header>
+            <div class="chart-card-body">
+              <div class="chart-controls">
+                <span class="chart-badge">单位：%（付费人数 / 注册数）</span>
+                <div class="chart-filter-row">
+                  <div
+                    class="filter-group"
+                    data-module="payRate"
+                    data-filter-kind="country"
+                  >
+                    <div class="filter-label">国家：</div>
+                    <div class="filter-chips js-filter-chips"></div>
+                  </div>
+                  <div
+                    class="filter-group"
+                    data-module="payRate"
+                    data-filter-kind="month"
+                  >
+                    <div class="filter-label">月份：</div>
+                    <div class="filter-chips js-filter-chips"></div>
+                  </div>
+                  <div class="chart-mini-filter">
+                    <span class="chart-mini-label">视图：</span>
+                    <div class="chart-mini-radio" data-module="payRate">
+                      <button
+                        type="button"
+                        class="mini-radio-btn is-active"
+                        data-view="monthly"
+                      >
+                        月度柱状
+                      </button>
+                      <button
+                        type="button"
+                        class="mini-radio-btn"
+                        data-view="daily"
+                      >
+                        日度折线
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="chart-main">
+                <div id="chart-payrate" class="chart-container"></div>
+              </div>
+              <div class="chart-table-wrapper">
+                <div class="chart-table-title">D0 / D7 付费率 · 国家拆分</div>
+                <table class="chart-table" id="table-payrate">
+                  <thead>
+                    <tr>
+                      <th>国家</th>
+                      <th>自然量 D0 付费率</th>
+                      <th>自然量 D7 付费率</th>
+                      <th>买量 D0 付费率</th>
+                      <th>买量 D7 付费率</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="analysis-block">
+                <div class="analysis-title">
+                  数据分析 · <span data-analysis-month-label="payRate"></span>
+                </div>
+                <div class="analysis-body" data-analysis-for="payRate"></div>
+              </div>
+              <div class="comment-block">
+                <div class="chart-comment-label">
+                  <span>我的备注（付费率 &amp; 质量评估）</span>
+                </div>
+                <textarea
+                  class="chart-comment-input"
+                  placeholder="记录各国家自然量与买量 D0 / D7 付费差异，标注高 / 低质渠道与需要优化的国家。"
+                ></textarea>
+              </div>
+            </div>
+          </article>
+
+          <!-- 3. D0 / D7 ARPPU -->
+          <article class="chart-card" id="card-arppu">
+            <header class="chart-card-header">
+              <div class="chart-title-block">
+                <div class="chart-kicker">Monetization Depth</div>
+                <div class="chart-title">D0 / D7 ARPPU · 自然量 vs 买量</div>
+                <div class="chart-sub">
+                  关注付费用户的人均贡献，对比自然量与买量在付费深度上的差异。
+                </div>
+              </div>
+              <div class="chart-header-meta">
+                <span>维度：国家 × 日 / 月</span>
+                <span>ARPPU = GGR / 付费人数</span>
+              </div>
+            </header>
+            <div class="chart-card-body">
+              <div class="chart-controls">
+                <span class="chart-badge">单位：USD（示例货币）</span>
+                <div class="chart-filter-row">
+                  <div
+                    class="filter-group"
+                    data-module="arppu"
+                    data-filter-kind="country"
+                  >
+                    <div class="filter-label">国家：</div>
+                    <div class="filter-chips js-filter-chips"></div>
+                  </div>
+                  <div
+                    class="filter-group"
+                    data-module="arppu"
+                    data-filter-kind="month"
+                  >
+                    <div class="filter-label">月份：</div>
+                    <div class="filter-chips js-filter-chips"></div>
+                  </div>
+                  <div class="chart-mini-filter">
+                    <span class="chart-mini-label">视图：</span>
+                    <div class="chart-mini-radio" data-module="arppu">
+                      <button
+                        type="button"
+                        class="mini-radio-btn is-active"
+                        data-view="monthly"
+                      >
+                        月度柱状
+                      </button>
+                      <button
+                        type="button"
+                        class="mini-radio-btn"
+                        data-view="daily"
+                      >
+                        日度折线
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="chart-main">
+                <div id="chart-arppu" class="chart-container"></div>
+              </div>
+              <div class="chart-table-wrapper">
+                <div class="chart-table-title">D0 / D7 ARPPU · 国家拆分</div>
+                <table class="chart-table" id="table-arppu">
+                  <thead>
+                    <tr>
+                      <th>国家</th>
+                      <th>自然量 D0 ARPPU</th>
+                      <th>自然量 D7 ARPPU</th>
+                      <th>买量 D0 ARPPU</th>
+                      <th>买量 D7 ARPPU</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="analysis-block">
+                <div class="analysis-title">
+                  数据分析 · <span data-analysis-month-label="arppu"></span>
+                </div>
+                <div class="analysis-body" data-analysis-for="arppu"></div>
+              </div>
+              <div class="comment-block">
+                <div class="chart-comment-label">
+                  <span>我的备注（付费深度 &amp; 高价值玩家）</span>
+                </div>
+                <textarea
+                  class="chart-comment-input"
+                  placeholder="标注 ARPPU 高的国家 / 渠道，记录是否与玩法结构、赛事节奏、首充活动等有关系。"
+                ></textarea>
+              </div>
+            </div>
+          </article>
+
+          <!-- 4. D0 / D7 人均流水 -->
+          <article class="chart-card" id="card-revpu">
+            <header class="chart-card-header">
+              <div class="chart-title-block">
+                <div class="chart-kicker">Revenue per User</div>
+                <div class="chart-title">
+                  D0 / D7 人均流水（体育 / 游戏 / 总）
+                </div>
+                <div class="chart-sub">
+                  以注册用户为底，观察体育、游戏及整体的人均流水，对比自然量与买量的变现效率。
+                </div>
+              </div>
+              <div class="chart-header-meta">
+                <span>维度：国家 × 日 / 月</span>
+                <span>口径：示例按注册人均 GGR 计算</span>
+              </div>
+            </header>
+            <div class="chart-card-body">
+              <div class="chart-controls">
+                <span class="chart-badge">单位：USD / 注册用户</span>
+                <div class="chart-filter-row">
+                  <div
+                    class="filter-group"
+                    data-module="revpu"
+                    data-filter-kind="country"
+                  >
+                    <div class="filter-label">国家：</div>
+                    <div class="filter-chips js-filter-chips"></div>
+                  </div>
+                  <div
+                    class="filter-group"
+                    data-module="revpu"
+                    data-filter-kind="month"
+                  >
+                    <div class="filter-label">月份：</div>
+                    <div class="filter-chips js-filter-chips"></div>
+                  </div>
+                  <div
+                    class="filter-group"
+                    data-module="revpu"
+                    data-filter-kind="product"
+                  >
+                    <div class="filter-label">玩法：</div>
+                    <div class="filter-chips js-filter-chips"></div>
+                  </div>
+                  <div class="chart-mini-filter">
+                    <span class="chart-mini-label">视图：</span>
+                    <div class="chart-mini-radio" data-module="revpu">
+                      <button
+                        type="button"
+                        class="mini-radio-btn is-active"
+                        data-view="monthly"
+                      >
+                        月度柱状
+                      </button>
+                      <button
+                        type="button"
+                        class="mini-radio-btn"
+                        data-view="daily"
+                      >
+                        日度折线
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="chart-main">
+                <div id="chart-revpu" class="chart-container"></div>
+              </div>
+              <div class="chart-table-wrapper">
+                <div class="chart-table-title">D0 / D7 人均流水 · 国家拆分</div>
+                <table class="chart-table" id="table-revpu">
+                  <thead>
+                    <tr>
+                      <th>国家</th>
+                      <th>自然量 D0 人均流水</th>
+                      <th>自然量 D7 人均流水</th>
+                      <th>买量 D0 人均流水</th>
+                      <th>买量 D7 人均流水</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="analysis-block">
+                <div class="analysis-title">
+                  数据分析 · <span data-analysis-month-label="revpu"></span>
+                </div>
+                <div class="analysis-body" data-analysis-for="revpu"></div>
+              </div>
+              <div class="comment-block">
+                <div class="chart-comment-label">
+                  <span>我的备注（人均流水 &amp; 玩法结构）</span>
+                </div>
+                <textarea
+                  class="chart-comment-input"
+                  placeholder="记录不同玩法下自然量与买量的人均流水差异，补充对体育 / 游戏分布的理解。"
+                ></textarea>
+              </div>
+            </div>
+          </article>
+
+          <!-- 5. 体育 vs 游戏玩家比例（自然量） -->
+          <article class="chart-card" id="card-sports-mix">
+            <header class="chart-card-header">
+              <div class="chart-title-block">
+                <div class="chart-kicker">Product Mix · Organic</div>
+                <div class="chart-title">体育 vs 游戏玩家比例（自然量）</div>
+                <div class="chart-sub">
+                  仅看自然量用户的体育 /
+                  游戏偏好结构，用于衡量自然盘玩法健康度。
+                </div>
+              </div>
+              <div class="chart-header-meta">
+                <span>维度：国家 × 月</span>
+                <span>说明：本模块只使用自然量数据</span>
+              </div>
+            </header>
+            <div class="chart-card-body">
+              <div class="chart-controls">
+                <span class="chart-badge">单位：%（体育 / 游戏玩家占比）</span>
+                <div class="chart-filter-row">
+                  <div
+                    class="filter-group"
+                    data-module="sportsMix"
+                    data-filter-kind="country"
+                  >
+                    <div class="filter-label">国家：</div>
+                    <div class="filter-chips js-filter-chips"></div>
+                  </div>
+                  <div
+                    class="filter-group"
+                    data-module="sportsMix"
+                    data-filter-kind="month"
+                  >
+                    <div class="filter-label">月份：</div>
+                    <div class="filter-chips js-filter-chips"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="chart-main">
+                <div id="chart-sports-mix" class="chart-container"></div>
+              </div>
+              <div class="chart-table-wrapper">
+                <div class="chart-table-title">
+                  自然量体育 / 游戏玩家结构 · 国家拆分
+                </div>
+                <table class="chart-table" id="table-sports-mix">
+                  <thead>
+                    <tr>
+                      <th>国家</th>
+                      <th>自然量体/游D0</th>
+                      <th>自然量体/游D7</th>
+                      <th>买量体/游D0</th>
+                      <th>买量体/游D7</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="analysis-block">
+                <div class="analysis-title">
+                  数据分析 · <span data-analysis-month-label="sportsMix"></span>
+                </div>
+                <div class="analysis-body" data-analysis-for="sportsMix"></div>
+              </div>
+              <div class="comment-block">
+                <div class="chart-comment-label">
+                  <span>我的备注（玩法结构）</span>
+                </div>
+                <textarea
+                  class="chart-comment-input"
+                  placeholder="记录自然盘体育 / 游戏结构上的变化，比如赛事周期、体育衰退期游戏兜底等。"
+                ></textarea>
+              </div>
+            </div>
+          </article>
+
+          <!-- 6. 次日 / 7 日留存率 -->
+          <article class="chart-card" id="card-retention">
+            <header class="chart-card-header">
+              <div class="chart-title-block">
+                <div class="chart-kicker">Retention</div>
+                <div class="chart-title">
+                  次日 / 7 日留存率 · 自然量 vs 买量
+                </div>
+                <div class="chart-sub">
+                  对比自然量与买量的短期留存，辅助判断买量是否拉低整体留存表现。
+                </div>
+              </div>
+              <div class="chart-header-meta">
+                <span>维度：国家 × 日 / 月</span>
+                <span>按注册日 Cohort 统计 D1 / D7 留存</span>
+              </div>
+            </header>
+            <div class="chart-card-body">
+              <div class="chart-controls">
+                <span class="chart-badge">单位：%（留存用户数 / 注册数）</span>
+                <div class="chart-filter-row">
+                  <div
+                    class="filter-group"
+                    data-module="retention"
+                    data-filter-kind="country"
+                  >
+                    <div class="filter-label">国家：</div>
+                    <div class="filter-chips js-filter-chips"></div>
+                  </div>
+                  <div
+                    class="filter-group"
+                    data-module="retention"
+                    data-filter-kind="month"
+                  >
+                    <div class="filter-label">月份：</div>
+                    <div class="filter-chips js-filter-chips"></div>
+                  </div>
+                  <div class="chart-mini-filter">
+                    <span class="chart-mini-label">视图：</span>
+                    <div class="chart-mini-radio" data-module="retention">
+                      <button
+                        type="button"
+                        class="mini-radio-btn is-active"
+                        data-view="monthly"
+                      >
+                        月度柱状
+                      </button>
+                      <button
+                        type="button"
+                        class="mini-radio-btn"
+                        data-view="daily"
+                      >
+                        日度折线
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="chart-main">
+                <div id="chart-retention" class="chart-container"></div>
+              </div>
+              <div class="chart-table-wrapper">
+                <div class="chart-table-title">
+                  次日 / 7 日留存率 · 国家拆分
+                </div>
+                <table class="chart-table" id="table-retention">
+                  <thead>
+                    <tr>
+                      <th>国家</th>
+                      <th>自然量 D1 留存率</th>
+                      <th>自然量 D7 留存率</th>
+                      <th>买量 D1 留存率</th>
+                      <th>买量 D7 留存率</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="analysis-block">
+                <div class="analysis-title">
+                  数据分析 · <span data-analysis-month-label="retention"></span>
+                </div>
+                <div class="analysis-body" data-analysis-for="retention"></div>
+              </div>
+              <div class="comment-block">
+                <div class="chart-comment-label">
+                  <span>我的备注（留存 &amp; 生命周期）</span>
+                </div>
+                <textarea
+                  class="chart-comment-input"
+                  placeholder="记录自然量与买量在留存上的差异，并补充与活动周期、补贴强度等相关的解释。"
+                ></textarea>
+              </div>
+            </div>
+          </article>
+        </section>
+      </main>
+
+      <footer class="app-footer">
+        <div class="footer-left">
+          Owner：用户增长部-Jerry Lyu · 自然量&amp;买量数据看板 v3.1（从
+          RAW_ORGANIC_BY_MONTH 聚合）
+        </div>
+        <div class="footer-right">
+          数据来源：内部自然量&amp;买量数据报表 · 时间口径建议统一为 UTC+0
+          日切。
+        </div>
+      </footer>
+    </div>
+
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+
+    <!-- 主逻辑脚本：示例数据 + 交互逻辑 -->
+    <script>
+      (function () {
+        const ALL_MONTHS = ["2025-09", "2025-10"];
+        const ALL_COUNTRIES = ["GH", "KE", "NG", "TZ", "UG"];
+
+        const COLOR_ORGANIC = "#f97316"; // 橙色 - 自然量
+        const COLOR_ORGANIC_SHADOW = "rgba(249, 115, 22, 0.45)";
+        const COLOR_PAID = "#2563eb"; // 蓝色 - 买量
+        const COLOR_PAID_SHADOW = "rgba(37, 99, 235, 0.45)";
+
+        // ===== 示例数据源：RAW_ORGANIC / RAW_PAID =====
+        // 后续接入真实数据时，可以直接把 genSampleData 替换为你自己的聚合结果。
+        // ===== 源数据入口：自然量 & 买量（按日 × 国家 × 月） =====
+        // 使用约定：
+        // 1）每条记录 = 某天 × 某国家的数据
+        // 2）month:  "YYYY-MM"，必须出现在 ALL_MONTHS 里
+        // 3）date:   "YYYY-MM-DD"，用于日度折线图
+        // 4）金额单位：USD；人数单位：人；留存率用小数表示（35% 写 0.35）
+        // 5）买量比自然量多 3 个字段：spend, media, productType
+
+        // --- 自然量源数据（RAW_ORGANIC） ---
+        const RAW_ORGANIC = [
+          // ====== 2024-10 自然量（示例：GH）======
+          // ===== 2025-10 自然量（粘贴到自然量月度看板数据对象中） =====
+          // 在这里继续追加 2024-10 其他日期 / 其他国家
+          // { month: "2024-10", date: "2024-10-02", country: "GH", ... },
+          // ...
+          // ====== 2024-11、2024-12 等月份按同样结构往下追加 ======
+        ];
+
+        // --- 买量源数据（RAW_PAID） ---
+        const RAW_PAID = [
+          // ====== 2024-10 买量（示例：GH）======
+          // ===== 2025-10 买量（粘贴到买量月度看板数据对象中） =====
+          // 同样按「日 × 国家」继续补齐 2024-10
+          // 后续月份继续往数组末尾追加即可
+        ];
+
+        // 注意：使用真实数据时，注释掉 demo 生成函数
+        // genSampleData();
+
+        // ===== 数据分析文案库：按模块 × 月份维护 =====
+        const ANALYSIS_TEXT = {
+          // 1. 注册量
+          reg: {
+            "2024-10":
+              "示例文案：10 月整体注册规模相比 9 月有中等增长，自然量略增，买量拉升更明显；NG / GH 仍是注册主力国家，KE 买量放量后注册占比抬升。",
+            "2024-09":
+              "示例文案：9 月自然量主要由重点赛事驱动，买量相对收紧；TZ / UG 注册占比偏低，可结合 ROI 再评估投放策略。",
+          },
+          // 2. 付费率
+          payRate: {
+            "2024-10":
+              "示例文案：10 月整体 D0 付费率自然量优于买量，但部分国家买量 D7 有追平趋势；需重点关注买量 D0 过低但 D7 回补的国家，判断是否存在延迟激励或后置首充。",
+            "2024-09":
+              "示例文案：9 月自然量 D0 / D7 付费率结构相对稳定，买量在 NG / KE 质量分层明显，高出价媒体带来更高 D0 付费。",
+          },
+          // 3. ARPPU
+          arppu: {
+            "2024-10":
+              "示例文案：10 月自然量 ARPPU 整体高于买量，说明自然盘高价值玩家占比更高；部分国家买量 ARPPU 明显偏低，需排查是否存在补贴型活动或低质量渠道灌水。",
+            "2024-09":
+              "示例文案：9 月自然量与买量 ARPPU 差距不大，说明主站定价与活动节奏相对平衡，未出现极端补贴行为。",
+          },
+          // 4. 人均流水
+          revpu: {
+            "2024-10":
+              "示例文案：10 月体育人均流水在 NG / GH 表现最好，游戏在 TZ / UG 抬头；买量在体育方向的人均流水低于自然，游戏方向差距较小，可考虑体育买量更精细的定向与投放节奏。",
+            "2024-09":
+              "示例文案：9 月整体人均流水水平略低于 10 月，主要受赛事强度影响；游戏在人均流水上更稳定，可作为淡季兜底品类。",
+          },
+          // 5. 自然量玩法结构
+          sportsMix: {
+            "2024-10":
+              "示例文案：10 月自然盘整体仍以体育为主，但个别国家游戏占比已接近 40%，说明游戏在自然搜索和品牌心智上有提升空间，可继续加码内容与活动。",
+            "2024-09":
+              "示例文案：9 月体育占比高位，接近赛事旺季上沿，需关注后续体育淡季的结构回落情况。",
+          },
+          // 6. 留存
+          retention: {
+            "2024-10":
+              "示例文案：10 月自然量 D1 / D7 留存明显优于买量，其中 NG / KE 差距最大；建议对买量重点监控 D1 留存，淘汰留存偏低的媒体与素材组合。",
+            "2024-09":
+              "示例文案：9 月整体留存结构较为健康，自然与买量差距可控；部分小国家样本量较小，留存波动需结合注册基数看。",
+          },
+        };
+
+        // ===== 图表实例容器 =====
+        const charts = {
+          reg: null,
+          payRate: null,
+          arppu: null,
+          revpu: null,
+          sportsMix: null,
+          retention: null,
+        };
+
+        // ===== 全局看板状态 =====
+        const dashboardState = {
+          globalMonth: ALL_MONTHS[ALL_MONTHS.length - 1],
+          modules: {
+            reg: {
+              month: ALL_MONTHS[ALL_MONTHS.length - 1],
+              countries: ALL_COUNTRIES.slice(),
+              view: "monthly",
+            },
+            payRate: {
+              month: ALL_MONTHS[ALL_MONTHS.length - 1],
+              countries: ALL_COUNTRIES.slice(),
+              view: "monthly",
+            },
+            arppu: {
+              month: ALL_MONTHS[ALL_MONTHS.length - 1],
+              countries: ALL_COUNTRIES.slice(),
+              view: "monthly",
+            },
+            revpu: {
+              month: ALL_MONTHS[ALL_MONTHS.length - 1],
+              countries: ALL_COUNTRIES.slice(),
+              view: "monthly",
+              product: "total", // total / sports / games
+            },
+            sportsMix: {
+              month: ALL_MONTHS[ALL_MONTHS.length - 1],
+              countries: ALL_COUNTRIES.slice(),
+              view: "monthly",
+            },
+            retention: {
+              month: ALL_MONTHS[ALL_MONTHS.length - 1],
+              countries: ALL_COUNTRIES.slice(),
+              view: "monthly",
+            },
+          },
+        };
+
+        document.addEventListener("DOMContentLoaded", function () {
+          initGlobalMonthFilter();
+          initModuleFilters();
+          initCharts();
+          bindViewToggleEvents();
+          renderAll();
+
+          window.addEventListener("resize", function () {
+            Object.keys(charts).forEach(function (key) {
+              if (charts[key]) {
+                charts[key].resize();
+              }
+            });
+          });
+        });
+
+        // ---------------- Sample Data Generator ----------------
+        // 这里是为了 demo 写的示例数据生成逻辑。
+        // 实战中你可以把 RAW_ORGANIC / RAW_PAID 替换成自己从 EXCEL 聚合出来的结果，然后删掉本函数。
+
+        // ---------------- DOM helpers ----------------
+        function formatMonthLabel(month) {
+          // 输入格式：YYYY-MM，输出：YYYY-MM（你后续可以改成 “9 月 / 10 月”）
+          return month;
+        }
+
+        function safeArray(value, fallback) {
+          if (Array.isArray(value)) {
+            // 允许空数组，空选就返回 []
+            return value.slice();
+          }
+          // 非数组时才用 fallback（初始化等场景）
+          return fallback.slice();
+        }
+
+        // ---------------- Filters ----------------
+        function initGlobalMonthFilter() {
+          const wrapper = document.getElementById("global-month-filter");
+          if (!wrapper) return;
+
+          const chipsContainer = wrapper.querySelector(
+            ".js-global-month-chips"
+          );
+          if (!chipsContainer) return;
+
+          chipsContainer.innerHTML = "";
+
+          ALL_MONTHS.forEach(function (month) {
+            const label = document.createElement("label");
+            label.className = "filter-chip";
+
+            const input = document.createElement("input");
+            input.type = "checkbox";
+            input.value = month;
+            if (dashboardState.globalMonth === month) {
+              input.checked = true;
+            }
+
+            input.addEventListener("change", function () {
+              if (!input.checked) {
+                // 不允许全部取消：点已经选中的那个，只是取消选中时，直接拉回去
+                input.checked = true;
+                return;
+              }
+
+              // 【新增】保证全局月份是“单选”：把同一容器下其他月份全部取消
+              const siblings = chipsContainer.querySelectorAll(
+                "input[type='checkbox']"
+              );
+              siblings.forEach(function (el) {
+                if (el !== input) {
+                  el.checked = false;
+                }
+              });
+
+              // 同步全局状态
+              dashboardState.globalMonth = month;
+
+              // 全局：各模块月份同步为该月
+              Object.keys(dashboardState.modules).forEach(function (key) {
+                dashboardState.modules[key].month = month;
+              });
+
+              // 同步所有模块的月份筛选 UI
+              syncModuleMonthFiltersUI(month);
+
+              // 重新渲染
+              renderAll();
+            });
+
+            const span = document.createElement("span");
+            span.textContent = formatMonthLabel(month);
+            label.appendChild(input);
+            label.appendChild(span);
+            chipsContainer.appendChild(label);
+          });
+        }
+
+        function initModuleFilters() {
+          const groups = document.querySelectorAll(".filter-group");
+          groups.forEach(function (group) {
+            const moduleKey = group.getAttribute("data-module");
+            const kind = group.getAttribute("data-filter-kind");
+            if (!moduleKey || !kind) return;
+
+            const chipsContainer = group.querySelector(".js-filter-chips");
+            if (!chipsContainer) return;
+
+            chipsContainer.innerHTML = "";
+
+            if (kind === "country") {
+              ALL_COUNTRIES.forEach(function (country) {
+                createCountryChip(chipsContainer, moduleKey, country);
+              });
+            } else if (kind === "month") {
+              ALL_MONTHS.forEach(function (month) {
+                createMonthChip(chipsContainer, moduleKey, month);
+              });
+            } else if (kind === "product" && moduleKey === "revpu") {
+              [
+                { value: "total", label: "总" },
+                { value: "sports", label: "体育" },
+                { value: "games", label: "游戏" },
+              ].forEach(function (p) {
+                createProductChip(chipsContainer, moduleKey, p.value, p.label);
+              });
+            }
+          });
+        }
+
+        function createCountryChip(container, moduleKey, country) {
+          const label = document.createElement("label");
+          label.className = "filter-chip";
+
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.value = country;
+
+          const moduleState = dashboardState.modules[moduleKey];
+          if (moduleState && moduleState.countries.indexOf(country) !== -1) {
+            input.checked = true;
+          }
+
+          input.addEventListener("change", function () {
+            const state = dashboardState.modules[moduleKey];
+            if (!state) return;
+
+            let current = safeArray(state.countries, ALL_COUNTRIES);
+            if (input.checked) {
+              if (current.indexOf(country) === -1) {
+                current.push(country);
+              }
+            } else {
+              current = current.filter(function (c) {
+                return c !== country;
+              });
+            }
+
+            state.countries = current;
+            renderModule(moduleKey);
+          });
+
+          const span = document.createElement("span");
+          span.textContent = country;
+
+          label.appendChild(input);
+          label.appendChild(span);
+          container.appendChild(label);
+        }
+
+        function createMonthChip(container, moduleKey, month) {
+          const label = document.createElement("label");
+          label.className = "filter-chip";
+
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.value = month;
+
+          const state = dashboardState.modules[moduleKey];
+          if (state && state.month === month) {
+            input.checked = true;
+          }
+
+          input.addEventListener("change", function () {
+            const modState = dashboardState.modules[moduleKey];
+            if (!modState) return;
+
+            if (!input.checked) {
+              // 不允许全部取消，自动恢复为当前选中
+              input.checked = true;
+              return;
+            }
+
+            const siblings = container.querySelectorAll(
+              "input[type='checkbox']"
+            );
+            siblings.forEach(function (el) {
+              if (el !== input) {
+                el.checked = false;
+              }
+            });
+
+            modState.month = month;
+            renderModule(moduleKey);
+            updateAnalysisForModule(moduleKey);
+            updateHeroOverview();
+          });
+
+          const span = document.createElement("span");
+          span.textContent = formatMonthLabel(month);
+
+          label.appendChild(input);
+          label.appendChild(span);
+          container.appendChild(label);
+        }
+
+        function createProductChip(container, moduleKey, value, labelText) {
+          const label = document.createElement("label");
+          label.className = "filter-chip";
+
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.value = value;
+
+          const state = dashboardState.modules[moduleKey];
+          if (state && state.product === value) {
+            input.checked = true;
+          }
+
+          input.addEventListener("change", function () {
+            const modState = dashboardState.modules[moduleKey];
+            if (!modState) return;
+
+            if (!input.checked) {
+              input.checked = true;
+              return;
+            }
+
+            const siblings = container.querySelectorAll(
+              "input[type='checkbox']"
+            );
+            siblings.forEach(function (el) {
+              if (el !== input) el.checked = false;
+            });
+
+            modState.product = value;
+            renderModule(moduleKey);
+            updateAnalysisForModule(moduleKey);
+          });
+
+          const span = document.createElement("span");
+          span.textContent = labelText;
+
+          label.appendChild(input);
+          label.appendChild(span);
+          container.appendChild(label);
+        }
+
+        function syncModuleMonthFiltersUI(month) {
+          const groups = document.querySelectorAll(
+            ".filter-group[data-filter-kind='month']"
+          );
+          groups.forEach(function (group) {
+            const container = group.querySelector(".js-filter-chips");
+            if (!container) return;
+            const inputs = container.querySelectorAll("input[type='checkbox']");
+            inputs.forEach(function (input) {
+              input.checked = input.value === month;
+            });
+          });
+        }
+
+        // ---------------- Charts init & view toggles ----------------
+        function initCharts() {
+          if (window.echarts) {
+            const regEl = document.getElementById("chart-reg");
+            const payRateEl = document.getElementById("chart-payrate");
+            const arppuEl = document.getElementById("chart-arppu");
+            const revpuEl = document.getElementById("chart-revpu");
+            const sportsMixEl = document.getElementById("chart-sports-mix");
+            const retentionEl = document.getElementById("chart-retention");
+
+            if (regEl) charts.reg = echarts.init(regEl);
+            if (payRateEl) charts.payRate = echarts.init(payRateEl);
+            if (arppuEl) charts.arppu = echarts.init(arppuEl);
+            if (revpuEl) charts.revpu = echarts.init(revpuEl);
+            if (sportsMixEl) charts.sportsMix = echarts.init(sportsMixEl);
+            if (retentionEl) charts.retention = echarts.init(retentionEl);
+          }
+        }
+
+        function bindViewToggleEvents() {
+          const radios = document.querySelectorAll(".chart-mini-radio");
+          radios.forEach(function (group) {
+            const moduleKey = group.getAttribute("data-module");
+            if (!moduleKey) return;
+
+            group.addEventListener("click", function (evt) {
+              const btn = evt.target.closest("button[data-view]");
+              if (!btn) return;
+              const view = btn.getAttribute("data-view");
+              const state = dashboardState.modules[moduleKey];
+              if (!state) return;
+
+              state.view = view;
+
+              const allBtns = group.querySelectorAll("button[data-view]");
+              allBtns.forEach(function (b) {
+                b.classList.toggle("is-active", b === btn);
+              });
+
+              renderModule(moduleKey);
+            });
+          });
+        }
+
+        // ---------------- Aggregation helpers ----------------
+        function filterRows(source, month, countries) {
+          const useCountries = safeArray(countries, ALL_COUNTRIES);
+          return source.filter(function (row) {
+            return (
+              row.month === month && useCountries.indexOf(row.country) !== -1
+            );
+          });
+        }
+
+        function aggregateByCountry(rows, fields) {
+          const map = {};
+          rows.forEach(function (row) {
+            const c = row.country;
+            if (!c) return;
+            if (!map[c]) {
+              map[c] = {};
+              fields.forEach(function (f) {
+                map[c][f] = 0;
+              });
+            }
+            fields.forEach(function (f) {
+              map[c][f] += row[f] || 0;
+            });
+          });
+          return map;
+        }
+
+        function aggregateByDate(rows, fields) {
+          const map = {};
+          rows.forEach(function (row) {
+            const d = row.date;
+            if (!d) return;
+            if (!map[d]) {
+              map[d] = {};
+              fields.forEach(function (f) {
+                map[d][f] = 0;
+              });
+            }
+            fields.forEach(function (f) {
+              map[d][f] += row[f] || 0;
+            });
+          });
+          return map;
+        }
+
+        function sortKeys(keys) {
+          return keys.slice().sort();
+        }
+
+        // ---------------- Hero overview ----------------
+        function updateHeroOverview() {
+          const month = dashboardState.globalMonth;
+          const heroMonthEl = document.getElementById("hero-month-label");
+          if (heroMonthEl) {
+            heroMonthEl.textContent = formatMonthLabel(month);
+          }
+
+          const orgRows = filterRows(RAW_ORGANIC, month, ALL_COUNTRIES);
+          const paidRows = filterRows(RAW_PAID, month, ALL_COUNTRIES);
+
+          const orgRegs = orgRows.reduce(function (sum, r) {
+            return sum + (r.regs || 0);
+          }, 0);
+          const paidRegs = paidRows.reduce(function (sum, r) {
+            return sum + (r.regs || 0);
+          }, 0);
+
+          const orgEl = document.getElementById("hero-organic-reg");
+          const paidEl = document.getElementById("hero-paid-reg");
+          const ratioEl = document.getElementById("hero-reg-ratio");
+
+          if (orgEl) orgEl.textContent = orgRegs.toLocaleString();
+          if (paidEl) paidEl.textContent = paidRegs.toLocaleString();
+          if (ratioEl) {
+            if (orgRegs === 0) {
+              ratioEl.textContent = "-";
+            } else {
+              const ratio = paidRegs / orgRegs;
+              ratioEl.textContent = ratio.toFixed(2) + "x";
+            }
+          }
+        }
+
+        // ---------------- Analysis text ----------------
+        function updateAnalysisForModule(moduleKey) {
+          const state = dashboardState.modules[moduleKey];
+          if (!state) return;
+          const month = state.month;
+          const block = document.querySelector(
+            ".analysis-body[data-analysis-for='" + moduleKey + "']"
+          );
+          const monthLabelSpan = document.querySelector(
+            "[data-analysis-month-label='" + moduleKey + "']"
+          );
+          if (monthLabelSpan) {
+            monthLabelSpan.textContent = formatMonthLabel(month);
+          }
+
+          if (!block) return;
+          const dict = ANALYSIS_TEXT[moduleKey] || {};
+          const text =
+            dict[month] ||
+            "当前月份暂无数据分析文案，请在 ANALYSIS_TEXT." +
+              moduleKey +
+              " 中维护。";
+          block.textContent = text;
+        }
+
+        function updateAllAnalysis() {
+          Object.keys(dashboardState.modules).forEach(function (key) {
+            updateAnalysisForModule(key);
+          });
+        }
+
+        // ---------------- Render entrypoints ----------------
+        function renderModule(moduleKey) {
+          if (moduleKey === "reg") {
+            renderRegModule();
+          } else if (moduleKey === "payRate") {
+            renderPayRateModule();
+          } else if (moduleKey === "arppu") {
+            renderArppuModule();
+          } else if (moduleKey === "revpu") {
+            renderRevpuModule();
+          } else if (moduleKey === "sportsMix") {
+            renderSportsMixModule();
+          } else if (moduleKey === "retention") {
+            renderRetentionModule();
+          }
+        }
+
+        function renderAll() {
+          renderRegModule();
+          renderPayRateModule();
+          renderArppuModule();
+          renderRevpuModule();
+          renderSportsMixModule();
+          renderRetentionModule();
+          updateAllAnalysis();
+          updateHeroOverview();
+        }
+
+        // ---------------- Module 1: 注册量 ----------------
+        function renderRegModule() {
+          const state = dashboardState.modules.reg;
+          const month = state.month;
+          const countries = safeArray(state.countries, ALL_COUNTRIES);
+          const view = state.view || "monthly";
+
+          const orgRows = filterRows(RAW_ORGANIC, month, countries);
+          const paidRows = filterRows(RAW_PAID, month, countries);
+
+          const chart = charts.reg;
+          if (!chart) return;
+
+          let option;
+
+          if (view === "daily") {
+            const orgAgg = aggregateByDate(orgRows, ["regs"]);
+            const paidAgg = aggregateByDate(paidRows, ["regs"]);
+
+            const allDates = sortKeys(
+              Array.from(
+                new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+              )
+            );
+
+            const orgSeries = allDates.map(function (d) {
+              return (orgAgg[d] && orgAgg[d].regs) || 0;
+            });
+            const paidSeries = allDates.map(function (d) {
+              return (paidAgg[d] && paidAgg[d].regs) || 0;
+            });
+
+            option = {
+              tooltip: {
+                trigger: "axis",
+              },
+              legend: {
+                data: ["自然量注册", "买量注册"],
+              },
+              grid: {
+                left: 40,
+                right: 20,
+                top: 40,
+                bottom: 40,
+              },
+              xAxis: {
+                type: "category",
+                data: allDates,
+              },
+              yAxis: {
+                type: "value",
+              },
+              series: [
+                {
+                  name: "自然量注册",
+                  type: "line",
+                  smooth: true,
+                  showSymbol: false,
+                  itemStyle: {
+                    color: COLOR_ORGANIC,
+                  },
+                  areaStyle: {
+                    opacity: 0.06,
+                    color: COLOR_ORGANIC,
+                  },
+                  data: orgSeries,
+                },
+                {
+                  name: "买量注册",
+                  type: "line",
+                  smooth: true,
+                  showSymbol: false,
+                  itemStyle: {
+                    color: COLOR_PAID,
+                  },
+                  areaStyle: {
+                    opacity: 0.06,
+                    color: COLOR_PAID,
+                  },
+                  data: paidSeries,
+                },
+              ],
+            };
+          } else {
+            const orgAgg = aggregateByCountry(orgRows, ["regs"]);
+            const paidAgg = aggregateByCountry(paidRows, ["regs"]);
+
+            const allCountries = sortKeys(
+              Array.from(
+                new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+              )
+            );
+
+            const orgSeries = allCountries.map(function (c) {
+              return (orgAgg[c] && orgAgg[c].regs) || 0;
+            });
+            const paidSeries = allCountries.map(function (c) {
+              return (paidAgg[c] && paidAgg[c].regs) || 0;
+            });
+
+            option = {
+              tooltip: {
+                trigger: "axis",
+                axisPointer: { type: "shadow" },
+              },
+              legend: {
+                data: ["自然量注册", "买量注册"],
+              },
+              grid: {
+                left: 40,
+                right: 20,
+                top: 40,
+                bottom: 40,
+              },
+              xAxis: {
+                type: "category",
+                data: allCountries,
+              },
+              yAxis: {
+                type: "value",
+              },
+              series: [
+                {
+                  name: "自然量注册",
+                  type: "bar",
+                  barGap: "20%",
+                  itemStyle: {
+                    color: COLOR_ORGANIC,
+                  },
+                  data: orgSeries,
+                },
+                {
+                  name: "买量注册",
+                  type: "bar",
+                  itemStyle: {
+                    color: COLOR_PAID,
+                  },
+                  data: paidSeries,
+                },
+              ],
+            };
+          }
+
+          chart.setOption(option, true);
+          renderRegTable(orgRows, paidRows);
+        }
+
+        function renderRegTable(orgRows, paidRows) {
+          const tableBody = document.querySelector("#table-reg tbody");
+          if (!tableBody) return;
+
+          const orgAgg = aggregateByCountry(orgRows, ["regs"]);
+          const paidAgg = aggregateByCountry(paidRows, ["regs"]);
+
+          const allCountries = sortKeys(
+            Array.from(
+              new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+            )
+          );
+
+          let totalOrg = 0;
+          let totalPaid = 0;
+          allCountries.forEach(function (c) {
+            totalOrg += (orgAgg[c] && orgAgg[c].regs) || 0;
+            totalPaid += (paidAgg[c] && paidAgg[c].regs) || 0;
+          });
+          const totalAll = totalOrg + totalPaid;
+
+          tableBody.innerHTML = "";
+
+          allCountries.forEach(function (c) {
+            const org = (orgAgg[c] && orgAgg[c].regs) || 0;
+            const paid = (paidAgg[c] && paidAgg[c].regs) || 0;
+            const total = org + paid;
+            const orgShare = totalAll ? (org / totalAll) * 100 : 0;
+            const paidShare = totalAll ? (paid / totalAll) * 100 : 0;
+
+            const tr = document.createElement("tr");
+            tr.innerHTML =
+              "<td>" +
+              c +
+              "</td>" +
+              "<td>" +
+              orgShare.toFixed(1) +
+              "%</td>" +
+              "<td>" +
+              paidShare.toFixed(1) +
+              "%</td>" +
+              "<td>" +
+              org.toLocaleString() +
+              "</td>" +
+              "<td>" +
+              paid.toLocaleString() +
+              "</td>" +
+              "<td>" +
+              total.toLocaleString() +
+              "</td>";
+            tableBody.appendChild(tr);
+          });
+        }
+
+        // ---------------- Module 2: 付费率 ----------------
+        function renderPayRateModule() {
+          const state = dashboardState.modules.payRate;
+          const month = state.month;
+          const countries = safeArray(state.countries, ALL_COUNTRIES);
+          const view = state.view || "monthly";
+
+          const orgRows = filterRows(RAW_ORGANIC, month, countries);
+          const paidRows = filterRows(RAW_PAID, month, countries);
+
+          const chart = charts.payRate;
+          if (!chart) return;
+
+          let option;
+
+          if (view === "daily") {
+            const orgAgg = aggregateByDate(orgRows, [
+              "regs",
+              "d0Payers",
+              "d7Payers",
+            ]);
+            const paidAgg = aggregateByDate(paidRows, [
+              "regs",
+              "d0Payers",
+              "d7Payers",
+            ]);
+
+            const allDates = sortKeys(
+              Array.from(
+                new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+              )
+            );
+
+            const orgD0 = [];
+            const orgD7 = [];
+            const paidD0 = [];
+            const paidD7 = [];
+
+            allDates.forEach(function (d) {
+              const o = orgAgg[d] || {};
+              const p = paidAgg[d] || {};
+              orgD0.push(o.regs ? (o.d0Payers / o.regs) * 100 : 0);
+              orgD7.push(o.regs ? (o.d7Payers / o.regs) * 100 : 0);
+              paidD0.push(p.regs ? (p.d0Payers / p.regs) * 100 : 0);
+              paidD7.push(p.regs ? (p.d7Payers / p.regs) * 100 : 0);
+            });
+
+            option = {
+              tooltip: {
+                trigger: "axis",
+                valueFormatter: function (val) {
+                  return val.toFixed(2) + "%";
+                },
+              },
+              legend: {
+                data: ["自然量 D0", "自然量 D7", "买量 D0", "买量 D7"],
+              },
+              grid: {
+                left: 40,
+                right: 20,
+                top: 40,
+                bottom: 40,
+              },
+              xAxis: {
+                type: "category",
+                data: allDates,
+              },
+              yAxis: {
+                type: "value",
+                axisLabel: {
+                  formatter: "{value}%",
+                },
+              },
+              series: [
+                {
+                  name: "自然量 D0",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_ORGANIC },
+                  data: orgD0,
+                },
+                {
+                  name: "自然量 D7",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_ORGANIC },
+                  lineStyle: { width: 2, type: "dashed" },
+                  areaStyle: { opacity: 0.05, color: COLOR_ORGANIC },
+                  data: orgD7,
+                },
+                {
+                  name: "买量 D0",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_PAID },
+                  data: paidD0,
+                },
+                {
+                  name: "买量 D7",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_PAID },
+                  lineStyle: { width: 2, type: "dashed" },
+                  areaStyle: { opacity: 0.05, color: COLOR_PAID },
+                  data: paidD7,
+                },
+              ],
+            };
+          } else {
+            const orgAgg = aggregateByCountry(orgRows, [
+              "regs",
+              "d0Payers",
+              "d7Payers",
+            ]);
+            const paidAgg = aggregateByCountry(paidRows, [
+              "regs",
+              "d0Payers",
+              "d7Payers",
+            ]);
+
+            const allCountries = sortKeys(
+              Array.from(
+                new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+              )
+            );
+
+            const orgD0 = [];
+            const orgD7 = [];
+            const paidD0 = [];
+            const paidD7 = [];
+
+            allCountries.forEach(function (c) {
+              const o = orgAgg[c] || {};
+              const p = paidAgg[c] || {};
+              orgD0.push(o.regs ? (o.d0Payers / o.regs) * 100 : 0);
+              orgD7.push(o.regs ? (o.d7Payers / o.regs) * 100 : 0);
+              paidD0.push(p.regs ? (p.d0Payers / p.regs) * 100 : 0);
+              paidD7.push(p.regs ? (p.d7Payers / p.regs) * 100 : 0);
+            });
+
+            option = {
+              tooltip: {
+                trigger: "axis",
+                axisPointer: { type: "shadow" },
+                valueFormatter: function (val) {
+                  return val.toFixed(2) + "%";
+                },
+              },
+              legend: {
+                data: ["自然量 D0", "自然量 D7", "买量 D0", "买量 D7"],
+              },
+              grid: {
+                left: 40,
+                right: 20,
+                top: 40,
+                bottom: 40,
+              },
+              xAxis: {
+                type: "category",
+                data: allCountries,
+              },
+              yAxis: {
+                type: "value",
+                axisLabel: {
+                  formatter: "{value}%",
+                },
+              },
+              series: [
+                {
+                  name: "自然量 D0",
+                  type: "bar",
+                  barGap: "10%",
+                  itemStyle: { color: COLOR_ORGANIC },
+                  data: orgD0,
+                },
+                {
+                  name: "自然量 D7",
+                  type: "bar",
+                  itemStyle: {
+                    color: COLOR_ORGANIC,
+                    opacity: 0.7,
+                    shadowBlur: 10,
+                    shadowColor: COLOR_ORGANIC_SHADOW,
+                  },
+                  data: orgD7,
+                },
+                {
+                  name: "买量 D0",
+                  type: "bar",
+                  itemStyle: { color: COLOR_PAID },
+                  data: paidD0,
+                },
+                {
+                  name: "买量 D7",
+                  type: "bar",
+                  itemStyle: {
+                    color: COLOR_PAID,
+                    opacity: 0.7,
+                    shadowBlur: 10,
+                    shadowColor: COLOR_PAID_SHADOW,
+                  },
+                  data: paidD7,
+                },
+              ],
+            };
+          }
+
+          chart.setOption(option, true);
+          renderPayRateTable(orgRows, paidRows);
+        }
+
+        function renderPayRateTable(orgRows, paidRows) {
+          const tbody = document.querySelector("#table-payrate tbody");
+          if (!tbody) return;
+
+          const orgAgg = aggregateByCountry(orgRows, [
+            "regs",
+            "d0Payers",
+            "d7Payers",
+          ]);
+          const paidAgg = aggregateByCountry(paidRows, [
+            "regs",
+            "d0Payers",
+            "d7Payers",
+          ]);
+
+          const allCountries = sortKeys(
+            Array.from(
+              new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+            )
+          );
+
+          tbody.innerHTML = "";
+
+          allCountries.forEach(function (c) {
+            const o = orgAgg[c] || {};
+            const p = paidAgg[c] || {};
+            const orgD0 = o.regs ? (o.d0Payers / o.regs) * 100 : 0;
+            const orgD7 = o.regs ? (o.d7Payers / o.regs) * 100 : 0;
+            const paidD0 = p.regs ? (p.d0Payers / p.regs) * 100 : 0;
+            const paidD7 = p.regs ? (p.d7Payers / p.regs) * 100 : 0;
+
+            const tr = document.createElement("tr");
+            tr.innerHTML =
+              "<td>" +
+              c +
+              "</td>" +
+              "<td>" +
+              orgD0.toFixed(2) +
+              "%</td>" +
+              "<td>" +
+              orgD7.toFixed(2) +
+              "%</td>" +
+              "<td>" +
+              paidD0.toFixed(2) +
+              "%</td>" +
+              "<td>" +
+              paidD7.toFixed(2) +
+              "%</td>";
+            tbody.appendChild(tr);
+          });
+        }
+
+        // ---------------- Module 3: ARPPU ----------------
+        function renderArppuModule() {
+          const state = dashboardState.modules.arppu;
+          const month = state.month;
+          const countries = safeArray(state.countries, ALL_COUNTRIES);
+          const view = state.view || "monthly";
+
+          const orgRows = filterRows(RAW_ORGANIC, month, countries);
+          const paidRows = filterRows(RAW_PAID, month, countries);
+
+          const chart = charts.arppu;
+          if (!chart) return;
+
+          let option;
+
+          if (view === "daily") {
+            const orgAgg = aggregateByDate(orgRows, [
+              "d0Payers",
+              "d7Payers",
+              "D0_PURCHASE_VALUE",
+              "D7_PURCHASE_VALUE",
+            ]);
+            const paidAgg = aggregateByDate(paidRows, [
+              "d0Payers",
+              "d7Payers",
+              "D0_PURCHASE_VALUE",
+              "D7_PURCHASE_VALUE",
+            ]);
+
+            const allDates = sortKeys(
+              Array.from(
+                new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+              )
+            );
+
+            const orgD0 = [];
+            const orgD7 = [];
+            const paidD0 = [];
+            const paidD7 = [];
+
+            allDates.forEach(function (d) {
+              const o = orgAgg[d] || {};
+              const p = paidAgg[d] || {};
+              const orgV0 = o.D0_PURCHASE_VALUE || 0;
+              const orgV7 = o.D7_PURCHASE_VALUE || 0;
+              const paidV0 = p.D0_PURCHASE_VALUE || 0;
+              const paidV7 = p.D7_PURCHASE_VALUE || 0;
+
+              orgD0.push(o.d0Payers ? orgV0 / o.d0Payers : 0);
+              orgD7.push(o.d7Payers ? orgV7 / o.d7Payers : 0);
+              paidD0.push(p.d0Payers ? paidV0 / p.d0Payers : 0);
+              paidD7.push(p.d7Payers ? paidV7 / p.d7Payers : 0);
+            });
+
+            option = {
+              tooltip: { trigger: "axis" },
+              legend: {
+                data: ["自然量 D0", "自然量 D7", "买量 D0", "买量 D7"],
+              },
+              grid: {
+                left: 40,
+                right: 20,
+                top: 40,
+                bottom: 40,
+              },
+              xAxis: { type: "category", data: allDates },
+              yAxis: { type: "value" },
+              series: [
+                {
+                  name: "自然量 D0",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_ORGANIC },
+                  data: orgD0,
+                },
+                {
+                  name: "自然量 D7",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_ORGANIC },
+                  lineStyle: { type: "dashed" },
+                  areaStyle: { opacity: 0.05, color: COLOR_ORGANIC },
+                  data: orgD7,
+                },
+                {
+                  name: "买量 D0",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_PAID },
+                  data: paidD0,
+                },
+                {
+                  name: "买量 D7",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_PAID },
+                  lineStyle: { type: "dashed" },
+                  areaStyle: { opacity: 0.05, color: COLOR_PAID },
+                  data: paidD7,
+                },
+              ],
+            };
+          } else {
+            const orgAgg = aggregateByDate(orgRows, [
+              "d0Payers",
+              "d7Payers",
+              "D0_PURCHASE_VALUE",
+              "D7_PURCHASE_VALUE",
+            ]);
+            const paidAgg = aggregateByDate(paidRows, [
+              "d0Payers",
+              "d7Payers",
+              "D0_PURCHASE_VALUE",
+              "D7_PURCHASE_VALUE",
+            ]);
+
+            const allCountries = sortKeys(
+              Array.from(
+                new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+              )
+            );
+
+            const orgD0 = [];
+            const orgD7 = [];
+            const paidD0 = [];
+            const paidD7 = [];
+
+            allCountries.forEach(function (c) {
+              const o = orgAgg[c] || {};
+              const p = paidAgg[c] || {};
+              const orgV0 = o.D0_PURCHASE_VALUE || 0;
+              const orgV7 = o.D7_PURCHASE_VALUE || 0;
+              const paidV0 = p.D0_PURCHASE_VALUE || 0;
+              const paidV7 = p.D7_PURCHASE_VALUE || 0;
+
+              orgD0.push(o.d0Payers ? orgV0 / o.d0Payers : 0);
+              orgD7.push(o.d7Payers ? orgV7 / o.d7Payers : 0);
+              paidD0.push(p.d0Payers ? paidV0 / p.d0Payers : 0);
+              paidD7.push(p.d7Payers ? paidV7 / p.d7Payers : 0);
+            });
+
+            option = {
+              tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+              legend: {
+                data: ["自然量 D0", "自然量 D7", "买量 D0", "买量 D7"],
+              },
+              grid: {
+                left: 40,
+                right: 20,
+                top: 40,
+                bottom: 40,
+              },
+              xAxis: { type: "category", data: allCountries },
+              yAxis: { type: "value" },
+              series: [
+                {
+                  name: "自然量 D0",
+                  type: "bar",
+                  barGap: "10%",
+                  itemStyle: { color: COLOR_ORGANIC },
+                  data: orgD0,
+                },
+                {
+                  name: "自然量 D7",
+                  type: "bar",
+                  itemStyle: {
+                    color: COLOR_ORGANIC,
+                    opacity: 0.7,
+                    shadowBlur: 10,
+                    shadowColor: COLOR_ORGANIC_SHADOW,
+                  },
+                  data: orgD7,
+                },
+                {
+                  name: "买量 D0",
+                  type: "bar",
+                  itemStyle: { color: COLOR_PAID },
+                  data: paidD0,
+                },
+                {
+                  name: "买量 D7",
+                  type: "bar",
+                  itemStyle: {
+                    color: COLOR_PAID,
+                    opacity: 0.7,
+                    shadowBlur: 10,
+                    shadowColor: COLOR_PAID_SHADOW,
+                  },
+                  data: paidD7,
+                },
+              ],
+            };
+          }
+
+          chart.setOption(option, true);
+          renderArppuTable(orgRows, paidRows);
+        }
+
+        function renderArppuTable(orgRows, paidRows) {
+          const tbody = document.querySelector("#table-arppu tbody");
+          if (!tbody) return;
+
+          const orgAgg = aggregateByDate(orgRows, [
+            "d0Payers",
+            "d7Payers",
+            "D0_PURCHASE_VALUE",
+            "D7_PURCHASE_VALUE",
+          ]);
+          const paidAgg = aggregateByDate(paidRows, [
+            "d0Payers",
+            "d7Payers",
+            "D0_PURCHASE_VALUE",
+            "D7_PURCHASE_VALUE",
+          ]);
+
+          const allCountries = sortKeys(
+            Array.from(
+              new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+            )
+          );
+
+          tbody.innerHTML = "";
+
+          allCountries.forEach(function (c) {
+            const o = orgAgg[c] || {};
+            const p = paidAgg[c] || {};
+            const orgV0 = o.D0_PURCHASE_VALUE || 0;
+            const orgV7 = o.D7_PURCHASE_VALUE || 0;
+            const paidV0 = p.D0_PURCHASE_VALUE || 0;
+            const paidV7 = p.D7_PURCHASE_VALUE || 0;
+
+            orgD0.push(o.d0Payers ? orgV0 / o.d0Payers : 0);
+            orgD7.push(o.d7Payers ? orgV7 / o.d7Payers : 0);
+            paidD0.push(p.d0Payers ? paidV0 / p.d0Payers : 0);
+            paidD7.push(p.d7Payers ? paidV7 / p.d7Payers : 0);
+
+            const tr = document.createElement("tr");
+            tr.innerHTML =
+              "<td>" +
+              c +
+              "</td>" +
+              "<td>" +
+              orgD0.toFixed(2) +
+              "</td>" +
+              "<td>" +
+              orgD7.toFixed(2) +
+              "</td>" +
+              "<td>" +
+              paidD0.toFixed(2) +
+              "</td>" +
+              "<td>" +
+              paidD7.toFixed(2) +
+              "</td>";
+            tbody.appendChild(tr);
+          });
+        }
+
+        // ---------------- Module 4: 人均流水 ----------------
+        function getBetFlowByProduct(aggEntry, product, phase) {
+          if (!aggEntry) return 0;
+          const isD0 = phase === "D0";
+          if (product === "sports")
+            return (
+              aggEntry[isD0 ? "D0_SPORTS_BET_FLOW" : "D7_SPORTS_BET_FLOW"] || 0
+            );
+          if (product === "games")
+            return (
+              aggEntry[isD0 ? "D0_GAMES_BET_FLOW" : "D7_GAMES_BET_FLOW"] || 0
+            );
+          return (
+            aggEntry[isD0 ? "D0_TOTAL_BET_FLOW" : "D7_TOTAL_BET_FLOW"] || 0
+          );
+        }
+
+        function getBetPlacedUserByProduct(aggEntry, product, phase) {
+          if (!aggEntry) return 0;
+          const isD0 = phase === "D0";
+          if (product === "sports")
+            return (
+              aggEntry[
+                isD0 ? "D0_SPORTS_BET_PLACED_USER" : "D7_SPORTS_BET_PLACED_USER"
+              ] || 0
+            );
+          if (product === "games")
+            return (
+              aggEntry[
+                isD0 ? "D0_GAMES_BET_PLACED_USER" : "D7_GAMES_BET_PLACED_USER"
+              ] || 0
+            );
+          return (
+            aggEntry[
+              isD0 ? "D0_TOTAL_BET_PLACED_USER" : "D7_TOTAL_BET_PLACED_USER"
+            ] || 0
+          );
+        }
+
+        function renderRevpuModule() {
+          const state = dashboardState.modules.revpu;
+          const month = state.month;
+          const countries = safeArray(state.countries, ALL_COUNTRIES);
+          const view = state.view || "monthly";
+          const product = state.product || "total";
+
+          const orgRows = filterRows(RAW_ORGANIC, month, countries);
+          const paidRows = filterRows(RAW_PAID, month, countries);
+
+          const chart = charts.revpu;
+          if (!chart) return;
+
+          let option;
+
+          if (view === "daily") {
+            const orgAgg = aggregateByDate(orgRows, [
+              "regs",
+              "ggrSportsD0",
+              "ggrSportsD7",
+              "ggrGamesD0",
+              "ggrGamesD7",
+            ]);
+            const paidAgg = aggregateByDate(paidRows, [
+              "regs",
+              "ggrSportsD0",
+              "ggrSportsD7",
+              "ggrGamesD0",
+              "ggrGamesD7",
+            ]);
+
+            const allDates = sortKeys(
+              Array.from(
+                new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+              )
+            );
+
+            const orgD0 = [];
+            const orgD7 = [];
+            const paidD0 = [];
+            const paidD7 = [];
+
+            allDates.forEach(function (d) {
+              const o = orgAgg[d] || {};
+              const p = paidAgg[d] || {};
+              const orgFlow0 = getBetFlowByProduct(o, product, "D0");
+              const orgFlow7 = getBetFlowByProduct(o, product, "D7");
+              const paidFlow0 = getBetFlowByProduct(p, product, "D0");
+              const paidFlow7 = getBetFlowByProduct(p, product, "D7");
+
+              const orgU0 = getBetPlacedUserByProduct(o, product, "D0");
+              const orgU7 = getBetPlacedUserByProduct(o, product, "D7");
+              const paidU0 = getBetPlacedUserByProduct(p, product, "D0");
+              const paidU7 = getBetPlacedUserByProduct(p, product, "D7");
+
+              const orgD0 = orgU0 ? orgFlow0 / orgU0 : 0;
+              const orgD7 = orgU7 ? orgFlow7 / orgU7 : 0;
+              const paidD0 = paidU0 ? paidFlow0 / paidU0 : 0;
+              const paidD7 = paidU7 ? paidFlow7 / paidU7 : 0;
+            });
+
+            option = {
+              tooltip: { trigger: "axis" },
+              legend: {
+                data: ["自然量 D0", "自然量 D7", "买量 D0", "买量 D7"],
+              },
+              grid: {
+                left: 40,
+                right: 20,
+                top: 40,
+                bottom: 40,
+              },
+              xAxis: { type: "category", data: allDates },
+              yAxis: { type: "value" },
+              series: [
+                {
+                  name: "自然量 D0",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_ORGANIC },
+                  data: orgD0,
+                },
+                {
+                  name: "自然量 D7",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_ORGANIC },
+                  lineStyle: { type: "dashed" },
+                  areaStyle: { opacity: 0.05, color: COLOR_ORGANIC },
+                  data: orgD7,
+                },
+                {
+                  name: "买量 D0",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_PAID },
+                  data: paidD0,
+                },
+                {
+                  name: "买量 D7",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_PAID },
+                  lineStyle: { type: "dashed" },
+                  areaStyle: { opacity: 0.05, color: COLOR_PAID },
+                  data: paidD7,
+                },
+              ],
+            };
+          } else {
+            const orgAgg = aggregateByCountry(orgRows, [
+              "regs",
+              "ggrSportsD0",
+              "ggrSportsD7",
+              "ggrGamesD0",
+              "ggrGamesD7",
+            ]);
+            const paidAgg = aggregateByCountry(paidRows, [
+              "regs",
+              "ggrSportsD0",
+              "ggrSportsD7",
+              "ggrGamesD0",
+              "ggrGamesD7",
+            ]);
+
+            const allCountries = sortKeys(
+              Array.from(
+                new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+              )
+            );
+
+            const orgD0 = [];
+            const orgD7 = [];
+            const paidD0 = [];
+            const paidD7 = [];
+
+            allCountries.forEach(function (c) {
+              const o = orgAgg[c] || {};
+              const p = paidAgg[c] || {};
+              const orgFlow0 = getBetFlowByProduct(o, product, "D0");
+              const orgFlow7 = getBetFlowByProduct(o, product, "D7");
+              const paidFlow0 = getBetFlowByProduct(p, product, "D0");
+              const paidFlow7 = getBetFlowByProduct(p, product, "D7");
+
+              const orgU0 = getBetPlacedUserByProduct(o, product, "D0");
+              const orgU7 = getBetPlacedUserByProduct(o, product, "D7");
+              const paidU0 = getBetPlacedUserByProduct(p, product, "D0");
+              const paidU7 = getBetPlacedUserByProduct(p, product, "D7");
+
+              const orgD0 = orgU0 ? orgFlow0 / orgU0 : 0;
+              const orgD7 = orgU7 ? orgFlow7 / orgU7 : 0;
+              const paidD0 = paidU0 ? paidFlow0 / paidU0 : 0;
+              const paidD7 = paidU7 ? paidFlow7 / paidU7 : 0;
+            });
+
+            option = {
+              tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+              legend: {
+                data: ["自然量 D0", "自然量 D7", "买量 D0", "买量 D7"],
+              },
+              grid: {
+                left: 40,
+                right: 20,
+                top: 40,
+                bottom: 40,
+              },
+              xAxis: { type: "category", data: allCountries },
+              yAxis: { type: "value" },
+              series: [
+                {
+                  name: "自然量 D0",
+                  type: "bar",
+                  barGap: "10%",
+                  itemStyle: { color: COLOR_ORGANIC },
+                  data: orgD0,
+                },
+                {
+                  name: "自然量 D7",
+                  type: "bar",
+                  itemStyle: {
+                    color: COLOR_ORGANIC,
+                    opacity: 0.7,
+                    shadowBlur: 10,
+                    shadowColor: COLOR_ORGANIC_SHADOW,
+                  },
+                  data: orgD7,
+                },
+                {
+                  name: "买量 D0",
+                  type: "bar",
+                  itemStyle: { color: COLOR_PAID },
+                  data: paidD0,
+                },
+                {
+                  name: "买量 D7",
+                  type: "bar",
+                  itemStyle: {
+                    color: COLOR_PAID,
+                    opacity: 0.7,
+                    shadowBlur: 10,
+                    shadowColor: COLOR_PAID_SHADOW,
+                  },
+                  data: paidD7,
+                },
+              ],
+            };
+          }
+
+          chart.setOption(option, true);
+          renderRevpuTable(orgRows, paidRows);
+        }
+
+        function renderRevpuTable(orgRows, paidRows) {
+          const tbody = document.querySelector("#table-revpu tbody");
+          if (!tbody) return;
+
+          const state = dashboardState.modules.revpu;
+          const product = state.product || "total";
+
+          const orgAgg = aggregateByCountry(orgRows, [
+            "regs",
+            "ggrSportsD0",
+            "ggrSportsD7",
+            "ggrGamesD0",
+            "ggrGamesD7",
+          ]);
+          const paidAgg = aggregateByCountry(paidRows, [
+            "regs",
+            "ggrSportsD0",
+            "ggrSportsD7",
+            "ggrGamesD0",
+            "ggrGamesD7",
+          ]);
+
+          const allCountries = sortKeys(
+            Array.from(
+              new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+            )
+          );
+
+          tbody.innerHTML = "";
+
+          allCountries.forEach(function (c) {
+            const o = orgAgg[c] || {};
+            const p = paidAgg[c] || {};
+            const orgFlow0 = getBetFlowByProduct(o, product, "D0");
+            const orgFlow7 = getBetFlowByProduct(o, product, "D7");
+            const paidFlow0 = getBetFlowByProduct(p, product, "D0");
+            const paidFlow7 = getBetFlowByProduct(p, product, "D7");
+
+            const orgU0 = getBetPlacedUserByProduct(o, product, "D0");
+            const orgU7 = getBetPlacedUserByProduct(o, product, "D7");
+            const paidU0 = getBetPlacedUserByProduct(p, product, "D0");
+            const paidU7 = getBetPlacedUserByProduct(p, product, "D7");
+
+            const orgD0 = orgU0 ? orgFlow0 / orgU0 : 0;
+            const orgD7 = orgU7 ? orgFlow7 / orgU7 : 0;
+            const paidD0 = paidU0 ? paidFlow0 / paidU0 : 0;
+            const paidD7 = paidU7 ? paidFlow7 / paidU7 : 0;
+
+            const tr = document.createElement("tr");
+            tr.innerHTML =
+              "<td>" +
+              c +
+              "</td>" +
+              "<td>" +
+              orgD0.toFixed(2) +
+              "</td>" +
+              "<td>" +
+              orgD7.toFixed(2) +
+              "</td>" +
+              "<td>" +
+              paidD0.toFixed(2) +
+              "</td>" +
+              "<td>" +
+              paidD7.toFixed(2) +
+              "</td>";
+            tbody.appendChild(tr);
+          });
+        }
+
+        // ---------------- Module 5: 体育 vs 游戏玩家比例（自然量） ----------------
+        // ---------------- Module 5: 体育 vs 游戏玩家比例（自然量） ----------------
+        function renderSportsMixModule() {
+          const state = dashboardState.modules.sportsMix;
+          if (!state) return;
+
+          const month = state.month;
+          const countries = safeArray(state.countries, ALL_COUNTRIES);
+
+          const orgRows = filterRows(RAW_ORGANIC, month, countries);
+          const paidRows = filterRows(RAW_PAID, month, countries);
+
+          const chart = charts.sportsMix;
+          if (!chart) return;
+
+          const orgAgg = aggregateByCountry(orgRows, [
+            "sportsPlayers",
+            "gamesPlayers",
+          ]);
+          const paidAgg = aggregateByCountry(paidRows, [
+            "sportsPlayers",
+            "gamesPlayers",
+          ]);
+
+          const allCountries = sortKeys(Object.keys(orgAgg));
+
+          // 图：仍然只看自然量体育 / 游戏占比
+          const sportsCnt = [];
+          const gamesCnt = [];
+          const sportsRate = [];
+          const gamesRate = [];
+
+          // 表：4 个体/游比（自然 D0/D7，买量 D0/D7）
+          const orgRatioD0 = [];
+          const orgRatioD7 = [];
+          const paidRatioD0 = [];
+          const paidRatioD7 = [];
+
+          allCountries.forEach(function (c) {
+            const o = orgAgg[c] || {};
+            const p = paidAgg[c] || {};
+
+            const sp = Number(o.sportsPlayers || 0);
+            const gp = Number(o.gamesPlayers || 0);
+            const total = sp + gp;
+
+            sportsCnt.push(sp);
+            gamesCnt.push(gp);
+            sportsRate.push(total ? (sp / total) * 100 : 0);
+            gamesRate.push(total ? (gp / total) * 100 : 0);
+
+            const spPaid = Number(p.sportsPlayers || 0);
+            const gpPaid = Number(p.gamesPlayers || 0);
+
+            // 示例数据暂未拆 D0 / D7，这里先用同一组玩家数演示体/游比
+            const orgD0 = gp ? sp / gp : null;
+            const orgD7 = gp ? sp / gp : null;
+            const paidD0 = gpPaid ? spPaid / gpPaid : null;
+            const paidD7 = gpPaid ? spPaid / gpPaid : null;
+
+            orgRatioD0.push(orgD0);
+            orgRatioD7.push(orgD7);
+            paidRatioD0.push(paidD0);
+            paidRatioD7.push(paidD7);
+          });
+
+          const option = {
+            tooltip: {
+              trigger: "axis",
+              axisPointer: { type: "shadow" },
+              formatter: function (params) {
+                const p0 = params[0];
+                const p1 = params[1];
+                const country = p0 ? p0.name : p1 ? p1.name : "";
+                const sVal = p0 ? p0.data : 0;
+                const gVal = p1 ? p1.data : 0;
+                const total = sVal + gVal;
+                return (
+                  country +
+                  "<br/>体育玩家占比：" +
+                  sVal.toFixed(1) +
+                  "%<br/>游戏玩家占比：" +
+                  gVal.toFixed(1) +
+                  "%<br/>体育+游戏合计：" +
+                  total.toFixed(1) +
+                  "%"
+                );
+              },
+            },
+            legend: {
+              data: ["自然量 体育玩家占比", "自然量 游戏玩家占比"],
+            },
+            grid: {
+              left: 40,
+              right: 20,
+              top: 40,
+              bottom: 40,
+            },
+            xAxis: {
+              type: "category",
+              data: allCountries,
+              axisTick: { alignWithLabel: true },
+            },
+            yAxis: {
+              type: "value",
+              axisLabel: { formatter: "{value}%" },
+            },
+            series: [
+              {
+                name: "自然量 体育玩家占比",
+                type: "bar",
+                barGap: "10%",
+                itemStyle: { color: COLOR_ORGANIC },
+                data: sportsRate,
+              },
+              {
+                name: "自然量 游戏玩家占比",
+                type: "bar",
+                itemStyle: { color: COLOR_PAID },
+                data: gamesRate,
+              },
+            ],
+          };
+
+          chart.setOption(option, true);
+
+          // 表格渲染：4 列体/游比
+          renderSportsMixTable(
+            allCountries,
+            orgRatioD0,
+            orgRatioD7,
+            paidRatioD0,
+            paidRatioD7
+          );
+        }
+
+        function renderSportsMixTable(
+          countries,
+          orgRatioD0,
+          orgRatioD7,
+          paidRatioD0,
+          paidRatioD7
+        ) {
+          const tbody = document.querySelector("#table-sports-mix tbody");
+          if (!tbody) return;
+
+          tbody.innerHTML = "";
+
+          countries.forEach(function (c, idx) {
+            const tr = document.createElement("tr");
+
+            // 国家
+            const tdCountry = document.createElement("td");
+            tdCountry.textContent = c;
+            tr.appendChild(tdCountry);
+
+            // 小工具：追加一个体/游比单元格，>1 标红 + 加粗
+            function appendRatioCell(value) {
+              const td = document.createElement("td");
+              td.className = "num";
+              if (value == null || !isFinite(value)) {
+                td.textContent = "-";
+              } else {
+                const num = Number(value);
+                td.textContent = num.toFixed(2);
+                if (num > 1) {
+                  td.className += " highlight";
+                }
+              }
+              tr.appendChild(td);
+            }
+
+            appendRatioCell(orgRatioD0[idx]);
+            appendRatioCell(orgRatioD7[idx]);
+            appendRatioCell(paidRatioD0[idx]);
+            appendRatioCell(paidRatioD7[idx]);
+
+            tbody.appendChild(tr);
+          });
+        }
+
+        // ---------------- Module 6: 留存 ----------------
+        function aggregateRetentionByCountry(rows) {
+          const map = {};
+          rows.forEach(function (row) {
+            const c = row.country;
+            if (!c) return;
+            if (!map[c]) {
+              map[c] = {
+                regs: 0,
+                aliveD1: 0,
+                aliveD7: 0,
+              };
+            }
+            const regs = row.regs || 0;
+            map[c].regs += regs;
+            map[c].aliveD1 += regs * (row.retentionD1 || 0);
+            map[c].aliveD7 += regs * (row.retentionD7 || 0);
+          });
+          return map;
+        }
+
+        function aggregateRetentionByDate(rows) {
+          const map = {};
+          rows.forEach(function (row) {
+            const d = row.date;
+            if (!d) return;
+            if (!map[d]) {
+              map[d] = {
+                regs: 0,
+                aliveD1: 0,
+                aliveD7: 0,
+              };
+            }
+            const regs = row.regs || 0;
+            map[d].regs += regs;
+            map[d].aliveD1 += regs * (row.retentionD1 || 0);
+            map[d].aliveD7 += regs * (row.retentionD7 || 0);
+          });
+          return map;
+        }
+
+        function renderRetentionModule() {
+          const state = dashboardState.modules.retention;
+          const month = state.month;
+          const countries = safeArray(state.countries, ALL_COUNTRIES);
+          const view = state.view || "monthly";
+
+          const orgRows = filterRows(RAW_ORGANIC, month, countries);
+          const paidRows = filterRows(RAW_PAID, month, countries);
+
+          const chart = charts.retention;
+          if (!chart) return;
+
+          let option;
+
+          if (view === "daily") {
+            const orgAgg = aggregateRetentionByDate(orgRows);
+            const paidAgg = aggregateRetentionByDate(paidRows);
+
+            const allDates = sortKeys(
+              Array.from(
+                new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+              )
+            );
+
+            const orgD1 = [];
+            const orgD7 = [];
+            const paidD1 = [];
+            const paidD7 = [];
+
+            allDates.forEach(function (d) {
+              const o = orgAgg[d] || {};
+              const p = paidAgg[d] || {};
+              orgD1.push(o.regs ? (o.aliveD1 / o.regs) * 100 : 0);
+              orgD7.push(o.regs ? (o.aliveD7 / o.regs) * 100 : 0);
+              paidD1.push(p.regs ? (p.aliveD1 / p.regs) * 100 : 0);
+              paidD7.push(p.regs ? (p.aliveD7 / p.regs) * 100 : 0);
+            });
+
+            option = {
+              tooltip: {
+                trigger: "axis",
+                valueFormatter: function (val) {
+                  return val.toFixed(2) + "%";
+                },
+              },
+              legend: {
+                data: ["自然量 D1", "自然量 D7", "买量 D1", "买量 D7"],
+              },
+              grid: {
+                left: 40,
+                right: 20,
+                top: 40,
+                bottom: 40,
+              },
+              xAxis: { type: "category", data: allDates },
+              yAxis: {
+                type: "value",
+                axisLabel: { formatter: "{value}%" },
+              },
+              series: [
+                {
+                  name: "自然量 D1",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_ORGANIC },
+                  data: orgD1,
+                },
+                {
+                  name: "自然量 D7",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_ORGANIC },
+                  lineStyle: { type: "dashed" },
+                  areaStyle: { opacity: 0.05, color: COLOR_ORGANIC },
+                  data: orgD7,
+                },
+                {
+                  name: "买量 D1",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_PAID },
+                  data: paidD1,
+                },
+                {
+                  name: "买量 D7",
+                  type: "line",
+                  smooth: true,
+                  itemStyle: { color: COLOR_PAID },
+                  lineStyle: { type: "dashed" },
+                  areaStyle: { opacity: 0.05, color: COLOR_PAID },
+                  data: paidD7,
+                },
+              ],
+            };
+          } else {
+            const orgAgg = aggregateRetentionByCountry(orgRows);
+            const paidAgg = aggregateRetentionByCountry(paidRows);
+
+            const allCountries = sortKeys(
+              Array.from(
+                new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+              )
+            );
+
+            const orgD1 = [];
+            const orgD7 = [];
+            const paidD1 = [];
+            const paidD7 = [];
+
+            allCountries.forEach(function (c) {
+              const o = orgAgg[c] || {};
+              const p = paidAgg[c] || {};
+              orgD1.push(o.regs ? (o.aliveD1 / o.regs) * 100 : 0);
+              orgD7.push(o.regs ? (o.aliveD7 / o.regs) * 100 : 0);
+              paidD1.push(p.regs ? (p.aliveD1 / p.regs) * 100 : 0);
+              paidD7.push(p.regs ? (p.aliveD7 / p.regs) * 100 : 0);
+            });
+
+            option = {
+              tooltip: {
+                trigger: "axis",
+                axisPointer: { type: "shadow" },
+                valueFormatter: function (val) {
+                  return val.toFixed(2) + "%";
+                },
+              },
+              legend: {
+                data: ["自然量 D1", "自然量 D7", "买量 D1", "买量 D7"],
+              },
+              grid: {
+                left: 40,
+                right: 20,
+                top: 40,
+                bottom: 40,
+              },
+              xAxis: { type: "category", data: allCountries },
+              yAxis: {
+                type: "value",
+                axisLabel: { formatter: "{value}%" },
+              },
+              series: [
+                {
+                  name: "自然量 D1",
+                  type: "bar",
+                  barGap: "10%",
+                  itemStyle: { color: COLOR_ORGANIC },
+                  data: orgD1,
+                },
+                {
+                  name: "自然量 D7",
+                  type: "bar",
+                  itemStyle: {
+                    color: COLOR_ORGANIC,
+                    opacity: 0.7,
+                    shadowBlur: 10,
+                    shadowColor: COLOR_ORGANIC_SHADOW,
+                  },
+                  data: orgD7,
+                },
+                {
+                  name: "买量 D1",
+                  type: "bar",
+                  itemStyle: { color: COLOR_PAID },
+                  data: paidD1,
+                },
+                {
+                  name: "买量 D7",
+                  type: "bar",
+                  itemStyle: {
+                    color: COLOR_PAID,
+                    opacity: 0.7,
+                    shadowBlur: 10,
+                    shadowColor: COLOR_PAID_SHADOW,
+                  },
+                  data: paidD7,
+                },
+              ],
+            };
+          }
+
+          chart.setOption(option, true);
+          renderRetentionTable(orgRows, paidRows);
+        }
+
+        function renderRetentionTable(orgRows, paidRows) {
+          const tbody = document.querySelector("#table-retention tbody");
+          if (!tbody) return;
+
+          const orgAgg = aggregateRetentionByCountry(orgRows);
+          const paidAgg = aggregateRetentionByCountry(paidRows);
+
+          const allCountries = sortKeys(
+            Array.from(
+              new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
+            )
+          );
+
+          tbody.innerHTML = "";
+
+          allCountries.forEach(function (c) {
+            const o = orgAgg[c] || {};
+            const p = paidAgg[c] || {};
+            const orgD1 = o.regs ? (o.aliveD1 / o.regs) * 100 : 0;
+            const orgD7 = o.regs ? (o.aliveD7 / o.regs) * 100 : 0;
+            const paidD1 = p.regs ? (p.aliveD1 / p.regs) * 100 : 0;
+            const paidD7 = p.regs ? (p.aliveD7 / p.regs) * 100 : 0;
+
+            const tr = document.createElement("tr");
+            tr.innerHTML =
+              "<td>" +
+              c +
+              "</td>" +
+              "<td>" +
+              orgD1.toFixed(2) +
+              "%</td>" +
+              "<td>" +
+              orgD7.toFixed(2) +
+              "%</td>" +
+              "<td>" +
+              paidD1.toFixed(2) +
+              "%</td>" +
+              "<td>" +
+              paidD7.toFixed(2) +
+              "%</td>";
+            tbody.appendChild(tr);
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>
