@@ -1708,7 +1708,7 @@
 
           if (view === "daily") {
             const orgAgg = aggregateByDate(orgRows, ["registration"]);
-            const paidAgg = aggregateByDate(paidRows, ["registration"]);
+const paidAgg = aggregateByDate(paidRows, ["registration"]);
 
             const allDates = sortKeys(
               Array.from(
@@ -1717,11 +1717,11 @@
             );
 
             const orgSeries = allDates.map(function (d) {
-              return (orgAgg[d] && orgAgg[d].registrations) || 0;
-            });
-            const paidSeries = allDates.map(function (d) {
-              return (paidAgg[d] && paidAgg[d].registrations) || 0;
-            });
+  return (orgAgg[d] && orgAgg[d].registration) || 0;
+});
+const paidSeries = allDates.map(function (d) {
+  return (paidAgg[d] && paidAgg[d].registration) || 0;
+});
 
             option = {
               tooltip: {
@@ -1842,8 +1842,8 @@
           const tableBody = document.querySelector("#table-reg tbody");
           if (!tableBody) return;
 
-          const orgAgg = aggregateByCountry(orgRows, ["regs"]);
-          const paidAgg = aggregateByCountry(paidRows, ["regs"]);
+          const orgAgg = aggregateByCountry(orgRows, ["registration"]);
+const paidAgg = aggregateByCountry(paidRows, ["registration"]);
 
           const allCountries = sortKeys(
             Array.from(
@@ -1854,19 +1854,19 @@
           let totalOrg = 0;
           let totalPaid = 0;
           allCountries.forEach(function (c) {
-            totalOrg += (orgAgg[c] && orgAgg[c].regs) || 0;
-            totalPaid += (paidAgg[c] && paidAgg[c].regs) || 0;
-          });
-          const totalAll = totalOrg + totalPaid;
+  totalOrg += (orgAgg[c] && orgAgg[c].registration) || 0;
+  totalPaid += (paidAgg[c] && paidAgg[c].registration) || 0;
+});
+const totalAll = totalOrg + totalPaid; // 如果后面你想加一行“整体”的话还能用到
 
           tableBody.innerHTML = "";
 
           allCountries.forEach(function (c) {
-            const org = (orgAgg[c] && orgAgg[c].regs) || 0;
-            const paid = (paidAgg[c] && paidAgg[c].regs) || 0;
-            const total = org + paid;
-            const orgShare = totalAll ? (org / totalAll) * 100 : 0;
-            const paidShare = totalAll ? (paid / totalAll) * 100 : 0;
+            const org = (orgAgg[c] && orgAgg[c].registration) || 0;
+const paid = (paidAgg[c] && paidAgg[c].registration) || 0;
+const total = org + paid;
+const orgShare = total ? (org / total) * 100 : 0;
+const paidShare = total ? (paid / total) * 100 : 0;
 
             const tr = document.createElement("tr");
             tr.innerHTML =
@@ -1909,15 +1909,15 @@
 
           if (view === "daily") {
             const orgAgg = aggregateByDate(orgRows, [
-              "regs",
-              "d0Payers",
-              "d7Payers",
-            ]);
-            const paidAgg = aggregateByDate(paidRows, [
-              "regs",
-              "d0Payers",
-              "d7Payers",
-            ]);
+  "registration",
+  "D0_unique_purchase",
+  "D7_unique_purchase",
+]);
+const paidAgg = aggregateByDate(paidRows, [
+  "registration",
+  "D0_unique_purchase",
+  "D7_unique_purchase",
+]);
 
             const allDates = sortKeys(
               Array.from(
@@ -1933,10 +1933,18 @@
             allDates.forEach(function (d) {
               const o = orgAgg[d] || {};
               const p = paidAgg[d] || {};
-              orgD0.push(o.regs ? (o.d0Payers / o.regs) * 100 : 0);
-              orgD7.push(o.regs ? (o.d7Payers / o.regs) * 100 : 0);
-              paidD0.push(p.regs ? (p.d0Payers / p.regs) * 100 : 0);
-              paidD7.push(p.regs ? (p.d7Payers / p.regs) * 100 : 0);
+              orgD0.push(
+  o.registration ? (o.D0_unique_purchase / o.registration) * 100 : 0
+);
+orgD7.push(
+  o.registration ? (o.D7_unique_purchase / o.registration) * 100 : 0
+);
+paidD0.push(
+  p.registration ? (p.D0_unique_purchase / p.registration) * 100 : 0
+);
+paidD7.push(
+  p.registration ? (p.D7_unique_purchase / p.registration) * 100 : 0
+);
             });
 
             option = {
@@ -2002,15 +2010,15 @@
             };
           } else {
             const orgAgg = aggregateByCountry(orgRows, [
-              "regs",
-              "d0Payers",
-              "d7Payers",
-            ]);
-            const paidAgg = aggregateByCountry(paidRows, [
-              "regs",
-              "d0Payers",
-              "d7Payers",
-            ]);
+  "registration",
+  "D0_unique_purchase",
+  "D7_unique_purchase",
+]);
+const paidAgg = aggregateByCountry(paidRows, [
+  "registration",
+  "D0_unique_purchase",
+  "D7_unique_purchase",
+]);
 
             const allCountries = sortKeys(
               Array.from(
@@ -2026,10 +2034,18 @@
             allCountries.forEach(function (c) {
               const o = orgAgg[c] || {};
               const p = paidAgg[c] || {};
-              orgD0.push(o.regs ? (o.d0Payers / o.regs) * 100 : 0);
-              orgD7.push(o.regs ? (o.d7Payers / o.regs) * 100 : 0);
-              paidD0.push(p.regs ? (p.d0Payers / p.regs) * 100 : 0);
-              paidD7.push(p.regs ? (p.d7Payers / p.regs) * 100 : 0);
+              orgD0.push(
+  o.registration ? (o.D0_unique_purchase / o.registration) * 100 : 0
+);
+orgD7.push(
+  o.registration ? (o.D7_unique_purchase / o.registration) * 100 : 0
+);
+paidD0.push(
+  p.registration ? (p.D0_unique_purchase / p.registration) * 100 : 0
+);
+paidD7.push(
+  p.registration ? (p.D7_unique_purchase / p.registration) * 100 : 0
+);
             });
 
             option = {
@@ -2108,15 +2124,15 @@
           if (!tbody) return;
 
           const orgAgg = aggregateByCountry(orgRows, [
-            "regs",
-            "d0Payers",
-            "d7Payers",
-          ]);
-          const paidAgg = aggregateByCountry(paidRows, [
-            "regs",
-            "d0Payers",
-            "d7Payers",
-          ]);
+  "registration",
+  "D0_unique_purchase",
+  "D7_unique_purchase",
+]);
+const paidAgg = aggregateByCountry(paidRows, [
+  "registration",
+  "D0_unique_purchase",
+  "D7_unique_purchase",
+]);
 
           const allCountries = sortKeys(
             Array.from(
@@ -2129,10 +2145,18 @@
           allCountries.forEach(function (c) {
             const o = orgAgg[c] || {};
             const p = paidAgg[c] || {};
-            const orgD0 = o.regs ? (o.d0Payers / o.regs) * 100 : 0;
-            const orgD7 = o.regs ? (o.d7Payers / o.regs) * 100 : 0;
-            const paidD0 = p.regs ? (p.d0Payers / p.regs) * 100 : 0;
-            const paidD7 = p.regs ? (p.d7Payers / p.regs) * 100 : 0;
+            orgD0.push(
+  o.registration ? (o.D0_unique_purchase / o.registration) * 100 : 0
+);
+orgD7.push(
+  o.registration ? (o.D7_unique_purchase / o.registration) * 100 : 0
+);
+paidD0.push(
+  p.registration ? (p.D0_unique_purchase / p.registration) * 100 : 0
+);
+paidD7.push(
+  p.registration ? (p.D7_unique_purchase / p.registration) * 100 : 0
+);
 
             const tr = document.createElement("tr");
             tr.innerHTML =
