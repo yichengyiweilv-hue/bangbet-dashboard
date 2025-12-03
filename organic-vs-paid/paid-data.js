@@ -1,7 +1,7 @@
 // 买量源数据：按 “日 × 国家 × 媒体 × 产品形态” 一条记录
 const RAW_PAID = [
   // 2025-10 买量数据
-"2025-10": [
+
     {
       date: "2025-10-31",
       country: "GH",
@@ -9856,7 +9856,7 @@ const RAW_PAID = [
       D1_retained_users: 18,
       D7_retained_users: 10,
     }
-],
+
 
 
   // 继续追加...
