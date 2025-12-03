@@ -1549,14 +1549,24 @@
         }
 
         // ---------------- Aggregation helpers ----------------
-        function filterRows(source, month, countries) {
-          const useCountries = safeArray(countries, ALL_COUNTRIES);
-          return source.filter(function (row) {
-            return (
-              row.month === month && useCountries.indexOf(row.country) !== -1
-            );
-          });
-        }
+        function getRowMonth(row) {
+  if (row.month) return row.month;
+  if (row.date && typeof row.date === "string") {
+    return row.date.slice(0, 7); // "YYYY-MM-DD" -> "YYYY-MM"
+  }
+  return null;
+}
+
+function filterRows(source, month, countries) {
+  const useCountries = safeArray(countries, ALL_COUNTRIES);
+  return source.filter(function (row) {
+    const rowMonth = getRowMonth(row);
+    return (
+      rowMonth === month && useCountries.indexOf(row.country) !== -1
+    );
+  });
+}
+
 
         function aggregateByCountry(rows, fields) {
           const map = {};
@@ -1607,28 +1617,31 @@
           }
 
           const orgRows = filterRows(RAW_ORGANIC, month, ALL_COUNTRIES);
-          const paidRows = filterRows(RAW_PAID, month, ALL_COUNTRIES);
+const paidRows = filterRows(RAW_PAID, month, ALL_COUNTRIES);
 
-          const orgRegs = orgRows.reduce(function (sum, r) {
-            return sum + (r.regs || 0);
-          }, 0);
-          const paidRegs = paidRows.reduce(function (sum, r) {
-            return sum + (r.regs || 0);
-          }, 0);
+const orgRegs = orgRows.reduce(function (sum, r) {
+  return sum + (r.registration || 0);
+}, 0);
+const paidRegs = paidRows.reduce(function (sum, r) {
+  return sum + (r.registration || 0);
+}, 0);
 
-          const orgEl = document.getElementById("hero-organic-reg");
-          const paidEl = document.getElementById("hero-paid-reg");
-          const ratioEl = document.getElementById("hero-reg-ratio");
+const orgEl = document.getElementById("hero-organic-reg");
+const paidEl = document.getElementById("hero-paid-reg");
+const ratioEl = document.getElementById("hero-reg-ratio");
 
-          if (orgEl) orgEl.textContent = orgRegs.toLocaleString();
-          if (paidEl) paidEl.textContent = paidRegs.toLocaleString();
-          if (ratioEl) {
-            if (orgRegs === 0) {
-              ratioEl.textContent = "-";
-            } else {
-              const ratio = paidRegs / orgRegs;
-              ratioEl.textContent = ratio.toFixed(2) + "x";
-            }
+if (orgEl) orgEl.textContent = orgRegs.toLocaleString();
+if (paidEl) paidEl.textContent = paidRegs.toLocaleString();
+if (ratioEl) {
+  const total = orgRegs + paidRegs;
+  if (!total) {
+    ratioEl.textContent = "-";
+  } else {
+    const share = orgRegs / total; // 自然量占比
+    ratioEl.textContent = (share * 100).toFixed(1) + "%";
+  }
+}
+
           }
         }
 
@@ -1707,21 +1720,16 @@
           let option;
 
           if (view === "daily") {
-            const orgAgg = aggregateByDate(orgRows, ["regs"]);
-            const paidAgg = aggregateByDate(paidRows, ["regs"]);
+            const orgAgg = aggregateByDate(orgRows, ["registration"]);
+const paidAgg = aggregateByDate(paidRows, ["registration"]);
+...
+const orgSeries = allDates.map(function (d) {
+  return (orgAgg[d] && orgAgg[d].registration) || 0;
+});
+const paidSeries = allDates.map(function (d) {
+  return (paidAgg[d] && paidAgg[d].registration) || 0;
+});
 
-            const allDates = sortKeys(
-              Array.from(
-                new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
-              )
-            );
-
-            const orgSeries = allDates.map(function (d) {
-              return (orgAgg[d] && orgAgg[d].regs) || 0;
-            });
-            const paidSeries = allDates.map(function (d) {
-              return (paidAgg[d] && paidAgg[d].regs) || 0;
-            });
 
             option = {
               tooltip: {
@@ -1775,21 +1783,16 @@
               ],
             };
           } else {
-            const orgAgg = aggregateByCountry(orgRows, ["regs"]);
-            const paidAgg = aggregateByCountry(paidRows, ["regs"]);
+            const orgAgg = aggregateByDate(orgRows, ["registration"]);
+const paidAgg = aggregateByDate(paidRows, ["registration"]);
+...
+const orgSeries = allDates.map(function (d) {
+  return (orgAgg[d] && orgAgg[d].registration) || 0;
+});
+const paidSeries = allDates.map(function (d) {
+  return (paidAgg[d] && paidAgg[d].registration) || 0;
+});
 
-            const allCountries = sortKeys(
-              Array.from(
-                new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
-              )
-            );
-
-            const orgSeries = allCountries.map(function (c) {
-              return (orgAgg[c] && orgAgg[c].regs) || 0;
-            });
-            const paidSeries = allCountries.map(function (c) {
-              return (paidAgg[c] && paidAgg[c].regs) || 0;
-            });
 
             option = {
               tooltip: {
@@ -1842,31 +1845,25 @@
           const tableBody = document.querySelector("#table-reg tbody");
           if (!tableBody) return;
 
-          const orgAgg = aggregateByCountry(orgRows, ["regs"]);
-          const paidAgg = aggregateByCountry(paidRows, ["regs"]);
+          const orgAgg = aggregateByCountry(orgRows, ["registration"]);
+const paidAgg = aggregateByCountry(paidRows, ["registration"]);
 
-          const allCountries = sortKeys(
-            Array.from(
-              new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
-            )
-          );
+...
 
-          let totalOrg = 0;
-          let totalPaid = 0;
-          allCountries.forEach(function (c) {
-            totalOrg += (orgAgg[c] && orgAgg[c].regs) || 0;
-            totalPaid += (paidAgg[c] && paidAgg[c].regs) || 0;
-          });
-          const totalAll = totalOrg + totalPaid;
+allCountries.forEach(function (c) {
+  totalOrg += (orgAgg[c] && orgAgg[c].registration) || 0;
+  totalPaid += (paidAgg[c] && paidAgg[c].registration) || 0;
+});
+const totalAll = totalOrg + totalPaid; // 如果后面你想加一行“整体”的话还能用到
 
-          tableBody.innerHTML = "";
+...
 
-          allCountries.forEach(function (c) {
-            const org = (orgAgg[c] && orgAgg[c].regs) || 0;
-            const paid = (paidAgg[c] && paidAgg[c].regs) || 0;
-            const total = org + paid;
-            const orgShare = totalAll ? (org / totalAll) * 100 : 0;
-            const paidShare = totalAll ? (paid / totalAll) * 100 : 0;
+const org = (orgAgg[c] && orgAgg[c].registration) || 0;
+const paid = (paidAgg[c] && paidAgg[c].registration) || 0;
+const total = org + paid;
+const orgShare = total ? (org / total) * 100 : 0;
+const paidShare = total ? (paid / total) * 100 : 0;
+
 
             const tr = document.createElement("tr");
             tr.innerHTML =
