@@ -1,14 +1,14 @@
 (function() {
-    // =================配置区 (保持不变)=================
+    // =================配置区=================
     const CONFIG = {
         username: "jerry",      // 账号
         password: "666",        // 密码
         validHours: 24,         // 有效期(小时)
         storageKey: "bangbet_auth_token" // 浏览器缓存的Key
     };
-    // ===============================================
+    // =======================================
 
-    // 检查是否已登录且未过期 (保持不变)
+    // 检查是否已登录且未过期
     function checkLogin() {
         const stored = localStorage.getItem(CONFIG.storageKey);
         if (stored) {
@@ -22,7 +22,7 @@
         return false; // 未登录
     }
 
-    // 执行登录逻辑 (保持不变)
+    // 执行登录逻辑
     function doLogin(u, p) {
         if (u === CONFIG.username && p === CONFIG.password) {
             const data = {
@@ -42,8 +42,10 @@
         } else {
             // 错误提示动画
             const box = document.querySelector('.tech-auth-box');
-            box.style.animation = 'shake 0.5s';
-            setTimeout(() => box.style.animation = '', 500);
+            if (box) {
+                box.style.animation = 'shake 0.5s';
+                setTimeout(() => box.style.animation = '', 500);
+            }
             alert("ACCESS DENIED // 账号或密码错误");
             return false;
         }
@@ -191,22 +193,29 @@
         div.innerHTML = modalHtml;
         document.body.appendChild(div);
 
-        // 3. 绑定事件 (保持不变)
-        const user Input = document.getElementById('auth-user');
+        // 3. 绑定事件
+        // 【修正点】这里去掉了 user 后的空格
+        const userInput = document.getElementById('auth-user');
         const passInput = document.getElementById('auth-pass');
         const btn = document.getElementById('auth-btn');
 
-        btn.onclick = function() { doLogin(userInput.value, passInput.value); };
+        if (btn) {
+            btn.onclick = function() { doLogin(userInput.value, passInput.value); };
+        }
         
-        passInput.addEventListener("keypress", function(event) {
-            if (event.key === "Enter") btn.click();
-        });
+        if (passInput) {
+            passInput.addEventListener("keypress", function(event) {
+                if (event.key === "Enter") btn.click();
+            });
+        }
         
         // 自动聚焦账号输入框
-        userInput.focus();
+        if (userInput) {
+            userInput.focus();
+        }
     }
 
-    // 立即执行检查 (保持不变)
+    // 立即执行检查
     if (!checkLogin()) {
         if (document.body) {
             renderLoginModal();
