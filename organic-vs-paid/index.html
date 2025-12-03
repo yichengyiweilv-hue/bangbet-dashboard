@@ -2196,18 +2196,17 @@ paidD7.push(
 
           if (view === "daily") {
             const orgAgg = aggregateByDate(orgRows, [
-              "d0Payers",
-              "d7Payers",
-              "D0_PURCHASE_VALUE",
-              "D7_PURCHASE_VALUE",
-            ]);
-            const paidAgg = aggregateByDate(paidRows, [
-              "d0Payers",
-              "d7Payers",
-              "D0_PURCHASE_VALUE",
-              "D7_PURCHASE_VALUE",
-            ]);
-
+  "D0_unique_purchase",
+  "D7_unique_purchase",
+  "D0_PURCHASE_VALUE",
+  "D7_PURCHASE_VALUE",
+]);
+const paidAgg = aggregateByDate(paidRows, [
+  "D0_unique_purchase",
+  "D7_unique_purchase",
+  "D0_PURCHASE_VALUE",
+  "D7_PURCHASE_VALUE",
+]);
             const allDates = sortKeys(
               Array.from(
                 new Set(Object.keys(orgAgg).concat(Object.keys(paidAgg)))
@@ -2223,14 +2222,14 @@ paidD7.push(
               const o = orgAgg[d] || {};
               const p = paidAgg[d] || {};
               const orgV0 = o.D0_PURCHASE_VALUE || 0;
-              const orgV7 = o.D7_PURCHASE_VALUE || 0;
-              const paidV0 = p.D0_PURCHASE_VALUE || 0;
-              const paidV7 = p.D7_PURCHASE_VALUE || 0;
+const orgV7 = o.D7_PURCHASE_VALUE || 0;
+const paidV0 = p.D0_PURCHASE_VALUE || 0;
+const paidV7 = p.D7_PURCHASE_VALUE || 0;
 
-              orgD0.push(o.d0Payers ? orgV0 / o.d0Payers : 0);
-              orgD7.push(o.d7Payers ? orgV7 / o.d7Payers : 0);
-              paidD0.push(p.d0Payers ? paidV0 / p.d0Payers : 0);
-              paidD7.push(p.d7Payers ? paidV7 / p.d7Payers : 0);
+              orgD0.push(o.D0_unique_purchase ? orgV0 / o.D0_unique_purchase : 0);
+orgD7.push(o.D7_unique_purchase ? orgV7 / o.D7_unique_purchase : 0);
+paidD0.push(p.D0_unique_purchase ? paidV0 / p.D0_unique_purchase : 0);
+paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
             });
 
             option = {
@@ -2283,17 +2282,17 @@ paidD7.push(
             };
           } else {
             const orgAgg = aggregateByDate(orgRows, [
-              "d0Payers",
-              "d7Payers",
-              "D0_PURCHASE_VALUE",
-              "D7_PURCHASE_VALUE",
-            ]);
-            const paidAgg = aggregateByDate(paidRows, [
-              "d0Payers",
-              "d7Payers",
-              "D0_PURCHASE_VALUE",
-              "D7_PURCHASE_VALUE",
-            ]);
+  "D0_unique_purchase",
+  "D7_unique_purchase",
+  "D0_PURCHASE_VALUE",
+  "D7_PURCHASE_VALUE",
+]);
+const paidAgg = aggregateByDate(paidRows, [
+  "D0_unique_purchase",
+  "D7_unique_purchase",
+  "D0_PURCHASE_VALUE",
+  "D7_PURCHASE_VALUE",
+]);
 
             const allCountries = sortKeys(
               Array.from(
@@ -2310,14 +2309,15 @@ paidD7.push(
               const o = orgAgg[c] || {};
               const p = paidAgg[c] || {};
               const orgV0 = o.D0_PURCHASE_VALUE || 0;
-              const orgV7 = o.D7_PURCHASE_VALUE || 0;
-              const paidV0 = p.D0_PURCHASE_VALUE || 0;
-              const paidV7 = p.D7_PURCHASE_VALUE || 0;
+const orgV7 = o.D7_PURCHASE_VALUE || 0;
+const paidV0 = p.D0_PURCHASE_VALUE || 0;
+const paidV7 = p.D7_PURCHASE_VALUE || 0;
 
-              orgD0.push(o.d0Payers ? orgV0 / o.d0Payers : 0);
-              orgD7.push(o.d7Payers ? orgV7 / o.d7Payers : 0);
-              paidD0.push(p.d0Payers ? paidV0 / p.d0Payers : 0);
-              paidD7.push(p.d7Payers ? paidV7 / p.d7Payers : 0);
+
+              orgD0.push(o.D0_unique_purchase ? orgV0 / o.D0_unique_purchase : 0);
+orgD7.push(o.D7_unique_purchase ? orgV7 / o.D7_unique_purchase : 0);
+paidD0.push(p.D0_unique_purchase ? paidV0 / p.D0_unique_purchase : 0);
+paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
             });
 
             option = {
@@ -2381,18 +2381,18 @@ paidD7.push(
           const tbody = document.querySelector("#table-arppu tbody");
           if (!tbody) return;
 
-          const orgAgg = aggregateByDate(orgRows, [
-            "d0Payers",
-            "d7Payers",
-            "D0_PURCHASE_VALUE",
-            "D7_PURCHASE_VALUE",
-          ]);
-          const paidAgg = aggregateByDate(paidRows, [
-            "d0Payers",
-            "d7Payers",
-            "D0_PURCHASE_VALUE",
-            "D7_PURCHASE_VALUE",
-          ]);
+         const orgAgg = aggregateByDate(orgRows, [
+  "D0_unique_purchase",
+  "D7_unique_purchase",
+  "D0_PURCHASE_VALUE",
+  "D7_PURCHASE_VALUE",
+]);
+const paidAgg = aggregateByDate(paidRows, [
+  "D0_unique_purchase",
+  "D7_unique_purchase",
+  "D0_PURCHASE_VALUE",
+  "D7_PURCHASE_VALUE",
+]);
 
           const allCountries = sortKeys(
             Array.from(
@@ -2405,15 +2405,15 @@ paidD7.push(
           allCountries.forEach(function (c) {
             const o = orgAgg[c] || {};
             const p = paidAgg[c] || {};
-            const orgV0 = o.D0_PURCHASE_VALUE || 0;
-            const orgV7 = o.D7_PURCHASE_VALUE || 0;
-            const paidV0 = p.D0_PURCHASE_VALUE || 0;
-            const paidV7 = p.D7_PURCHASE_VALUE || 0;
+           const orgV0 = o.D0_PURCHASE_VALUE || 0;
+const orgV7 = o.D7_PURCHASE_VALUE || 0;
+const paidV0 = p.D0_PURCHASE_VALUE || 0;
+const paidV7 = p.D7_PURCHASE_VALUE || 0;
 
-            orgD0.push(o.d0Payers ? orgV0 / o.d0Payers : 0);
-            orgD7.push(o.d7Payers ? orgV7 / o.d7Payers : 0);
-            paidD0.push(p.d0Payers ? paidV0 / p.d0Payers : 0);
-            paidD7.push(p.d7Payers ? paidV7 / p.d7Payers : 0);
+            orgD0.push(o.D0_unique_purchase ? orgV0 / o.D0_unique_purchase : 0);
+orgD7.push(o.D7_unique_purchase ? orgV7 / o.D7_unique_purchase : 0);
+paidD0.push(p.D0_unique_purchase ? paidV0 / p.D0_unique_purchase : 0);
+paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
 
             const tr = document.createElement("tr");
             tr.innerHTML =
