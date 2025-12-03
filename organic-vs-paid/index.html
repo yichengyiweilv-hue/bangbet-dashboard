@@ -2437,6 +2437,22 @@ paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
         }
 
         // ---------------- Module 4: 人均流水 ----------------
+
+        const REVPU_FIELDS = [
+  "D0_TOTAL_BET_FLOW",
+  "D7_TOTAL_BET_FLOW",
+  "D0_SPORTS_BET_FLOW",
+  "D7_SPORTS_BET_FLOW",
+  "D0_GAMES_BET_FLOW",
+  "D7_GAMES_BET_FLOW",
+  "D0_TOTAL_BET_PLACED_USER",
+  "D7_TOTAL_BET_PLACED_USER",
+  "D0_SPORTS_BET_PLACED_USER",
+  "D7_SPORTS_BET_PLACED_USER",
+  "D0_GAMES_BET_PLACED_USER",
+  "D7_GAMES_BET_PLACED_USER",
+];
+
         function getBetFlowByProduct(aggEntry, product, phase) {
           if (!aggEntry) return 0;
           const isD0 = phase === "D0";
@@ -2491,20 +2507,9 @@ paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
           let option;
 
           if (view === "daily") {
-            const orgAgg = aggregateByDate(orgRows, [
-              "regs",
-              "ggrSportsD0",
-              "ggrSportsD7",
-              "ggrGamesD0",
-              "ggrGamesD7",
-            ]);
-            const paidAgg = aggregateByDate(paidRows, [
-              "regs",
-              "ggrSportsD0",
-              "ggrSportsD7",
-              "ggrGamesD0",
-              "ggrGamesD7",
-            ]);
+            const orgAgg = aggregateByDate(orgRows, REVPU_FIELDS);
+const paidAgg = aggregateByDate(paidRows, REVPU_FIELDS);
+
 
             const allDates = sortKeys(
               Array.from(
@@ -2530,11 +2535,11 @@ paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
               const paidU0 = getBetPlacedUserByProduct(p, product, "D0");
               const paidU7 = getBetPlacedUserByProduct(p, product, "D7");
 
-              const orgD0 = orgU0 ? orgFlow0 / orgU0 : 0;
-              const orgD7 = orgU7 ? orgFlow7 / orgU7 : 0;
-              const paidD0 = paidU0 ? paidFlow0 / paidU0 : 0;
-              const paidD7 = paidU7 ? paidFlow7 / paidU7 : 0;
-            });
+              orgD0.push(orgU0 ? orgFlow0 / orgU0 : 0);
+  orgD7.push(orgU7 ? orgFlow7 / orgU7 : 0);
+  paidD0.push(paidU0 ? paidFlow0 / paidU0 : 0);
+  paidD7.push(paidU7 ? paidFlow7 / paidU7 : 0);
+});
 
             option = {
               tooltip: { trigger: "axis" },
@@ -2585,20 +2590,9 @@ paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
               ],
             };
           } else {
-            const orgAgg = aggregateByCountry(orgRows, [
-              "regs",
-              "ggrSportsD0",
-              "ggrSportsD7",
-              "ggrGamesD0",
-              "ggrGamesD7",
-            ]);
-            const paidAgg = aggregateByCountry(paidRows, [
-              "regs",
-              "ggrSportsD0",
-              "ggrSportsD7",
-              "ggrGamesD0",
-              "ggrGamesD7",
-            ]);
+            const orgAgg = aggregateByCountry(orgRows, REVPU_FIELDS);
+const paidAgg = aggregateByCountry(paidRows, REVPU_FIELDS);
+
 
             const allCountries = sortKeys(
               Array.from(
@@ -2624,11 +2618,11 @@ paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
               const paidU0 = getBetPlacedUserByProduct(p, product, "D0");
               const paidU7 = getBetPlacedUserByProduct(p, product, "D7");
 
-              const orgD0 = orgU0 ? orgFlow0 / orgU0 : 0;
-              const orgD7 = orgU7 ? orgFlow7 / orgU7 : 0;
-              const paidD0 = paidU0 ? paidFlow0 / paidU0 : 0;
-              const paidD7 = paidU7 ? paidFlow7 / paidU7 : 0;
-            });
+             orgD0.push(orgU0 ? orgFlow0 / orgU0 : 0);
+  orgD7.push(orgU7 ? orgFlow7 / orgU7 : 0);
+  paidD0.push(paidU0 ? paidFlow0 / paidU0 : 0);
+  paidD7.push(paidU7 ? paidFlow7 / paidU7 : 0);
+});
 
             option = {
               tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
@@ -2694,20 +2688,8 @@ paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
           const state = dashboardState.modules.revpu;
           const product = state.product || "total";
 
-          const orgAgg = aggregateByCountry(orgRows, [
-            "regs",
-            "ggrSportsD0",
-            "ggrSportsD7",
-            "ggrGamesD0",
-            "ggrGamesD7",
-          ]);
-          const paidAgg = aggregateByCountry(paidRows, [
-            "regs",
-            "ggrSportsD0",
-            "ggrSportsD7",
-            "ggrGamesD0",
-            "ggrGamesD7",
-          ]);
+          const orgAgg = aggregateByCountry(orgRows, REVPU_FIELDS);
+const paidAgg = aggregateByCountry(paidRows, REVPU_FIELDS);
 
           const allCountries = sortKeys(
             Array.from(
@@ -2730,10 +2712,11 @@ paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
             const paidU0 = getBetPlacedUserByProduct(p, product, "D0");
             const paidU7 = getBetPlacedUserByProduct(p, product, "D7");
 
-            const orgD0 = orgU0 ? orgFlow0 / orgU0 : 0;
-            const orgD7 = orgU7 ? orgFlow7 / orgU7 : 0;
-            const paidD0 = paidU0 ? paidFlow0 / paidU0 : 0;
-            const paidD7 = paidU7 ? paidFlow7 / paidU7 : 0;
+            orgD0.push(orgU0 ? orgFlow0 / orgU0 : 0);
+  orgD7.push(orgU7 ? orgFlow7 / orgU7 : 0);
+  paidD0.push(paidU0 ? paidFlow0 / paidU0 : 0);
+  paidD7.push(paidU7 ? paidFlow7 / paidU7 : 0);
+});
 
             const tr = document.createElement("tr");
             tr.innerHTML =
@@ -2757,7 +2740,6 @@ paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
         }
 
         // ---------------- Module 5: 体育 vs 游戏玩家比例（自然量） ----------------
-        // ---------------- Module 5: 体育 vs 游戏玩家比例（自然量） ----------------
         function renderSportsMixModule() {
           const state = dashboardState.modules.sportsMix;
           if (!state) return;
@@ -2772,12 +2754,16 @@ paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
           if (!chart) return;
 
           const orgAgg = aggregateByCountry(orgRows, [
-            "sportsPlayers",
-            "gamesPlayers",
+            "D0_SPORTS_BET_PLACED_USER",
+            "D0_GAMES_BET_PLACED_USER",
+            "D7_SPORTS_BET_PLACED_USER",
+            "D7_GAMES_BET_PLACED_USER",
           ]);
           const paidAgg = aggregateByCountry(paidRows, [
-            "sportsPlayers",
-            "gamesPlayers",
+            "D0_SPORTS_BET_PLACED_USER",
+            "D0_GAMES_BET_PLACED_USER",
+            "D7_SPORTS_BET_PLACED_USER",
+            "D7_GAMES_BET_PLACED_USER",
           ]);
 
           const allCountries = sortKeys(Object.keys(orgAgg));
@@ -2939,44 +2925,45 @@ paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
 
         // ---------------- Module 6: 留存 ----------------
         function aggregateRetentionByCountry(rows) {
-          const map = {};
-          rows.forEach(function (row) {
-            const c = row.country;
-            if (!c) return;
-            if (!map[c]) {
-              map[c] = {
-                regs: 0,
-                aliveD1: 0,
-                aliveD7: 0,
-              };
-            }
-            const regs = row.regs || 0;
-            map[c].regs += regs;
-            map[c].aliveD1 += regs * (row.retentionD1 || 0);
-            map[c].aliveD7 += regs * (row.retentionD7 || 0);
-          });
-          return map;
-        }
+  const map = {};
+  rows.forEach(function (row) {
+    const c = row.country;
+    if (!c) return;
+    if (!map[c]) {
+      map[c] = {
+        registration: 0,
+        D1_retained_users: 0,
+        D7_retained_users: 0,
+      };
+    }
+    const regs = row.registration || 0;
+    map[c].registration += regs;
+    map[c].D1_retained_users += row.D1_retained_users || 0;
+    map[c].D7_retained_users += row.D7_retained_users || 0;
+  });
+  return map;
+}
 
-        function aggregateRetentionByDate(rows) {
-          const map = {};
-          rows.forEach(function (row) {
-            const d = row.date;
-            if (!d) return;
-            if (!map[d]) {
-              map[d] = {
-                regs: 0,
-                aliveD1: 0,
-                aliveD7: 0,
-              };
-            }
-            const regs = row.regs || 0;
-            map[d].regs += regs;
-            map[d].aliveD1 += regs * (row.retentionD1 || 0);
-            map[d].aliveD7 += regs * (row.retentionD7 || 0);
-          });
-          return map;
-        }
+function aggregateRetentionByDate(rows) {
+  const map = {};
+  rows.forEach(function (row) {
+    const d = row.date;
+    if (!d) return;
+    if (!map[d]) {
+      map[d] = {
+        registration: 0,
+        D1_retained_users: 0,
+        D7_retained_users: 0,
+      };
+    }
+    const regs = row.registration || 0;
+    map[d].registration += regs;
+    map[d].D1_retained_users += row.D1_retained_users || 0;
+    map[d].D7_retained_users += row.D7_retained_users || 0;
+  });
+  return map;
+}
+
 
         function renderRetentionModule() {
           const state = dashboardState.modules.retention;
@@ -3010,10 +2997,19 @@ paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
             allDates.forEach(function (d) {
               const o = orgAgg[d] || {};
               const p = paidAgg[d] || {};
-              orgD1.push(o.regs ? (o.aliveD1 / o.regs) * 100 : 0);
-              orgD7.push(o.regs ? (o.aliveD7 / o.regs) * 100 : 0);
-              paidD1.push(p.regs ? (p.aliveD1 / p.regs) * 100 : 0);
-              paidD7.push(p.regs ? (p.aliveD7 / p.regs) * 100 : 0);
+              orgD1.push(
+  o.registration ? (o.D1_retained_users / o.registration) * 100 : 0
+);
+orgD7.push(
+  o.registration ? (o.D7_retained_users / o.registration) * 100 : 0
+);
+paidD1.push(
+  p.registration ? (p.D1_retained_users / p.registration) * 100 : 0
+);
+paidD7.push(
+  p.registration ? (p.D7_retained_users / p.registration) * 100 : 0
+);
+
             });
 
             option = {
@@ -3090,10 +3086,19 @@ paidD7.push(p.D7_unique_purchase ? paidV7 / p.D7_unique_purchase : 0);
             allCountries.forEach(function (c) {
               const o = orgAgg[c] || {};
               const p = paidAgg[c] || {};
-              orgD1.push(o.regs ? (o.aliveD1 / o.regs) * 100 : 0);
-              orgD7.push(o.regs ? (o.aliveD7 / o.regs) * 100 : 0);
-              paidD1.push(p.regs ? (p.aliveD1 / p.regs) * 100 : 0);
-              paidD7.push(p.regs ? (p.aliveD7 / p.regs) * 100 : 0);
+              orgD1.push(
+  o.registration ? (o.D1_retained_users / o.registration) * 100 : 0
+);
+orgD7.push(
+  o.registration ? (o.D7_retained_users / o.registration) * 100 : 0
+);
+paidD1.push(
+  p.registration ? (p.D1_retained_users / p.registration) * 100 : 0
+);
+paidD7.push(
+  p.registration ? (p.D7_retained_users / p.registration) * 100 : 0
+);
+
             });
 
             option = {
