@@ -6,7 +6,7 @@
 const RAW_ORGANIC = [
   
  // 2025-10 数据
-"2025-10": [
+
     {
       date: "2025-10-01",
       country: "GH",
@@ -3572,7 +3572,7 @@ const RAW_ORGANIC = [
       D1_retained_users: 70,
       D7_retained_users: 18,
     }
-],
+
 
 
   // 继续追加其他日期 / 国家...
