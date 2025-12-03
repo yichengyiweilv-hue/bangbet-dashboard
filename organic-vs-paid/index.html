@@ -1125,18 +1125,7 @@
         const COLOR_PAID = "#2563eb"; // 蓝色 - 买量
         const COLOR_PAID_SHADOW = "rgba(37, 99, 235, 0.45)";
 
-        // ===== 示例数据源：RAW_ORGANIC / RAW_PAID =====
-        // 后续接入真实数据时，可以直接把 genSampleData 替换为你自己的聚合结果。
-        // ===== 源数据入口：自然量 & 买量（按日 × 国家 × 月） =====
-        // 使用约定：
-        // 1）每条记录 = 某天 × 某国家的数据
-        // 2）month:  "YYYY-MM"，必须出现在 ALL_MONTHS 里
-        // 3）date:   "YYYY-MM-DD"，用于日度折线图
-        // 4）金额单位：USD；人数单位：人；留存率用小数表示（35% 写 0.35）
-        // 5）买量比自然量多 3 个字段：spend, media, productType
-
-        // 注意：使用真实数据时，注释掉 demo 生成函数
-        // genSampleData();
+       
 
         // ===== 数据分析文案库：按模块 × 月份维护 =====
         const ANALYSIS_TEXT = {
@@ -1182,7 +1171,7 @@
             "2024-09":
               "示例文案：9 月整体留存结构较为健康，自然与买量差距可控；部分小国家样本量较小，留存波动需结合注册基数看。",
           },
-        };
+        })();
 
         // ===== 图表实例容器 =====
         const charts = {
@@ -1273,9 +1262,7 @@
           });
         });
 
-        // ---------------- Sample Data Generator ----------------
-        // 这里是为了 demo 写的示例数据生成逻辑。
-        // 实战中你可以把 RAW_ORGANIC / RAW_PAID 替换成自己从 EXCEL 聚合出来的结果，然后删掉本函数。
+
 
         // ---------------- DOM helpers ----------------
         function formatMonthLabel(month) {
@@ -1800,8 +1787,8 @@ const paidSeries = allDates.map(function (d) {
               ],
             };
           } else {
-            const orgAgg = aggregateByCountry(orgRows, ["registrations"]);
-            const paidAgg = aggregateByCountry(paidRows, ["registrations"]);
+            const orgAgg = aggregateByCountry(orgRows, ["registration"]);
+            const paidAgg = aggregateByCountry(paidRows, ["registration"]);
 
             const allCountries = sortKeys(
               Array.from(
@@ -1810,10 +1797,10 @@ const paidSeries = allDates.map(function (d) {
             );
 
             const orgSeries = allCountries.map(function (c) {
-              return (orgAgg[c] && orgAgg[c].registrations) || 0;
+              return (orgAgg[c] && orgAgg[c].registration) || 0;
             });
             const paidSeries = allCountries.map(function (c) {
-              return (paidAgg[c] && paidAgg[c].registrations) || 0;
+              return (paidAgg[c] && paidAgg[c].registration) || 0;
             });
 
             option = {
