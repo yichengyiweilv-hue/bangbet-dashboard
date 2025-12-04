@@ -8,23 +8,7 @@
   const root = window;
   root.RAW_PAID_BY_MONTH = root.RAW_PAID_BY_MONTH || {};
 
-  // =========================
-  // 例子：
-// root.RAW_PAID_BY_MONTH["2025-09"] = [
-//    {
-//      date: "2025-09-01",
-//      country: "GH",
-      // 可选：买量拆分字段
-//      media: "FB",
-//      productType: "app",
-//      spent: 500.0,
-      // 必填：注册
-//      registration: 200
-//    }
-    // ...更多国家/日期/媒体
-//  ];
 
-//例子结束
   
   // =========================
   root.RAW_PAID_BY_MONTH["2025-09"] = [
