@@ -556,7 +556,7 @@
         </div>
 
         <div class="hero-side">
-          <div>当前版本：v0.1 · Step1 仅搭骨架 + 数据校验。</div>
+          <div>当前版本：v0.3 · Step3 注册量模块子筛选器已联动（总筛→子筛同步；子筛不影响总筛/其他模块）。</div>
           <div class="hero-pill" id="data-status-pill">数据状态：等待加载…</div>
         </div>
       </section>
@@ -614,15 +614,16 @@
 
             <div class="chart-controls">
               <span class="chart-badge">单位：人数 / %</span>
-              <div class="chart-mini-filter disabled" title="Step3 后启用">
-                <span class="chart-mini-label">月份：</span>
-                <div class="chart-mini-chips" id="reg-month"></div>
-              </div>
-              <div class="chart-mini-filter disabled" title="Step3 后启用">
-                <span class="chart-mini-label">国家：</span>
-                <div class="chart-mini-chips" id="reg-countries"></div>
-              </div>
-              <div class="chart-mini-filter" title="切换月度/日度">
+              <div class="chart-mini-filter">
+  <div class="chart-mini-label">月份</div>
+  <div class="filter-chips" id="reg-month"></div>
+</div>
+<div class="chart-mini-filter">
+  <div class="chart-mini-label">国家（可多选）</div>
+  <div class="filter-chips" id="reg-countries"></div>
+</div>
+<div class="chart-inline-note">子筛选器默认跟随总筛选器，单独修改不会影响总筛选器</div>
+
                 <span class="chart-mini-label">视图：</span>
                 <div class="chart-mini-radio">
                   <label>
@@ -1410,31 +1411,26 @@
       el.textContent = `当前筛选：${m}｜${cs}`;
     }
 
-    function onGlobalChange() {
+        function onGlobalChange() {
       renderGlobalPreview();
 
-      renderRegChart({
-        month: globalState.month,
-        countries: globalState.countries,
-        allCountries: ALL_COUNTRIES,
-      });
-      renderRegTable({
-        month: globalState.month,
-        countries: globalState.countries,
-        allCountries: ALL_COUNTRIES,
-      });
-      renderRegSummary({
-        month: globalState.month,
-        countries: globalState.countries,
-        allCountries: ALL_COUNTRIES,
-      });
+      // Step3：总筛选器变化 → 覆盖同步到所有模块子筛选器
+      syncAllModulesFromGlobal();
+      renderAllModuleFilters();
 
-      const preview = `当前筛选（预览）：月份=${globalState.month || "-"}；国家=${(globalState.countries || []).join(", ") || "全量国家"}`;
+      // 当前 Step：只让“注册量模块”跑真实联动
+      renderRegAll();
+
+      // 其他模块先保留“预览文本”（后续 Step 再接入真实计算）
+      const preview = `当前筛选（预览）：月份=${globalState.month || "-"}；国家=${
+        (globalState.countries || []).join(", ") || "全量国家"
+      }`;
       ["payrate", "arppu", "flow", "ratio", "retention"].forEach((k) => {
         const el = document.getElementById(`summary-${k}`);
         if (el) el.textContent = preview;
       });
     }
+
 
     createSingleSelectChips({
       containerId: "global-months",
@@ -1485,48 +1481,83 @@
     }
 
     document.querySelectorAll('input[name="reg-view"]').forEach((el) => {
-      el.addEventListener("change", onGlobalChange);
+      el.addEventListener("change", renderRegAll);
+
     });
 
-    const dummyLocal = { month: globalState.month };
+        // ===========================
+    // Step3：模块级筛选器状态（与总筛选器解耦）
+    // - 总筛选器变更：同步覆盖到各模块
+    // - 模块自己改：不反向影响总筛选器/其他模块
+    // ===========================
+    const moduleState = {
+      reg: { month: null, countries: [] },
+      payrate: { month: null, countries: [] },
+      arppu: { month: null, countries: [] },
+      flow: { month: null, countries: [] },
+      ratio: { month: null, countries: [] },
+      retention: { month: null, countries: [] },
+    };
 
-    [
-      "reg-month",
-      "payrate-month",
-      "arppu-month",
-      "flow-month",
-      "ratio-month",
-      "ret-month",
-    ].forEach((id) => {
-      createSingleSelectChips({
-        containerId: id,
-        values: ALL_MONTHS,
-        getLabel: (m) => m,
-        stateObj: dummyLocal,
-        key: "month",
-        preselect: "latest",
-        onChange: () => {},
+    const MODULE_FILTER_CONFIG = [
+      {
+        key: "reg",
+        monthId: "reg-month",
+        countriesId: "reg-countries",
+        onChange: () => renderRegAll(),
+      },
+      { key: "payrate", monthId: "payrate-month", countriesId: "payrate-countries", onChange: () => {} },
+      { key: "arppu", monthId: "arppu-month", countriesId: "arppu-countries", onChange: () => {} },
+      { key: "flow", monthId: "flow-month", countriesId: "flow-countries", onChange: () => {} },
+      { key: "ratio", monthId: "ratio-month", countriesId: "ratio-countries", onChange: () => {} },
+      { key: "retention", monthId: "ret-month", countriesId: "ret-countries", onChange: () => {} },
+    ];
+
+    function copyArray(target, source) {
+      target.length = 0;
+      if (Array.isArray(source)) source.forEach((v) => target.push(v));
+    }
+
+    function syncAllModulesFromGlobal() {
+      MODULE_FILTER_CONFIG.forEach((cfg) => {
+        const st = moduleState[cfg.key];
+        st.month = globalState.month;
+        copyArray(st.countries, globalState.countries);
       });
-    });
+    }
 
-    [
-      "reg-countries",
-      "payrate-countries",
-      "arppu-countries",
-      "flow-countries",
-      "ratio-countries",
-      "ret-countries",
-    ].forEach((id) => {
-      const arr = [];
-      createMultiSelectChips({
-        containerId: id,
-        values: ALL_COUNTRIES,
-        getLabel: (c) => c,
-        stateArray: arr,
-        preselect: "all",
-        onChange: () => {},
+    function renderAllModuleFilters() {
+      MODULE_FILTER_CONFIG.forEach((cfg) => {
+        const st = moduleState[cfg.key];
+
+        createSingleSelectChips({
+          containerId: cfg.monthId,
+          values: ALL_MONTHS,
+          getLabel: (m) => m,
+          stateObj: st,
+          key: "month",
+          preselect: "latest",
+          onChange: cfg.onChange,
+        });
+
+        createMultiSelectChips({
+          containerId: cfg.countriesId,
+          values: ALL_COUNTRIES,
+          getLabel: (c) => c,
+          stateArray: st.countries,
+          preselect: "all",
+          onChange: cfg.onChange,
+        });
       });
-    });
+    }
+
+    function renderRegAll() {
+      const st = moduleState.reg;
+      renderRegChart({ month: st.month, countries: st.countries, allCountries: ALL_COUNTRIES });
+      renderRegTable({ month: st.month, countries: st.countries, allCountries: ALL_COUNTRIES });
+      renderRegSummary({ month: st.month, countries: st.countries, allCountries: ALL_COUNTRIES });
+    }
+
 
     fillTableSkeleton("table-reg", [
       "国家",
