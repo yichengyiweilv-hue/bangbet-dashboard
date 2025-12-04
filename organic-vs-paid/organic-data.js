@@ -3,7 +3,7 @@
 // - date: "YYYY-MM-DD"
 // - month 从 date 自动切 "YYYY-MM"
 // - currency: USD, 人数单位: 人
-const RAW_ORGANIC = [
+window.RAW_ORGANIC = window.RAW_ORGANIC || [
   
  // 2025-10 数据
 
