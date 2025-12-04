@@ -556,7 +556,7 @@
         </div>
 
         <div class="hero-side">
-          <div>当前版本：v0.3 · Step3 注册量模块子筛选器已联动（总筛→子筛同步；子筛不影响总筛/其他模块）。</div>
+          <div>当前版本：v0.4 · Step4 付费率模块接真实数据（注册量 + 付费率双模块联动）。</div>
           <div class="hero-pill" id="data-status-pill">数据状态：等待加载…</div>
         </div>
       </section>
@@ -670,11 +670,11 @@
 
             <div class="chart-controls">
               <span class="chart-badge">单位：%</span>
-              <div class="chart-mini-filter disabled" title="Step3 后启用">
+              <div class="chart-mini-filter">
                 <span class="chart-mini-label">月份：</span>
                 <div class="chart-mini-chips" id="payrate-month"></div>
               </div>
-              <div class="chart-mini-filter disabled" title="Step3 后启用">
+              <div class="chart-mini-filter">
                 <span class="chart-mini-label">国家：</span>
                 <div class="chart-mini-chips" id="payrate-countries"></div>
               </div>
@@ -1371,6 +1371,201 @@
       `视图：${viewText}｜月份：${month}｜国家：${countryLabel}｜` +
       `自然：${fmtInt(totalOrg)}（${fmtPct01(orgShare)}）｜买量：${fmtInt(totalPaid)}（${fmtPct01(paidShare)}）｜总计：${fmtInt(total)}`;
   }
+      
+// ===========================
+// MODULE 2: D0/D7 付费率（自然 vs 买量）
+// 口径：付费率 = unique_purchase / registration
+// ===========================
+
+function renderPayrateAll() {
+  renderPayrateChart({
+    month: moduleState.payrate.month,
+    countries: moduleState.payrate.countries,
+    allCountries: ALL_COUNTRIES,
+  });
+  renderPayrateTable({
+    month: moduleState.payrate.month,
+    countries: moduleState.payrate.countries,
+    allCountries: ALL_COUNTRIES,
+  });
+  renderPayrateSummary({
+    month: moduleState.payrate.month,
+    countries: moduleState.payrate.countries,
+    allCountries: ALL_COUNTRIES,
+  });
+}
+
+function renderPayrateChart({ month, countries, allCountries }) {
+  const chart = chartsById["chart-payrate"];
+  if (!chart || !month) return;
+
+  const organicColor = cssVar("--organic", "#f97316");
+  const paidColor = cssVar("--paid", "#2563eb");
+
+  const useCountries = countries && countries.length ? countries : allCountries;
+
+  const orgRows = safeArray(RAW_ORGANIC_BY_MONTH && RAW_ORGANIC_BY_MONTH[month]).filter(
+    (r) => r && r.country && useCountries.includes(r.country)
+  );
+  const paidRows = safeArray(RAW_PAID_BY_MONTH && RAW_PAID_BY_MONTH[month]).filter(
+    (r) => r && r.country && useCountries.includes(r.country)
+  );
+
+  const orgRegBy = sumByCountry(orgRows, "registration");
+  const paidRegBy = sumByCountry(paidRows, "registration");
+
+  const orgD0PayBy = sumByCountry(orgRows, "D0_unique_purchase");
+  const orgD7PayBy = sumByCountry(orgRows, "D7_unique_purchase");
+  const paidD0PayBy = sumByCountry(paidRows, "D0_unique_purchase");
+  const paidD7PayBy = sumByCountry(paidRows, "D7_unique_purchase");
+
+  const xCats = useCountries.slice().sort();
+
+  const rate = (pay, reg) => {
+    const r = asNumber(reg || 0);
+    const p = asNumber(pay || 0);
+    return r > 0 ? p / r : 0;
+  };
+
+  const orgD0 = xCats.map((c) => rate(orgD0PayBy[c], orgRegBy[c]));
+  const orgD7 = xCats.map((c) => rate(orgD7PayBy[c], orgRegBy[c]));
+  const paidD0 = xCats.map((c) => rate(paidD0PayBy[c], paidRegBy[c]));
+  const paidD7 = xCats.map((c) => rate(paidD7PayBy[c], paidRegBy[c]));
+
+  const d7Shadow = {
+    shadowBlur: 10,
+    shadowOffsetY: 3,
+    shadowColor: "rgba(0,0,0,0.22)",
+  };
+
+  chart.setOption(
+    {
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        formatter: (params) => {
+          if (!params || !params.length) return "";
+          const title = params[0].axisValueLabel || params[0].name || "";
+          const lines = params
+            .map((p) => `${p.marker}${p.seriesName}：${fmtPct01(p.value, 1)}`)
+            .join("<br/>");
+          return `${title}<br/>${lines}`;
+        },
+      },
+      legend: { top: 0, right: 0 },
+      grid: { left: 36, right: 16, top: 36, bottom: 28, containLabel: true },
+      xAxis: { type: "category", data: xCats, axisTick: { alignWithLabel: true } },
+      yAxis: {
+        type: "value",
+        min: 0,
+        axisLabel: { formatter: (v) => fmtPct01(v, 0) },
+        splitLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+      },
+      series: [
+        { name: "自然量 D0", type: "bar", data: orgD0, itemStyle: { color: organicColor }, barMaxWidth: 18 },
+        { name: "自然量 D7", type: "bar", data: orgD7, itemStyle: { color: organicColor, ...d7Shadow }, barMaxWidth: 18 },
+        { name: "买量 D0", type: "bar", data: paidD0, itemStyle: { color: paidColor }, barMaxWidth: 18 },
+        { name: "买量 D7", type: "bar", data: paidD7, itemStyle: { color: paidColor, ...d7Shadow }, barMaxWidth: 18 },
+      ],
+    },
+    { notMerge: true }
+  );
+}
+
+function renderPayrateTable({ month, countries, allCountries }) {
+  const table = document.getElementById("table-payrate");
+  if (!table || !month) return;
+
+  const useCountries = countries && countries.length ? countries : allCountries;
+
+  const orgRows = safeArray(RAW_ORGANIC_BY_MONTH && RAW_ORGANIC_BY_MONTH[month]).filter(
+    (r) => r && r.country && useCountries.includes(r.country)
+  );
+  const paidRows = safeArray(RAW_PAID_BY_MONTH && RAW_PAID_BY_MONTH[month]).filter(
+    (r) => r && r.country && useCountries.includes(r.country)
+  );
+
+  const orgRegBy = sumByCountry(orgRows, "registration");
+  const paidRegBy = sumByCountry(paidRows, "registration");
+
+  const orgD0PayBy = sumByCountry(orgRows, "D0_unique_purchase");
+  const orgD7PayBy = sumByCountry(orgRows, "D7_unique_purchase");
+  const paidD0PayBy = sumByCountry(paidRows, "D0_unique_purchase");
+  const paidD7PayBy = sumByCountry(paidRows, "D7_unique_purchase");
+
+  const headers = ["国家", "自然量 D0 付费率", "自然量 D7 付费率", "买量 D0 付费率", "买量 D7 付费率"];
+
+  const rate = (pay, reg) => {
+    const r = asNumber(reg || 0);
+    const p = asNumber(pay || 0);
+    return r > 0 ? p / r : 0;
+  };
+
+  const rowsHtml = useCountries
+    .slice()
+    .sort()
+    .map((c) => {
+      const oReg = asNumber(orgRegBy[c] || 0);
+      const pReg = asNumber(paidRegBy[c] || 0);
+      const o0 = rate(orgD0PayBy[c], oReg);
+      const o7 = rate(orgD7PayBy[c], oReg);
+      const p0 = rate(paidD0PayBy[c], pReg);
+      const p7 = rate(paidD7PayBy[c], pReg);
+
+      return `
+        <tr>
+          <td>${c}</td>
+          <td class="num">${fmtPct01(o0, 1)}</td>
+          <td class="num">${fmtPct01(o7, 1)}</td>
+          <td class="num">${fmtPct01(p0, 1)}</td>
+          <td class="num">${fmtPct01(p7, 1)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const ths = headers.map((h) => `<th>${h}</th>`).join("");
+  table.innerHTML = `<thead><tr>${ths}</tr></thead><tbody>${rowsHtml}</tbody>`;
+}
+
+function renderPayrateSummary({ month, countries, allCountries }) {
+  const el = document.getElementById("summary-payrate");
+  if (!el || !month) return;
+
+  const useCountries = countries && countries.length ? countries : allCountries;
+
+  const orgRows = safeArray(RAW_ORGANIC_BY_MONTH && RAW_ORGANIC_BY_MONTH[month]).filter(
+    (r) => r && r.country && useCountries.includes(r.country)
+  );
+  const paidRows = safeArray(RAW_PAID_BY_MONTH && RAW_PAID_BY_MONTH[month]).filter(
+    (r) => r && r.country && useCountries.includes(r.country)
+  );
+
+  const sum = (rows, field) => rows.reduce((acc, r) => acc + asNumber(r && r[field]), 0);
+
+  const orgReg = sum(orgRows, "registration");
+  const paidReg = sum(paidRows, "registration");
+
+  const orgD0Pay = sum(orgRows, "D0_unique_purchase");
+  const orgD7Pay = sum(orgRows, "D7_unique_purchase");
+  const paidD0Pay = sum(paidRows, "D0_unique_purchase");
+  const paidD7Pay = sum(paidRows, "D7_unique_purchase");
+
+  const rate = (pay, reg) => (reg > 0 ? pay / reg : 0);
+  const orgD0 = rate(orgD0Pay, orgReg);
+  const orgD7 = rate(orgD7Pay, orgReg);
+  const paidD0 = rate(paidD0Pay, paidReg);
+  const paidD7 = rate(paidD7Pay, paidReg);
+
+  const fmtPP = (diff) => `${(diff * 100).toFixed(1)}pp`;
+
+  el.textContent =
+    `月份 ${month} · ${useCountries.length} 国｜` +
+    `自然 D0 ${fmtPct01(orgD0, 1)} / D7 ${fmtPct01(orgD7, 1)}（${fmtPP(orgD7 - orgD0)}）｜` +
+    `买量 D0 ${fmtPct01(paidD0, 1)} / D7 ${fmtPct01(paidD7, 1)}（${fmtPP(paidD7 - paidD0)}）｜` +
+    `买量-自然：D0 ${fmtPP(paidD0 - orgD0)} / D7 ${fmtPP(paidD7 - orgD7)}｜` +
+    `注册：自然 ${fmtInt(orgReg)} · 买量 ${fmtInt(paidReg)}`;
+}
 
   // ===========================
   // 初始化
@@ -1412,24 +1607,21 @@
     }
 
         function onGlobalChange() {
-      renderGlobalPreview();
+  // 总筛选器改动：同步到所有模块子筛选器，但只让“已接入真实计算”的模块刷新出图/表
+  syncAllModulesFromGlobal();
+  renderAllModuleFilters();
 
-      // Step3：总筛选器变化 → 覆盖同步到所有模块子筛选器
-      syncAllModulesFromGlobal();
-      renderAllModuleFilters();
+  // Step4：注册量 + 付费率 两个模块真联动
+  renderRegAll();
+  renderPayrateAll();
 
-      // 当前 Step：只让“注册量模块”跑真实联动
-      renderRegAll();
-
-      // 其他模块先保留“预览文本”（后续 Step 再接入真实计算）
-      const preview = `当前筛选（预览）：月份=${globalState.month || "-"}；国家=${
-        (globalState.countries || []).join(", ") || "全量国家"
-      }`;
-      ["payrate", "arppu", "flow", "ratio", "retention"].forEach((k) => {
-        const el = document.getElementById(`summary-${k}`);
-        if (el) el.textContent = preview;
-      });
-    }
+  // 其余模块先维持“预览摘要”（后续 Step 再接真实计算）
+  ["arppu", "flow", "ratio", "retention"].forEach((k) => {
+    const el = document.getElementById(`summary-${k}`);
+    if (!el) return;
+    el.textContent = `当前筛选（预览）：月份 ${globalState.month} · 国家 ${globalState.countries.length} 个`;
+  });
+}
 
 
     createSingleSelectChips({
@@ -1506,7 +1698,7 @@
         countriesId: "reg-countries",
         onChange: () => renderRegAll(),
       },
-      { key: "payrate", monthId: "payrate-month", countriesId: "payrate-countries", onChange: () => {} },
+      { key: "payrate", monthId: "payrate-month", countriesId: "payrate-countries", onChange: () => renderPayrateAll() },
       { key: "arppu", monthId: "arppu-month", countriesId: "arppu-countries", onChange: () => {} },
       { key: "flow", monthId: "flow-month", countriesId: "flow-countries", onChange: () => {} },
       { key: "ratio", monthId: "ratio-month", countriesId: "ratio-countries", onChange: () => {} },
