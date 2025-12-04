@@ -921,42 +921,55 @@
       }
 
       function updateRegCompTable(month, countries, orgIndex, paidIndex) {
-        const table = document.getElementById("table-regcomp");
-        if (!table) return;
+  var table = document.getElementById("table-regcomp");
+  if (!table) return;
 
-        if (!month || !countries || !countries.length) {
-          renderEmptyTable(table);
-          return;
-        }
+  if (!month || !countries || !countries.length) {
+    renderEmptyTable(table);
+    return;
+  }
 
-        const organicReg = calcMonthlyTotals(orgIndex, month, countries);
-        const paidReg = calcMonthlyTotals(paidIndex, month, countries);
-        const totalReg = organicReg + paidReg;
+  var orgByCountry = (orgIndex.aggMonth && orgIndex.aggMonth[month]) ? orgIndex.aggMonth[month] : {};
+  var paidByCountry = (paidIndex.aggMonth && paidIndex.aggMonth[month]) ? paidIndex.aggMonth[month] : {};
 
-        const organicShare = safeDivide(organicReg, totalReg) * 100;
-        const paidShare = safeDivide(paidReg, totalReg) * 100;
+  var rowsHtml = countries
+    .map(function (c) {
+      var organicReg = Number((orgByCountry[c] && orgByCountry[c].registration) || 0);
+      var paidReg = Number((paidByCountry[c] && paidByCountry[c].registration) || 0);
+      var totalReg = organicReg + paidReg;
 
-        table.innerHTML = `
-          <thead>
-            <tr>
-              <th class="num">自然量注册占比 (%)</th>
-              <th class="num">买量注册占比 (%)</th>
-              <th class="num">自然量注册数</th>
-              <th class="num">买量注册数</th>
-              <th class="num">总注册数</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="num">${formatPercent(organicShare)}</td>
-              <td class="num">${formatPercent(paidShare)}</td>
-              <td class="num">${formatInteger(organicReg)}</td>
-              <td class="num">${formatInteger(paidReg)}</td>
-              <td class="num">${formatInteger(totalReg)}</td>
-            </tr>
-          </tbody>
-        `;
-      }
+      var organicShare = safeDivide(organicReg, totalReg) * 100;
+      var paidShare = safeDivide(paidReg, totalReg) * 100;
+
+      return (
+        "<tr>" +
+          "<td>" + c + "</td>" +
+          '<td class="num">' + formatPercent(organicShare) + "</td>" +
+          '<td class="num">' + formatPercent(paidShare) + "</td>" +
+          '<td class="num">' + formatInteger(organicReg) + "</td>" +
+          '<td class="num">' + formatInteger(paidReg) + "</td>" +
+          '<td class="num">' + formatInteger(totalReg) + "</td>" +
+        "</tr>"
+      );
+    })
+    .join("");
+
+  table.innerHTML =
+    "<thead>" +
+      "<tr>" +
+        "<th>国家</th>" +
+        '<th class="num">自然量注册占比 (%)</th>' +
+        '<th class="num">买量注册占比 (%)</th>' +
+        '<th class="num">自然量注册数</th>' +
+        '<th class="num">买量注册数</th>' +
+        '<th class="num">总注册数</th>' +
+      "</tr>" +
+    "</thead>" +
+    "<tbody>" +
+      rowsHtml +
+    "</tbody>";
+}
+
 
       function updateRegCompChart(chart, view, month, countries, orgIndex, paidIndex) {
         if (!chart) return;
