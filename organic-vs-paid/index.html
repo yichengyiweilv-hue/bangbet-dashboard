@@ -568,7 +568,7 @@
           <div class="hero-tags">
             <span class="hero-tag">模块1：注册量（自然 vs 买量）</span>
             <span class="hero-tag">数据源：RAW_ORGANIC_BY_MONTH + RAW_PAID_BY_MONTH</span>
-            <span class="hero-tag">日折线：多国家会汇总</span>
+            <span class="hero-tag">日折线：</span>
           </div>
         </div>
 
@@ -576,7 +576,7 @@
           <div>当前版本：v0.1 · 本页仅完成模块1。</div>
           <div>每月新增数据：在 organic-data.js / paid-data.js 各自新增一个月份数组。</div>
           <div class="hero-pill">
-            提示：月筛选单选，国家可多选；折线图始终只画两条线（自然/买量）。
+            提示：月筛选单选，国家可多选；（自然/买量）。
           </div>
         </div>
       </section>
@@ -971,83 +971,74 @@
         updateAnalysisUI(month);
 
         if (view === "line") {
-          const dates = unionDates(orgIndex, paidIndex, month);
-          if (!dates.length) {
-            renderEmptyChart(chart, "暂无日数据");
-            return;
-          }
+  // 用“全日期”铺底，缺失日期按 0
+  var dates = unionDates(orgIndex, paidIndex, month);
+  if (!dates.length) {
+    renderEmptyChart(chart, "暂无日数据");
+    return;
+  }
 
-          // 用“全日期”铺底，缺失日期按 0
-          const orgByDate = (orgIndex.aggDay && orgIndex.aggDay[month]) || {};
-          const paidByDate = (paidIndex.aggDay && paidIndex.aggDay[month]) || {};
+  var orgByDate = (orgIndex.aggDay && orgIndex.aggDay[month]) ? orgIndex.aggDay[month] : {};
+  var paidByDate = (paidIndex.aggDay && paidIndex.aggDay[month]) ? paidIndex.aggDay[month] : {};
 
-          const orgLine = dates.map((d) => {
-            const m = orgByDate[d] || {};
-            let sum = 0;
-            countries.forEach((c) => (sum += Number((m[c] && m[c].registration) || 0)));
-            return sum;
-          });
+  // 每个国家两条线：自然量 / 买量
+  var lineTypes = ["solid", "dashed", "dotted"];
+  var series = [];
 
-          const paidLine = dates.map((d) => {
-            const m = paidByDate[d] || {};
-            let sum = 0;
-            countries.forEach((c) => (sum += Number((m[c] && m[c].registration) || 0)));
-            return sum;
-          });
+  countries.forEach(function (country, idx) {
+    var lineType = lineTypes[idx % lineTypes.length];
 
-          const countryNote =
-            countries.length === 1 ? countries[0] : countries.join(", ") + "（汇总）";
+    var orgData = dates.map(function (d) {
+      var m = orgByDate[d] || {};
+      return Number((m[country] && m[country].registration) || 0);
+    });
 
-          chart.setOption(
-            {
-              tooltip: {
-                trigger: "axis",
-                valueFormatter: (val) => (val == null ? "" : formatInteger(val)),
-              },
-              legend: { type: "scroll" },
-              grid: { left: 40, right: 20, top: 42, bottom: 40 },
-              xAxis: {
-                type: "category",
-                data: dates,
-                axisLabel: { formatter: (v) => v.slice(5) },
-              },
-              yAxis: {
-                type: "value",
-                name: "注册数",
-                axisLabel: {
-                  formatter: function (v) {
-                    return v >= 1000 ? (v / 1000).toFixed(1) + "k" : v;
-                  },
-                },
-              },
-              series: [
-                {
-                  name: "自然量 · " + countryNote,
-                  type: "line",
-                  data: orgLine,
-                  showSymbol: false,
-                  smooth: true,
-                  itemStyle: { color: COLOR_ORGANIC },
-                  lineStyle: { color: COLOR_ORGANIC, width: 2 },
-                  emphasis: { focus: "series" },
-                },
-                {
-                  name: "买量 · " + countryNote,
-                  type: "line",
-                  data: paidLine,
-                  showSymbol: false,
-                  smooth: true,
-                  itemStyle: { color: COLOR_PAID },
-                  lineStyle: { color: COLOR_PAID, width: 2 },
-                  emphasis: { focus: "series" },
-                },
-              ],
-            },
-            true
-          );
+    var paidData = dates.map(function (d) {
+      var m = paidByDate[d] || {};
+      return Number((m[country] && m[country].registration) || 0);
+    });
 
-          return;
-        }
+    series.push({
+      name: "自然量 · " + country,
+      type: "line",
+      smooth: true,
+      showSymbol: false,
+      data: orgData,
+      emphasis: { focus: "series" },
+      lineStyle: { width: 2, color: COLOR_ORGANIC, type: lineType },
+      itemStyle: { color: COLOR_ORGANIC },
+    });
+
+    series.push({
+      name: "买量 · " + country,
+      type: "line",
+      smooth: true,
+      showSymbol: false,
+      data: paidData,
+      emphasis: { focus: "series" },
+      lineStyle: { width: 2, color: COLOR_PAID, type: lineType },
+      itemStyle: { color: COLOR_PAID },
+    });
+  });
+
+  chart.setOption(
+    {
+      tooltip: { trigger: "axis", axisPointer: { type: "cross" } },
+      legend: { type: "scroll" },
+      grid: { left: 40, right: 24, top: 50, bottom: 40, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: dates,
+        axisLabel: { formatter: function (v) { return v.slice(8); } },
+      },
+      yAxis: { type: "value" },
+      series: series,
+    },
+    true
+  );
+  return;
+}
+
 
         // bar（月度）：按国家对比（自然/买量两组柱）
         const monthCountries = countries.slice(); // 已筛选
