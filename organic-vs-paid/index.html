@@ -650,19 +650,56 @@
           </div>
         </section>
 
-        <!-- 预留：后续模块位置（先别写逻辑） -->
-        <section class="chart-card is-placeholder" id="card-placeholder-2">
-          <header class="chart-card-header">
-            <div class="chart-title-block">
-              <div class="chart-kicker">Reserved</div>
-              <div class="chart-title">模块2（预留）</div>
-              <div class="chart-sub">后续接入：FTD、Spend、ROAS D0/D7/D30、GGR、留存等。</div>
-            </div>
-          </header>
-          <div class="placeholder-body">
-            先占位不接逻辑，避免现在把结构写死。等你给模块2口径和展示交互，再按同一套风格往下加。
-          </div>
-        </section>
+       <!-- 2. D0 / D7 付费率 · 自然量 vs 买量 -->
+<section class="chart-card" id="card-payratecomp">
+  <header class="chart-card-header">
+    <div class="chart-title-block">
+      <div class="chart-kicker">Monetization</div>
+      <div class="chart-title">D0 / D7 付费率 · 自然量 vs 买量</div>
+      <div class="chart-sub">
+        月度视图：按国家对比自然/买量的 D0、D7 付费率；D7 用阴影区分（不做堆叠柱）。
+      </div>
+    </div>
+
+    <div class="chart-controls">
+      <span class="chart-badge">单位：%（付费率）</span>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">月份：</span>
+        <div id="payratecomp-months" class="chips"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">国家：</span>
+        <div id="payratecomp-countries" class="chips"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="chart-area">
+    <div class="chart" id="chart-payratecomp"></div>
+  </div>
+
+  <div class="chart-summary">
+    <div class="chart-table-wrap">
+      <div class="chart-table-title">当前筛选 · D0 / D7 付费率（月度）</div>
+      <div class="chart-table-box">
+        <table id="table-payratecomp" class="chart-table"></table>
+      </div>
+    </div>
+
+    <div class="chart-analysis-box">
+      <div class="analysis-header">
+        <div class="analysis-title">数据分析：D0 / D7 付费率（自然 vs 买量）</div>
+        <div class="analysis-month" id="analysis-payratecomp-month">-</div>
+      </div>
+      <div class="analysis-body" id="analysis-payratecomp-text">
+        暂无文案：请在 analysis-payrate-vs-paid.js 里补充对应月份。
+      </div>
+    </div>
+  </div>
+</section>
+
       </main>
 
       <!-- 页脚（按旧看板保持一致） -->
@@ -681,6 +718,7 @@
 
     <!-- 文案文件（同级，新增） -->
     <script src="./analysis-reg-vs-paid.js"></script>
+<script src="./analysis-payrate-vs-paid.js"></script>
 
     <script>
       "use strict";
@@ -758,34 +796,55 @@
       // 数据索引（尽量薄：先只聚合 registration，后续模块再扩展）
       // ============
       function buildDatasetIndex(rawByMonth) {
-        const months = Object.keys(rawByMonth || {}).sort();
-        const aggMonth = {}; // month -> country -> { registration }
-        const aggDay = {}; // month -> date -> country -> { registration }
+  const months = Object.keys(rawByMonth || {}).sort();
+  const aggMonth = {}; // aggMonth[month][country] = { registration, D0_unique_purchase, D7_unique_purchase }
+  const aggDay = {};   // aggDay[month][date][country] = { registration, D0_unique_purchase, D7_unique_purchase }
 
-        months.forEach((month) => {
-          const rows = rawByMonth[month] || [];
-          aggMonth[month] = {};
-          aggDay[month] = {};
+  months.forEach((month) => {
+    const rows = rawByMonth[month] || [];
+    if (!aggMonth[month]) aggMonth[month] = {};
+    if (!aggDay[month]) aggDay[month] = {};
 
-          rows.forEach((row) => {
-            if (!row) return;
-            const country = row.country;
-            const date = row.date;
-            if (!country || !date) return;
+    rows.forEach((row) => {
+      const country = row.country;
+      const date = row.date;
 
-            const reg = Number(row.registration || 0);
+      const reg = Number(row.registration) || 0;
+      const d0u = Number(row.D0_unique_purchase) || 0;
+      const d7u = Number(row.D7_unique_purchase) || 0;
 
-            if (!aggMonth[month][country]) aggMonth[month][country] = { registration: 0 };
-            aggMonth[month][country].registration += reg;
-
-            if (!aggDay[month][date]) aggDay[month][date] = {};
-            if (!aggDay[month][date][country]) aggDay[month][date][country] = { registration: 0 };
-            aggDay[month][date][country].registration += reg;
-          });
-        });
-
-        return { months, aggMonth, aggDay };
+      if (country) {
+        if (!aggMonth[month][country]) {
+          aggMonth[month][country] = {
+            registration: 0,
+            D0_unique_purchase: 0,
+            D7_unique_purchase: 0,
+          };
+        }
+        aggMonth[month][country].registration += reg;
+        aggMonth[month][country].D0_unique_purchase += d0u;
+        aggMonth[month][country].D7_unique_purchase += d7u;
       }
+
+      if (country && date) {
+        if (!aggDay[month][date]) aggDay[month][date] = {};
+        if (!aggDay[month][date][country]) {
+          aggDay[month][date][country] = {
+            registration: 0,
+            D0_unique_purchase: 0,
+            D7_unique_purchase: 0,
+          };
+        }
+        aggDay[month][date][country].registration += reg;
+        aggDay[month][date][country].D0_unique_purchase += d0u;
+        aggDay[month][date][country].D7_unique_purchase += d7u;
+      }
+    });
+  });
+
+  return { months, aggMonth, aggDay };
+}
+
 
       function getCountriesForMonth(orgIndex, paidIndex, month) {
         const a = Object.keys((orgIndex.aggMonth && orgIndex.aggMonth[month]) || {});
@@ -1110,6 +1169,203 @@
           true
         );
       }
+function calcPayRatePct(purchase, reg) {
+  const r = Number(reg);
+  const p = Number(purchase);
+  if (!Number.isFinite(r) || r <= 0) return null;
+  if (!Number.isFinite(p) || p < 0) return null;
+  return safeDivide(p, r) * 100;
+}
+
+function updatePayRateCompTable(tableEl, month, countriesOrdered, orgIndex, paidIndex) {
+  if (!tableEl) return;
+
+  if (!month || !countriesOrdered || !countriesOrdered.length) {
+    renderEmptyTable(tableEl, "无数据：请先选择月份和国家");
+    return;
+  }
+
+  const orgMonth = (orgIndex.aggMonth && orgIndex.aggMonth[month]) || {};
+  const paidMonth = (paidIndex.aggMonth && paidIndex.aggMonth[month]) || {};
+
+  const rowsHtml = countriesOrdered
+    .map((c) => {
+      const o = orgMonth[c];
+      const p = paidMonth[c];
+
+      const oD0 = calcPayRatePct(o && o.D0_unique_purchase, o && o.registration);
+      const oD7 = calcPayRatePct(o && o.D7_unique_purchase, o && o.registration);
+      const pD0 = calcPayRatePct(p && p.D0_unique_purchase, p && p.registration);
+      const pD7 = calcPayRatePct(p && p.D7_unique_purchase, p && p.registration);
+
+      return `
+        <tr>
+          <th>${c}</th>
+          <td class="num">${formatPercent(oD0)}</td>
+          <td class="num">${formatPercent(oD7)}</td>
+          <td class="num">${formatPercent(pD0)}</td>
+          <td class="num">${formatPercent(pD7)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  tableEl.innerHTML = `
+    <thead>
+      <tr>
+        <th>国家</th>
+        <th class="num">自然量 D0 付费率</th>
+        <th class="num">自然量 D7 付费率</th>
+        <th class="num">买量 D0 付费率</th>
+        <th class="num">买量 D7 付费率</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml}
+    </tbody>
+  `;
+}
+
+function updatePayRateCompChart(chart, month, countries, orgIndex, paidIndex) {
+  if (!chart) return;
+
+  if (!month || !countries || !countries.length) {
+    renderEmptyChart(chart, "无数据：请先选择月份和国家");
+    return;
+  }
+
+  const orgMonth = (orgIndex.aggMonth && orgIndex.aggMonth[month]) || {};
+  const paidMonth = (paidIndex.aggMonth && paidIndex.aggMonth[month]) || {};
+
+  // 排序：按（自然+买量）注册总数降序，保证图和表顺序一致
+  const ordered = [...countries].sort((a, b) => {
+    const ar = (orgMonth[a]?.registration || 0) + (paidMonth[a]?.registration || 0);
+    const br = (orgMonth[b]?.registration || 0) + (paidMonth[b]?.registration || 0);
+    return br - ar || String(a).localeCompare(String(b));
+  });
+
+  const orgD0 = ordered.map((c) => calcPayRatePct(orgMonth[c]?.D0_unique_purchase, orgMonth[c]?.registration));
+  const orgD7 = ordered.map((c) => calcPayRatePct(orgMonth[c]?.D7_unique_purchase, orgMonth[c]?.registration));
+  const paidD0 = ordered.map((c) => calcPayRatePct(paidMonth[c]?.D0_unique_purchase, paidMonth[c]?.registration));
+  const paidD7 = ordered.map((c) => calcPayRatePct(paidMonth[c]?.D7_unique_purchase, paidMonth[c]?.registration));
+
+  const shadowStyle = {
+    shadowBlur: 10,
+    shadowColor: "rgba(0,0,0,0.20)",
+    shadowOffsetY: 3,
+  };
+
+  chart.setOption(
+    {
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        valueFormatter: (val) => (val == null ? "-" : formatPercent(val)),
+      },
+      legend: { type: "scroll" },
+      grid: { left: 44, right: 20, top: 42, bottom: 70 },
+      xAxis: {
+        type: "category",
+        data: ordered,
+        axisLabel: { rotate: ordered.length > 8 ? 30 : 0 },
+      },
+      yAxis: {
+        type: "value",
+        name: "付费率 (%)",
+        axisLabel: { formatter: (v) => v + "%" },
+      },
+      series: [
+        // D0（无阴影）
+        { name: "自然量 D0", type: "bar", data: orgD0, itemStyle: { color: COLOR_ORGANIC } },
+        { name: "买量 D0", type: "bar", data: paidD0, itemStyle: { color: COLOR_PAID } },
+        // D7（带阴影）
+        { name: "自然量 D7", type: "bar", data: orgD7, itemStyle: { color: COLOR_ORGANIC, ...shadowStyle } },
+        { name: "买量 D7", type: "bar", data: paidD7, itemStyle: { color: COLOR_PAID, ...shadowStyle } },
+      ],
+    },
+    true
+  );
+
+  return ordered; // 让 init 里复用同一排序同步表格
+}
+
+function updatePayRateAnalysisUI(month) {
+  const monthEl = document.getElementById("analysis-payratecomp-month");
+  const textEl = document.getElementById("analysis-payratecomp-text");
+  if (monthEl) monthEl.textContent = month ? formatMonthShort(month) : "-";
+  if (!textEl) return;
+
+  const txt = getAnalysisText("reg_vs_paid_payrate_d0d7", month);
+  textEl.textContent =
+    txt || "暂无文案：请在 analysis-payrate-vs-paid.js 中补充该月份的 reg_vs_paid_payrate_d0d7 文案。";
+}
+// ============
+// 模块2：D0/D7 付费率（自然 vs 买量）
+// ============
+const payrateDom = document.getElementById("chart-payratecomp");
+const payrateTable = document.getElementById("table-payratecomp");
+
+if (payrateDom && payrateTable) {
+  const payrateChart = echarts.init(payrateDom);
+
+  let payrateMonth = defaultMonth; // 跟模块1默认月一致
+  let payrateCountriesAll = getCountriesForMonth(orgIndex, paidIndex, payrateMonth);
+  let payrateCountries = payrateCountriesAll.slice(); // 默认全选
+
+  function renderPayRate() {
+    if (!payrateMonth || !payrateCountries || !payrateCountries.length) {
+      renderEmptyChart(payrateChart, "无数据：请先选择月份和国家");
+      renderEmptyTable(payrateTable, "无数据：请先选择月份和国家");
+      updatePayRateAnalysisUI(payrateMonth);
+      return;
+    }
+    const ordered = updatePayRateCompChart(payrateChart, payrateMonth, payrateCountries, orgIndex, paidIndex);
+    updatePayRateCompTable(payrateTable, payrateMonth, ordered || payrateCountries, orgIndex, paidIndex);
+    updatePayRateAnalysisUI(payrateMonth);
+  }
+
+  createSingleSelectChips(
+    "payratecomp-months",
+    allMonths,
+    payrateMonth,
+    formatMonthShort,
+    (m) => {
+      payrateMonth = m;
+      payrateCountriesAll = getCountriesForMonth(orgIndex, paidIndex, payrateMonth);
+
+      // 保留交集；交集为空则全选
+      const kept = (payrateCountries || []).filter((c) => payrateCountriesAll.includes(c));
+      payrateCountries = kept.length ? kept : payrateCountriesAll.slice();
+
+      createMultiSelectChips(
+        "payratecomp-countries",
+        payrateCountriesAll,
+        payrateCountries,
+        (c) => c,
+        (sel) => {
+          payrateCountries = sel;
+          renderPayRate();
+        }
+      );
+
+      renderPayRate();
+    }
+  );
+
+  createMultiSelectChips(
+    "payratecomp-countries",
+    payrateCountriesAll,
+    payrateCountries,
+    (c) => c,
+    (sel) => {
+      payrateCountries = sel;
+      renderPayRate();
+    }
+  );
+
+  renderPayRate();
+  window.addEventListener("resize", () => payrateChart.resize());
+}
 
       // ============
       // Init
