@@ -10,7 +10,7 @@
 
   // =========================
 
-  // =========================
+ 
   root.RAW_ORGANIC_BY_MONTH["2025-09"] = [
     // 建议：每行 = 1 天 × 1 国家；没数据可以写 0 或者不写该行（不写会导致折线断点）
         { date: "2025-09-01", country: "GH", registration: 302, D0_unique_purchase: 138, D7_unique_purchase: 172, D0_PURCHASE_VALUE: 561.46, D7_PURCHASE_VALUE: 3002, D0_TOTAL_BET_PLACED_USER: 139, D7_TOTAL_BET_PLACED_USER: 177, D0_SPORTS_BET_PLACED_USER: 64, D0_GAMES_BET_PLACED_USER: 104, D7_SPORTS_BET_PLACED_USER: 108, D7_GAMES_BET_PLACED_USER: 138, D0_SPORTS_BET_FLOW: 93.48, D0_GAMES_BET_FLOW: 2211, D0_TOTAL_BET_FLOW: 2304.49, D7_SPORTS_BET_FLOW: 532.02, D7_GAMES_BET_FLOW: 16393.33, D7_TOTAL_BET_FLOW: 16925.36, D1_retained_users: 139, D7_retained_users: 61 },
