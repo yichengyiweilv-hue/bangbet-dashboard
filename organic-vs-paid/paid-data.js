@@ -1,5 +1,5 @@
 // 买量源数据：按 “日 × 国家 × 媒体 × 产品形态” 一条记录
-const RAW_PAID = [
+window.RAW_PAID = window.RAW_PAID || [
   // 2025-10 买量数据
 
     {
