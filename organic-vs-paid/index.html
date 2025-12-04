@@ -713,11 +713,11 @@
 
             <div class="chart-controls">
               <span class="chart-badge">单位：USD 等值</span>
-              <div class="chart-mini-filter disabled" title="Step3 后启用">
+              <div class="chart-mini-filter">
                 <span class="chart-mini-label">月份：</span>
                 <div class="chart-mini-chips" id="arppu-month"></div>
               </div>
-              <div class="chart-mini-filter disabled" title="Step3 后启用">
+              <<div class="chart-mini-filter">
                 <span class="chart-mini-label">国家：</span>
                 <div class="chart-mini-chips" id="arppu-countries"></div>
               </div>
@@ -941,6 +941,13 @@
     const pct = r * 100;
     return pct.toFixed(digits) + "%";
   }
+function fmtMoney(x, digits = 2) {
+  const n = asNumber(x);
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
 
   function cssVar(name, fallback) {
     const v = getComputedStyle(document.documentElement)
@@ -1566,6 +1573,210 @@ function renderPayrateSummary({ month, countries, allCountries }) {
     `买量-自然：D0 ${fmtPP(paidD0 - orgD0)} / D7 ${fmtPP(paidD7 - orgD7)}｜` +
     `注册：自然 ${fmtInt(orgReg)} · 买量 ${fmtInt(paidReg)}`;
 }
+// ===========================
+// MODULE 3: D0/D7 ARPPU（自然量 vs 买量）
+// 单位：USD 等值 / 付费用户；时间区间：所选月份
+// ===========================
+
+function renderArppuAll() {
+  const month = moduleState.arppu?.month;
+  const countries = moduleState.arppu?.countries || [];
+  renderArppuChart({ month, countries, allCountries: ALL_COUNTRIES });
+  renderArppuTable({ month, countries, allCountries: ALL_COUNTRIES });
+  renderArppuSummary({ month, countries, allCountries: ALL_COUNTRIES });
+}
+
+function renderArppuChart({ month, countries, allCountries }) {
+  const chart = chartsById["chart-arppu"];
+  if (!chart) return;
+
+  if (!month) {
+    chart.setOption(placeholderOption("ARPPU：请选择月份"));
+    return;
+  }
+
+  const useCountries = (countries && countries.length ? countries : allCountries).slice();
+  if (!useCountries.length) {
+    chart.setOption(placeholderOption("ARPPU：未选择国家"));
+    return;
+  }
+  const xCats = useCountries.slice().sort();
+
+  const orgRows = safeArray(RAW_ORGANIC_BY_MONTH?.[month]).filter((r) => xCats.includes(r.country));
+  const paidRows = safeArray(RAW_PAID_BY_MONTH?.[month]).filter((r) => xCats.includes(r.country));
+
+  const sumByCountry = (rows, field) => {
+    const m = Object.create(null);
+    rows.forEach((r) => {
+      const c = r?.country;
+      if (!c) return;
+      m[c] = (m[c] || 0) + asNumber(r[field]);
+    });
+    return m;
+  };
+
+  const oD0Rev = sumByCountry(orgRows, "D0_PURCHASE_VALUE");
+  const oD7Rev = sumByCountry(orgRows, "D7_PURCHASE_VALUE");
+  const oD0P = sumByCountry(orgRows, "D0_unique_purchase");
+  const oD7P = sumByCountry(orgRows, "D7_unique_purchase");
+
+  const pD0Rev = sumByCountry(paidRows, "D0_PURCHASE_VALUE");
+  const pD7Rev = sumByCountry(paidRows, "D7_PURCHASE_VALUE");
+  const pD0P = sumByCountry(paidRows, "D0_unique_purchase");
+  const pD7P = sumByCountry(paidRows, "D7_unique_purchase");
+
+  const arppu = (rev, payers) => (payers > 0 ? rev / payers : 0);
+
+  const orgD0 = xCats.map((c) => arppu(asNumber(oD0Rev[c]), asNumber(oD0P[c])));
+  const orgD7 = xCats.map((c) => arppu(asNumber(oD7Rev[c]), asNumber(oD7P[c])));
+  const paidD0 = xCats.map((c) => arppu(asNumber(pD0Rev[c]), asNumber(pD0P[c])));
+  const paidD7 = xCats.map((c) => arppu(asNumber(pD7Rev[c]), asNumber(pD7P[c])));
+
+  const organicColor = cssVar("--organic", "#f97316");
+  const paidColor = cssVar("--paid", "#2563eb");
+  const gridColor = cssVar("--grid", "rgba(15, 23, 42, 0.08)");
+  const axisColor = cssVar("--muted", "#64748b");
+
+  const d7Shadow = { shadowColor: "rgba(0,0,0,0.18)", shadowBlur: 10, shadowOffsetY: 4 };
+
+  chart.setOption(
+    {
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        formatter: (params) => {
+          const title = params?.[0]?.axisValueLabel ?? "";
+          const lines = (params || []).map(
+            (p) => `${p.marker}${p.seriesName}: ${fmtMoney(p.data, 2)}`
+          );
+          return [title, ...lines].join("<br/>");
+        },
+      },
+      legend: {
+        top: 6,
+        right: 12,
+        itemWidth: 10,
+        itemHeight: 10,
+        textStyle: { color: axisColor },
+      },
+      grid: { top: 46, left: 42, right: 18, bottom: 34, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: xCats,
+        axisLine: { lineStyle: { color: gridColor } },
+        axisLabel: { color: axisColor },
+      },
+      yAxis: {
+        type: "value",
+        axisLine: { show: false },
+        axisLabel: { color: axisColor, formatter: (v) => fmtMoney(v, 0) },
+        splitLine: { lineStyle: { color: gridColor } },
+      },
+      series: [
+        { name: "自然量 D0 ARPPU", type: "bar", data: orgD0, itemStyle: { color: organicColor }, barMaxWidth: 18 },
+        { name: "自然量 D7 ARPPU", type: "bar", data: orgD7, itemStyle: { color: organicColor, ...d7Shadow }, barMaxWidth: 18 },
+        { name: "买量 D0 ARPPU", type: "bar", data: paidD0, itemStyle: { color: paidColor }, barMaxWidth: 18 },
+        { name: "买量 D7 ARPPU", type: "bar", data: paidD7, itemStyle: { color: paidColor, ...d7Shadow }, barMaxWidth: 18 },
+      ],
+    },
+    true
+  );
+
+  chart.resize();
+}
+
+function renderArppuTable({ month, countries, allCountries }) {
+  const table = document.getElementById("table-arppu");
+  if (!table) return;
+  if (!month) return;
+
+  const useCountries = (countries && countries.length ? countries : allCountries).slice().sort();
+
+  const orgRows = safeArray(RAW_ORGANIC_BY_MONTH?.[month]).filter((r) => useCountries.includes(r.country));
+  const paidRows = safeArray(RAW_PAID_BY_MONTH?.[month]).filter((r) => useCountries.includes(r.country));
+
+  const sumByCountry = (rows, field) => {
+    const m = Object.create(null);
+    rows.forEach((r) => {
+      const c = r?.country;
+      if (!c) return;
+      m[c] = (m[c] || 0) + asNumber(r[field]);
+    });
+    return m;
+  };
+
+  const oD0Rev = sumByCountry(orgRows, "D0_PURCHASE_VALUE");
+  const oD7Rev = sumByCountry(orgRows, "D7_PURCHASE_VALUE");
+  const oD0P = sumByCountry(orgRows, "D0_unique_purchase");
+  const oD7P = sumByCountry(orgRows, "D7_unique_purchase");
+
+  const pD0Rev = sumByCountry(paidRows, "D0_PURCHASE_VALUE");
+  const pD7Rev = sumByCountry(paidRows, "D7_PURCHASE_VALUE");
+  const pD0P = sumByCountry(paidRows, "D0_unique_purchase");
+  const pD7P = sumByCountry(paidRows, "D7_unique_purchase");
+
+  const arppu = (rev, payers) => (payers > 0 ? rev / payers : 0);
+
+  const rowsHtml = useCountries
+    .map((c) => {
+      const o0 = arppu(asNumber(oD0Rev[c]), asNumber(oD0P[c]));
+      const o7 = arppu(asNumber(oD7Rev[c]), asNumber(oD7P[c]));
+      const a0 = arppu(asNumber(pD0Rev[c]), asNumber(pD0P[c]));
+      const a7 = arppu(asNumber(pD7Rev[c]), asNumber(pD7P[c]));
+      return `
+        <tr>
+          <td>${c}</td>
+          <td class="num">${fmtMoney(o0, 2)}</td>
+          <td class="num">${fmtMoney(o7, 2)}</td>
+          <td class="num">${fmtMoney(a0, 2)}</td>
+          <td class="num">${fmtMoney(a7, 2)}</td>
+        </tr>`;
+    })
+    .join("");
+
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>国家</th>
+        <th>自然量 D0 ARPPU</th>
+        <th>自然量 D7 ARPPU</th>
+        <th>买量 D0 ARPPU</th>
+        <th>买量 D7 ARPPU</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>`;
+}
+
+function renderArppuSummary({ month, countries, allCountries }) {
+  const el = document.getElementById("summary-arppu");
+  if (!el) return;
+
+  if (!month) {
+    el.textContent = "请选择月份";
+    return;
+  }
+
+  const useCountries = (countries && countries.length ? countries : allCountries).slice();
+
+  const orgRows = safeArray(RAW_ORGANIC_BY_MONTH?.[month]).filter((r) => useCountries.includes(r.country));
+  const paidRows = safeArray(RAW_PAID_BY_MONTH?.[month]).filter((r) => useCountries.includes(r.country));
+
+  const sum = (rows, field) => rows.reduce((acc, r) => acc + asNumber(r[field]), 0);
+  const arppu = (rev, payers) => (payers > 0 ? rev / payers : 0);
+
+  const o0 = arppu(sum(orgRows, "D0_PURCHASE_VALUE"), sum(orgRows, "D0_unique_purchase"));
+  const o7 = arppu(sum(orgRows, "D7_PURCHASE_VALUE"), sum(orgRows, "D7_unique_purchase"));
+  const a0 = arppu(sum(paidRows, "D0_PURCHASE_VALUE"), sum(paidRows, "D0_unique_purchase"));
+  const a7 = arppu(sum(paidRows, "D7_PURCHASE_VALUE"), sum(paidRows, "D7_unique_purchase"));
+
+  const dd = (x) => `${x >= 0 ? "+" : ""}${fmtMoney(x, 2)}`;
+
+  el.textContent =
+    `月份 ${month} · 国家 ${useCountries.length} 个｜` +
+    `自然 D0 ${fmtMoney(o0, 2)} / D7 ${fmtMoney(o7, 2)}（Δ${dd(o7 - o0)}）｜` +
+    `买量 D0 ${fmtMoney(a0, 2)} / D7 ${fmtMoney(a7, 2)}（Δ${dd(a7 - a0)}）｜` +
+    `买量-自然 D0 ${dd(a0 - o0)} / D7 ${dd(a7 - o7)}（单位：USD/付费用户）`;
+}
 
   // ===========================
   // 初始化
@@ -1611,16 +1822,17 @@ function renderPayrateSummary({ month, countries, allCountries }) {
   syncAllModulesFromGlobal();
   renderAllModuleFilters();
 
-  // Step4：注册量 + 付费率 两个模块真联动
-  renderRegAll();
-  renderPayrateAll();
+  // Step5：注册量 + 付费率 + ARPPU 三个模块真联动
+renderRegAll();
+renderPayrateAll();
+renderArppuAll();
 
-  // 其余模块先维持“预览摘要”（后续 Step 再接真实计算）
-  ["arppu", "flow", "ratio", "retention"].forEach((k) => {
-    const el = document.getElementById(`summary-${k}`);
-    if (!el) return;
-    el.textContent = `当前筛选（预览）：月份 ${globalState.month} · 国家 ${globalState.countries.length} 个`;
-  });
+// 其余模块先维持“预览摘要”（后续 Step 再接真实计算）
+["flow", "ratio", "retention"].forEach((k) => {
+  const el = document.getElementById(`summary-${k}`);
+  if (!el) return;
+  el.textContent = `当前筛选（预览）：月份 ${globalState.month} · 国家 ${globalState.countries.length} 个`;
+});
 }
 
 
@@ -1699,7 +1911,7 @@ function renderPayrateSummary({ month, countries, allCountries }) {
         onChange: () => renderRegAll(),
       },
       { key: "payrate", monthId: "payrate-month", countriesId: "payrate-countries", onChange: () => renderPayrateAll() },
-      { key: "arppu", monthId: "arppu-month", countriesId: "arppu-countries", onChange: () => {} },
+      { key: "arppu", monthId: "arppu-month", countriesId: "arppu-countries", onChange: () => renderArppuAll() },
       { key: "flow", monthId: "flow-month", countriesId: "flow-countries", onChange: () => {} },
       { key: "ratio", monthId: "ratio-month", countriesId: "ratio-countries", onChange: () => {} },
       { key: "retention", monthId: "ret-month", countriesId: "ret-countries", onChange: () => {} },
