@@ -622,7 +622,7 @@
                 <span class="chart-mini-label">国家：</span>
                 <div class="chart-mini-chips" id="reg-countries"></div>
               </div>
-              <div class="chart-mini-filter disabled" title="Step3 后启用">
+              <div class="chart-mini-filter" title="切换月度/日度">
                 <span class="chart-mini-label">视图：</span>
                 <div class="chart-mini-radio">
                   <label>
@@ -900,304 +900,568 @@
     <script src="./paid-data.js"></script>
 
     <script>
-      // ===========================
-      // Step1：只做三件事
-      // 1) 校验数据文件是否加载
-      // 2) 从数据中抽取 ALL_MONTHS / ALL_COUNTRIES
-      // 3) 渲染“总筛选器”并给各模块画占位图
-      // ===========================
+  // ===========================
+  // Step2：落地「模块1 注册量」(月度/日度 + 表格联动)
+  // - 总筛选器：月份单选、国家多选（空选视为全选）
+  // - 其他模块仍保持占位，Step3+ 逐步接入
+  // ===========================
 
-      const RAW_ORGANIC_BY_MONTH = window.RAW_ORGANIC_BY_MONTH;
-      const RAW_PAID_BY_MONTH = window.RAW_PAID_BY_MONTH;
+  const RAW_ORGANIC_BY_MONTH = window.RAW_ORGANIC_BY_MONTH;
+  const RAW_PAID_BY_MONTH = window.RAW_PAID_BY_MONTH;
 
-      const charts = [];
+  const charts = [];
+  const chartsById = {};
 
-      function safeArray(v) {
-        return Array.isArray(v) ? v : [];
+  function safeArray(v) {
+    return Array.isArray(v) ? v : [];
+  }
+
+  function monthSort(a, b) {
+    // "YYYY-MM" 字符串直接比较即可
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+
+  function uniqSorted(arr) {
+    return Array.from(new Set(arr)).sort();
+  }
+
+  function asNumber(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function fmtInt(n) {
+    const x = Math.round(asNumber(n));
+    return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
+  function fmtPct01(ratio01, digits = 1) {
+    const r = asNumber(ratio01);
+    const pct = r * 100;
+    return pct.toFixed(digits) + "%";
+  }
+
+  function cssVar(name, fallback) {
+    const v = getComputedStyle(document.documentElement)
+      .getPropertyValue(name)
+      .trim();
+    return v || fallback;
+  }
+
+  function countRows(byMonth) {
+    if (!byMonth) return 0;
+    return Object.keys(byMonth).reduce(
+      (acc, m) => acc + safeArray(byMonth[m]).length,
+      0
+    );
+  }
+
+  function buildAllMonths() {
+    const m1 = RAW_ORGANIC_BY_MONTH ? Object.keys(RAW_ORGANIC_BY_MONTH) : [];
+    const m2 = RAW_PAID_BY_MONTH ? Object.keys(RAW_PAID_BY_MONTH) : [];
+    return uniqSorted(m1.concat(m2)).sort(monthSort);
+  }
+
+  function buildAllCountries(allMonths) {
+    const set = new Set();
+    safeArray(allMonths).forEach((m) => {
+      safeArray(RAW_ORGANIC_BY_MONTH && RAW_ORGANIC_BY_MONTH[m]).forEach(
+        (r) => r && r.country && set.add(r.country)
+      );
+      safeArray(RAW_PAID_BY_MONTH && RAW_PAID_BY_MONTH[m]).forEach((r) => {
+        r && r.country && set.add(r.country);
+      });
+    });
+    return Array.from(set).sort();
+  }
+
+  function createMultiSelectChips(options) {
+    const { containerId, values, getLabel, stateArray, preselect, onChange } =
+      options || {};
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = "";
+    if (!Array.isArray(values) || values.length === 0) {
+      container.textContent = "-";
+      return;
+    }
+
+    if (Array.isArray(stateArray) && stateArray.length === 0) {
+      if (preselect === "all") values.forEach((v) => stateArray.push(v));
+      if (typeof preselect === "number") {
+        for (let i = 0; i < Math.min(preselect, values.length); i++) {
+          stateArray.push(values[i]);
+        }
+      }
+    }
+
+    values.forEach((value) => {
+      const labelEl = document.createElement("label");
+      labelEl.className = "filter-chip";
+
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = value;
+
+      const selected =
+        Array.isArray(stateArray) && stateArray.indexOf(value) !== -1;
+      if (selected) {
+        input.checked = true;
+        labelEl.classList.add("filter-chip-active");
       }
 
-      function monthSort(a, b) {
-        // "YYYY-MM" 字符串直接比较即可
-        return a < b ? -1 : a > b ? 1 : 0;
+      labelEl.appendChild(input);
+      labelEl.appendChild(document.createTextNode(getLabel(value)));
+
+      input.addEventListener("change", (e) => {
+        const checked = e.target.checked;
+
+        if (Array.isArray(stateArray)) {
+          const existsIndex = stateArray.indexOf(value);
+          if (checked && existsIndex === -1) stateArray.push(value);
+          if (!checked && existsIndex !== -1) stateArray.splice(existsIndex, 1);
+        }
+
+        labelEl.classList.toggle("filter-chip-active", input.checked);
+        if (typeof onChange === "function") onChange();
+      });
+
+      container.appendChild(labelEl);
+    });
+  }
+
+  function createSingleSelectChips(options) {
+    const { containerId, values, getLabel, stateObj, key, preselect, onChange } =
+      options || {};
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = "";
+    if (!Array.isArray(values) || values.length === 0) {
+      container.textContent = "-";
+      return;
+    }
+
+    if (!stateObj[key]) {
+      stateObj[key] = preselect === "latest" ? values[values.length - 1] : values[0];
+    }
+
+    const groupName = `${containerId}__single`;
+
+    values.forEach((value) => {
+      const labelEl = document.createElement("label");
+      labelEl.className = "filter-chip";
+
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = groupName;
+      input.value = value;
+
+      const selected = stateObj[key] === value;
+      if (selected) {
+        input.checked = true;
+        labelEl.classList.add("filter-chip-active");
       }
 
-      function uniqSorted(arr) {
-        return Array.from(new Set(arr)).sort();
-      }
+      labelEl.appendChild(input);
+      labelEl.appendChild(document.createTextNode(getLabel(value)));
 
-      function cssEsc(v) {
-        if (window.CSS && typeof window.CSS.escape === "function")
-          return window.CSS.escape(v);
-        return String(v).replace(/"/g, '\\"');
-      }
+      input.addEventListener("change", () => {
+        stateObj[key] = value;
 
-      function buildAllMonths() {
-        const m1 = RAW_ORGANIC_BY_MONTH ? Object.keys(RAW_ORGANIC_BY_MONTH) : [];
-        const m2 = RAW_PAID_BY_MONTH ? Object.keys(RAW_PAID_BY_MONTH) : [];
-        return uniqSorted(m1.concat(m2)).sort(monthSort);
-      }
-
-      function buildAllCountries(allMonths) {
-        const set = new Set();
-        safeArray(allMonths).forEach((m) => {
-          safeArray(RAW_ORGANIC_BY_MONTH && RAW_ORGANIC_BY_MONTH[m]).forEach(
-            (r) => r && r.country && set.add(r.country)
-          );
-          safeArray(RAW_PAID_BY_MONTH && RAW_PAID_BY_MONTH[m]).forEach((r) => {
-            r && r.country && set.add(r.country);
-          });
+        container.querySelectorAll(".filter-chip").forEach((el) => {
+          el.classList.remove("filter-chip-active");
         });
-        return Array.from(set).sort();
-      }
+        labelEl.classList.add("filter-chip-active");
 
-      function countRows(byMonth) {
-        if (!byMonth) return 0;
-        return Object.keys(byMonth).reduce(
-          (acc, m) => acc + safeArray(byMonth[m]).length,
-          0
-        );
-      }
+        if (typeof onChange === "function") onChange();
+      });
 
-      function createMultiSelectChips(options) {
-        const { containerId, values, getLabel, stateArray, preselect, onChange } =
-          options || {};
-        const container = document.getElementById(containerId);
-        if (!container) return;
+      container.appendChild(labelEl);
+    });
+  }
 
-        container.innerHTML = "";
-        if (!Array.isArray(values) || values.length === 0) {
-          container.textContent = "-";
-          return;
-        }
+  function setDataStatus(text, ok) {
+    const pill = document.getElementById("data-status-pill");
+    if (!pill) return;
+    pill.textContent = text;
+    pill.style.background = ok
+      ? "rgba(224, 237, 255, 0.35)"
+      : "rgba(225, 29, 72, 0.08)";
+    pill.style.borderColor = ok
+      ? "rgba(148, 163, 184, 0.55)"
+      : "rgba(225, 29, 72, 0.28)";
+  }
 
-        if (Array.isArray(stateArray) && stateArray.length === 0) {
-          if (preselect === "all") values.forEach((v) => stateArray.push(v));
-          if (typeof preselect === "number") {
-            for (let i = 0; i < Math.min(preselect, values.length); i++) {
-              stateArray.push(values[i]);
-            }
-          }
-        }
-
-        values.forEach((value, idx) => {
-          const labelEl = document.createElement("label");
-          labelEl.className = "filter-chip";
-
-          const input = document.createElement("input");
-          input.type = "checkbox";
-          input.value = value;
-
-          const selected =
-            Array.isArray(stateArray) && stateArray.indexOf(value) !== -1;
-          if (selected) {
-            input.checked = true;
-            labelEl.classList.add("filter-chip-active");
-          }
-
-          labelEl.appendChild(input);
-          labelEl.appendChild(
-            document.createTextNode(
-              typeof getLabel === "function" ? getLabel(value, idx) : value
-            )
-          );
-
-          input.addEventListener("change", () => {
-            if (!Array.isArray(stateArray)) return;
-            const existsIndex = stateArray.indexOf(value);
-
-            if (input.checked) {
-              if (existsIndex === -1) stateArray.push(value);
-            } else {
-              if (existsIndex !== -1) stateArray.splice(existsIndex, 1);
-            }
-
-            labelEl.classList.toggle("filter-chip-active", input.checked);
-            if (typeof onChange === "function") onChange();
-          });
-
-          container.appendChild(labelEl);
-        });
-      }
-
-      function createSingleSelectChips(options) {
-        const { containerId, values, getLabel, stateObj, key, preselect, onChange } =
-          options || {};
-        const container = document.getElementById(containerId);
-        if (!container) return;
-
-        container.innerHTML = "";
-        if (!Array.isArray(values) || values.length === 0) {
-          container.textContent = "-";
-          return;
-        }
-
-        if (!stateObj[key]) {
-          stateObj[key] =
-            preselect === "latest" ? values[values.length - 1] : values[0];
-        }
-
-        const groupName = `${containerId}__single`;
-
-        values.forEach((value, idx) => {
-          const labelEl = document.createElement("label");
-          labelEl.className = "filter-chip";
-
-          const input = document.createElement("input");
-          input.type = "radio";
-          input.name = groupName;
-          input.value = value;
-
-          const selected = stateObj[key] === value;
-          if (selected) {
-            input.checked = true;
-            labelEl.classList.add("filter-chip-active");
-          }
-
-          labelEl.appendChild(input);
-          labelEl.appendChild(
-            document.createTextNode(
-              typeof getLabel === "function" ? getLabel(value, idx) : value
-            )
-          );
-
-          input.addEventListener("change", () => {
-            if (!input.checked) return;
-            stateObj[key] = value;
-
-            // 刷新 active 样式
-            container.querySelectorAll(".filter-chip").forEach((el) => {
-              el.classList.remove("filter-chip-active");
-            });
-            labelEl.classList.add("filter-chip-active");
-
-            if (typeof onChange === "function") onChange();
-          });
-
-          container.appendChild(labelEl);
-        });
-      }
-
-      function setDataStatus(text, ok) {
-        const pill = document.getElementById("data-status-pill");
-        if (!pill) return;
-        pill.textContent = text;
-        pill.style.background = ok
-          ? "rgba(224, 237, 255, 0.35)"
-          : "rgba(225, 29, 72, 0.08)";
-        pill.style.borderColor = ok
-          ? "rgba(148, 163, 184, 0.55)"
-          : "rgba(225, 29, 72, 0.28)";
-      }
-
-      function placeholderOption(title) {
-        return {
-          animation: false,
-          grid: { left: 16, right: 16, top: 22, bottom: 12 },
-          xAxis: { show: false },
-          yAxis: { show: false },
-          series: [],
-          graphic: [
+  function placeholderOption(title) {
+    return {
+      animation: false,
+      grid: { left: 16, right: 16, top: 22, bottom: 12 },
+      xAxis: { show: false },
+      yAxis: { show: false },
+      series: [],
+      graphic: [
+        {
+          type: "group",
+          left: "center",
+          top: "middle",
+          children: [
             {
-              type: "group",
-              left: "center",
-              top: "middle",
-              children: [
-                {
-                  type: "text",
-                  style: {
-                    text: title,
-                    fontSize: 14,
-                    fontWeight: 600,
-                    fill: "rgba(107, 114, 128, 0.9)",
-                  },
-                },
-                {
-                  type: "text",
-                  top: 24,
-                  style: {
-                    text: "Step1：占位图。下一步开始接入真实计算与联动。",
-                    fontSize: 12,
-                    fill: "rgba(107, 114, 128, 0.85)",
-                  },
-                },
-              ],
+              type: "rect",
+              shape: { width: 260, height: 78, r: 14 },
+              style: {
+                fill: "rgba(2, 6, 23, 0.06)",
+                stroke: "rgba(148, 163, 184, 0.35)",
+                lineWidth: 1,
+              },
+            },
+            {
+              type: "text",
+              style: {
+                text: title,
+                fill: "rgba(71, 85, 105, 0.92)",
+                font: "600 13px Inter, system-ui, -apple-system, Segoe UI, sans-serif",
+              },
+              left: 18,
+              top: 18,
+            },
+            {
+              type: "text",
+              style: {
+                text: "Step2：模块1 已接入（注册量）\n其他模块：占位中",
+                fill: "rgba(71, 85, 105, 0.72)",
+                font: "12px Inter, system-ui, -apple-system, Segoe UI, sans-serif",
+              },
+              left: 18,
+              top: 40,
             },
           ],
-        };
-      }
+        },
+      ],
+    };
+  }
 
-      function fillTableSkeleton(tableId, headers) {
-        const el = document.getElementById(tableId);
-        if (!el) return;
-        const ths = (headers || []).map((h) => `<th>${h}</th>`).join("");
-        const tds = (headers || [])
-          .map((_, idx) => (idx === 0 ? `<td>-</td>` : `<td class="num">-</td>`))
-          .join("");
-        el.innerHTML = `
-          <thead><tr>${ths}</tr></thead>
-          <tbody><tr>${tds}</tr></tbody>
+  function fillTableSkeleton(tableId, headers) {
+    const el = document.getElementById(tableId);
+    if (!el) return;
+    const ths = (headers || []).map((h) => `<th>${h}</th>`).join("");
+    const tds = (headers || [])
+      .map((_, idx) => (idx === 0 ? `<td>-</td>` : `<td class="num">-</td>`))
+      .join("");
+    el.innerHTML = `
+      <thead><tr>${ths}</tr></thead>
+      <tbody><tr>${tds}</tr></tbody>
+    `;
+  }
+
+  // ===========================
+  // Module 1：注册量（月度/日度）
+  // ===========================
+
+  function getRegViewMode() {
+    const el = document.querySelector('input[name="reg-view"]:checked');
+    return el ? el.value : "month";
+  }
+
+  function sumByCountry(rows, field) {
+    const out = Object.create(null);
+    safeArray(rows).forEach((r) => {
+      if (!r || !r.country) return;
+      const c = r.country;
+      out[c] = (out[c] || 0) + asNumber(r[field]);
+    });
+    return out;
+  }
+
+  function sumByDate(rows, field) {
+    const out = Object.create(null);
+    safeArray(rows).forEach((r) => {
+      if (!r || !r.date) return;
+      const d = r.date; // "YYYY-MM-DD"
+      out[d] = (out[d] || 0) + asNumber(r[field]);
+    });
+    return out;
+  }
+
+  function renderRegTable({ month, countries, allCountries }) {
+    const table = document.getElementById("table-reg");
+    if (!table) return;
+
+    const useCountries = countries && countries.length ? countries : allCountries;
+
+    const orgRows = safeArray(RAW_ORGANIC_BY_MONTH && RAW_ORGANIC_BY_MONTH[month]).filter(
+      (r) => r && r.country && useCountries.indexOf(r.country) !== -1
+    );
+    const paidRows = safeArray(RAW_PAID_BY_MONTH && RAW_PAID_BY_MONTH[month]).filter(
+      (r) => r && r.country && useCountries.indexOf(r.country) !== -1
+    );
+
+    const orgBy = sumByCountry(orgRows, "registration");
+    const paidBy = sumByCountry(paidRows, "registration");
+
+    const headers = [
+      "国家",
+      "自然量注册占比 (%)",
+      "买量注册占比 (%)",
+      "自然量注册数",
+      "买量注册数",
+      "总注册数",
+    ];
+
+    const rowsHtml = useCountries
+      .slice()
+      .sort()
+      .map((c) => {
+        const o = asNumber(orgBy[c] || 0);
+        const p = asNumber(paidBy[c] || 0);
+        const t = o + p;
+
+        const oShare = t > 0 ? o / t : 0;
+        const pShare = t > 0 ? p / t : 0;
+
+        return `
+          <tr>
+            <td>${c}</td>
+            <td class="num">${fmtPct01(oShare)}</td>
+            <td class="num">${fmtPct01(pShare)}</td>
+            <td class="num">${fmtInt(o)}</td>
+            <td class="num">${fmtInt(p)}</td>
+            <td class="num">${fmtInt(t)}</td>
+          </tr>
         `;
-      }
+      })
+      .join("");
 
-      // ===========================
-      // 初始化
-      // ===========================
-      (function init() {
-        const okOrganic = !!RAW_ORGANIC_BY_MONTH;
-        const okPaid = !!RAW_PAID_BY_MONTH;
+    const ths = headers.map((h) => `<th>${h}</th>`).join("");
+    table.innerHTML = `
+      <thead><tr>${ths}</tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    `;
+  }
 
-        if (!okOrganic || !okPaid) {
-          setDataStatus(
-            "数据状态：未加载。请确认同级目录存在 organic-data.js / paid-data.js，并且分别定义 RAW_ORGANIC_BY_MONTH / RAW_PAID_BY_MONTH。",
-            false
-          );
-        }
+  function renderRegChart({ month, countries, allCountries }) {
+    const chart = chartsById["chart-reg"];
+    if (!chart || !month) return;
 
-        const ALL_MONTHS = buildAllMonths();
-        const ALL_COUNTRIES = buildAllCountries(ALL_MONTHS);
+    const organicColor = cssVar("--organic", "#f97316");
+    const paidColor = cssVar("--paid", "#2563eb");
 
-        const organicRows = countRows(RAW_ORGANIC_BY_MONTH);
-        const paidRows = countRows(RAW_PAID_BY_MONTH);
+    const view = getRegViewMode();
+    const useCountries = countries && countries.length ? countries : allCountries;
 
-        if (okOrganic && okPaid) {
-          setDataStatus(
-            `数据状态：OK · 月份 ${ALL_MONTHS.length} 个 · 国家 ${ALL_COUNTRIES.length} 个 · 自然 ${organicRows} 行 · 买量 ${paidRows} 行`,
-            true
-          );
-        }
+    const orgAll = safeArray(RAW_ORGANIC_BY_MONTH && RAW_ORGANIC_BY_MONTH[month]);
+    const paidAll = safeArray(RAW_PAID_BY_MONTH && RAW_PAID_BY_MONTH[month]);
 
-        // 全局状态：月份单选，国家默认全选
-        const globalState = { month: null, countries: [] };
+    if (view === "day") {
+      const orgRows = orgAll.filter((r) => r && r.country && useCountries.indexOf(r.country) !== -1);
+      const paidRows = paidAll.filter((r) => r && r.country && useCountries.indexOf(r.country) !== -1);
 
-        function renderGlobalPreview() {
-          const el = document.getElementById("global-selection-preview");
-          if (!el) return;
-          const m = globalState.month || "-";
-          const cs = globalState.countries && globalState.countries.length
-            ? globalState.countries.join(", ")
-            : "-";
-          el.textContent = `当前筛选：${m}｜${cs}`;
-        }
+      const orgMap = sumByDate(orgRows, "registration");
+      const paidMap = sumByDate(paidRows, "registration");
+      const dates = uniqSorted(Object.keys(orgMap).concat(Object.keys(paidMap))).sort();
 
-        function onGlobalChange() {
-          renderGlobalPreview();
+      const orgSeries = dates.map((d) => asNumber(orgMap[d] || 0));
+      const paidSeries = dates.map((d) => asNumber(paidMap[d] || 0));
 
-          // Step1 只更新摘要文本（不做图表计算）
-          document.getElementById("summary-reg").textContent =
-            `当前筛选（预览）：月份=${globalState.month || "-"}；国家=${(globalState.countries || []).join(", ") || "-"}`;
-          document.getElementById("summary-payrate").textContent =
-            `当前筛选（预览）：月份=${globalState.month || "-"}；国家=${(globalState.countries || []).join(", ") || "-"}`;
-          document.getElementById("summary-arppu").textContent =
-            `当前筛选（预览）：月份=${globalState.month || "-"}；国家=${(globalState.countries || []).join(", ") || "-"}`;
-          document.getElementById("summary-flow").textContent =
-            `当前筛选（预览）：月份=${globalState.month || "-"}；国家=${(globalState.countries || []).join(", ") || "-"}`;
-          document.getElementById("summary-ratio").textContent =
-            `当前筛选（预览）：月份=${globalState.month || "-"}；国家=${(globalState.countries || []).join(", ") || "-"}`;
-          document.getElementById("summary-retention").textContent =
-            `当前筛选（预览）：月份=${globalState.month || "-"}；国家=${(globalState.countries || []).join(", ") || "-"}`;
-        }
+      chart.setOption(
+        {
+          color: [organicColor, paidColor],
+          tooltip: { trigger: "axis", axisPointer: { type: "line" } },
+          legend: {
+            data: ["自然量", "买量"],
+            top: 2,
+            right: 10,
+            textStyle: { color: "rgba(71,85,105,0.86)", fontSize: 11 },
+          },
+          grid: { left: 46, right: 18, top: 36, bottom: 40 },
+          xAxis: {
+            type: "category",
+            data: dates,
+            axisLabel: {
+              color: "rgba(71,85,105,0.74)",
+              fontSize: 11,
+              formatter: (v) => (typeof v === "string" ? v.slice(5) : v),
+            },
+            axisTick: { alignWithLabel: true },
+          },
+          yAxis: {
+            type: "value",
+            axisLabel: { color: "rgba(71,85,105,0.74)", fontSize: 11 },
+            splitLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+          },
+          series: [
+            { name: "自然量", type: "line", data: orgSeries, smooth: true, showSymbol: false, lineStyle: { width: 2 } },
+            { name: "买量", type: "line", data: paidSeries, smooth: true, showSymbol: false, lineStyle: { width: 2 } },
+          ],
+        },
+        { notMerge: true }
+      );
+    } else {
+      const orgRows = orgAll.filter((r) => r && r.country && useCountries.indexOf(r.country) !== -1);
+      const paidRows = paidAll.filter((r) => r && r.country && useCountries.indexOf(r.country) !== -1);
 
-        // 渲染全局筛选器
+      const orgBy = sumByCountry(orgRows, "registration");
+      const paidBy = sumByCountry(paidRows, "registration");
+
+      const xCats = useCountries.slice().sort();
+      const orgData = xCats.map((c) => asNumber(orgBy[c] || 0));
+      const paidData = xCats.map((c) => asNumber(paidBy[c] || 0));
+
+      chart.setOption(
+        {
+          color: [organicColor, paidColor],
+          tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+          legend: {
+            data: ["自然量", "买量"],
+            top: 2,
+            right: 10,
+            textStyle: { color: "rgba(71,85,105,0.86)", fontSize: 11 },
+          },
+          grid: { left: 46, right: 18, top: 36, bottom: 54 },
+          xAxis: {
+            type: "category",
+            data: xCats,
+            axisLabel: { color: "rgba(71,85,105,0.74)", fontSize: 11 },
+            axisTick: { alignWithLabel: true },
+          },
+          yAxis: {
+            type: "value",
+            axisLabel: { color: "rgba(71,85,105,0.74)", fontSize: 11 },
+            splitLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+          },
+          series: [
+            { name: "自然量", type: "bar", data: orgData, barMaxWidth: 22, itemStyle: { color: organicColor } },
+            { name: "买量", type: "bar", data: paidData, barMaxWidth: 22, itemStyle: { color: paidColor } },
+          ],
+        },
+        { notMerge: true }
+      );
+    }
+  }
+
+  function renderRegSummary({ month, countries, allCountries }) {
+    const el = document.getElementById("summary-reg");
+    if (!el) return;
+
+    const useCountries = countries && countries.length ? countries : allCountries;
+
+    const orgRows = safeArray(RAW_ORGANIC_BY_MONTH && RAW_ORGANIC_BY_MONTH[month]).filter(
+      (r) => r && r.country && useCountries.indexOf(r.country) !== -1
+    );
+    const paidRows = safeArray(RAW_PAID_BY_MONTH && RAW_PAID_BY_MONTH[month]).filter(
+      (r) => r && r.country && useCountries.indexOf(r.country) !== -1
+    );
+
+    const totalOrg = orgRows.reduce((acc, r) => acc + asNumber(r.registration), 0);
+    const totalPaid = paidRows.reduce((acc, r) => acc + asNumber(r.registration), 0);
+    const total = totalOrg + totalPaid;
+
+    const view = getRegViewMode();
+    const viewText = view === "day" ? "日度折线（所选国家合计）" : "月度柱状（按国家）";
+
+    const orgShare = total > 0 ? totalOrg / total : 0;
+    const paidShare = total > 0 ? totalPaid / total : 0;
+
+    const countryLabel =
+      countries && countries.length ? `${useCountries.length} 个国家` : `全量国家（${useCountries.length}）`;
+
+    el.textContent =
+      `视图：${viewText}｜月份：${month}｜国家：${countryLabel}｜` +
+      `自然：${fmtInt(totalOrg)}（${fmtPct01(orgShare)}）｜买量：${fmtInt(totalPaid)}（${fmtPct01(paidShare)}）｜总计：${fmtInt(total)}`;
+  }
+
+  // ===========================
+  // 初始化
+  // ===========================
+  (function init() {
+    const okOrganic = !!RAW_ORGANIC_BY_MONTH;
+    const okPaid = !!RAW_PAID_BY_MONTH;
+
+    if (!okOrganic || !okPaid) {
+      setDataStatus(
+        "数据状态：未加载。请确认同级目录存在 organic-data.js / paid-data.js，并且分别定义 RAW_ORGANIC_BY_MONTH / RAW_PAID_BY_MONTH。",
+        false
+      );
+      return;
+    }
+
+    const ALL_MONTHS = buildAllMonths();
+    const ALL_COUNTRIES = buildAllCountries(ALL_MONTHS);
+
+    const organicRows = countRows(RAW_ORGANIC_BY_MONTH);
+    const paidRows = countRows(RAW_PAID_BY_MONTH);
+
+    setDataStatus(
+      `数据状态：OK · 月份 ${ALL_MONTHS.length} 个 · 国家 ${ALL_COUNTRIES.length} 个 · 自然 ${organicRows} 行 · 买量 ${paidRows} 行`,
+      true
+    );
+
+    const globalState = { month: null, countries: [] };
+
+    function renderGlobalPreview() {
+      const el = document.getElementById("global-selection-preview");
+      if (!el) return;
+      const m = globalState.month || "-";
+      const cs =
+        globalState.countries && globalState.countries.length
+          ? globalState.countries.join(", ")
+          : "全量国家";
+      el.textContent = `当前筛选：${m}｜${cs}`;
+    }
+
+    function onGlobalChange() {
+      renderGlobalPreview();
+
+      renderRegChart({
+        month: globalState.month,
+        countries: globalState.countries,
+        allCountries: ALL_COUNTRIES,
+      });
+      renderRegTable({
+        month: globalState.month,
+        countries: globalState.countries,
+        allCountries: ALL_COUNTRIES,
+      });
+      renderRegSummary({
+        month: globalState.month,
+        countries: globalState.countries,
+        allCountries: ALL_COUNTRIES,
+      });
+
+      const preview = `当前筛选（预览）：月份=${globalState.month || "-"}；国家=${(globalState.countries || []).join(", ") || "全量国家"}`;
+      ["payrate", "arppu", "flow", "ratio", "retention"].forEach((k) => {
+        const el = document.getElementById(`summary-${k}`);
+        if (el) el.textContent = preview;
+      });
+    }
+
+    createSingleSelectChips({
+      containerId: "global-months",
+      values: ALL_MONTHS,
+      getLabel: (m) => m,
+      stateObj: globalState,
+      key: "month",
+      preselect: "latest",
+      onChange: onGlobalChange,
+    });
+
+    createMultiSelectChips({
+      containerId: "global-countries",
+      values: ALL_COUNTRIES,
+      getLabel: (c) => c,
+      stateArray: globalState.countries,
+      preselect: "all",
+      onChange: onGlobalChange,
+    });
+
+    const resetBtn = document.getElementById("btn-global-reset");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        globalState.month = ALL_MONTHS.length ? ALL_MONTHS[ALL_MONTHS.length - 1] : null;
+        globalState.countries.length = 0;
+        ALL_COUNTRIES.forEach((c) => globalState.countries.push(c));
+
         createSingleSelectChips({
           containerId: "global-months",
           values: ALL_MONTHS,
@@ -1207,7 +1471,6 @@
           preselect: "latest",
           onChange: onGlobalChange,
         });
-
         createMultiSelectChips({
           containerId: "global-countries",
           values: ALL_COUNTRIES,
@@ -1217,155 +1480,131 @@
           onChange: onGlobalChange,
         });
 
-        // Reset
-        const resetBtn = document.getElementById("btn-global-reset");
-        if (resetBtn) {
-          resetBtn.addEventListener("click", () => {
-            globalState.month = ALL_MONTHS.length ? ALL_MONTHS[ALL_MONTHS.length - 1] : null;
-            globalState.countries.length = 0;
-            ALL_COUNTRIES.forEach((c) => globalState.countries.push(c));
-
-            // 重新渲染 chips（简单粗暴，避免状态错位）
-            createSingleSelectChips({
-              containerId: "global-months",
-              values: ALL_MONTHS,
-              getLabel: (m) => m,
-              stateObj: globalState,
-              key: "month",
-              preselect: "latest",
-              onChange: onGlobalChange,
-            });
-            createMultiSelectChips({
-              containerId: "global-countries",
-              values: ALL_COUNTRIES,
-              getLabel: (c) => c,
-              stateArray: globalState.countries,
-              preselect: "all",
-              onChange: onGlobalChange,
-            });
-
-            onGlobalChange();
-          });
-        }
-
-        renderGlobalPreview();
         onGlobalChange();
+      });
+    }
 
-        // 给各模块筛选器先渲染“长得一样的 chips”，但 disabled（Step3 后启用）
-        const dummyLocal = { month: globalState.month };
+    document.querySelectorAll('input[name="reg-view"]').forEach((el) => {
+      el.addEventListener("change", onGlobalChange);
+    });
 
-        [
-          "reg-month",
-          "payrate-month",
-          "arppu-month",
-          "flow-month",
-          "ratio-month",
-          "ret-month",
-        ].forEach((id) => {
-          createSingleSelectChips({
-            containerId: id,
-            values: ALL_MONTHS,
-            getLabel: (m) => m,
-            stateObj: dummyLocal,
-            key: "month",
-            preselect: "latest",
-            onChange: () => {},
-          });
-        });
+    const dummyLocal = { month: globalState.month };
 
-        [
-          "reg-countries",
-          "payrate-countries",
-          "arppu-countries",
-          "flow-countries",
-          "ratio-countries",
-          "ret-countries",
-        ].forEach((id) => {
-          const arr = [];
-          createMultiSelectChips({
-            containerId: id,
-            values: ALL_COUNTRIES,
-            getLabel: (c) => c,
-            stateArray: arr,
-            preselect: "all",
-            onChange: () => {},
-          });
-        });
+    [
+      "reg-month",
+      "payrate-month",
+      "arppu-month",
+      "flow-month",
+      "ratio-month",
+      "ret-month",
+    ].forEach((id) => {
+      createSingleSelectChips({
+        containerId: id,
+        values: ALL_MONTHS,
+        getLabel: (m) => m,
+        stateObj: dummyLocal,
+        key: "month",
+        preselect: "latest",
+        onChange: () => {},
+      });
+    });
 
-        // 表格骨架（Step4+ 会替换为真实表格）
-        fillTableSkeleton("table-reg", [
-          "国家",
-          "自然量注册占比 (%)",
-          "买量注册占比 (%)",
-          "自然量注册数",
-          "买量注册数",
-          "总注册数",
-        ]);
+    [
+      "reg-countries",
+      "payrate-countries",
+      "arppu-countries",
+      "flow-countries",
+      "ratio-countries",
+      "ret-countries",
+    ].forEach((id) => {
+      const arr = [];
+      createMultiSelectChips({
+        containerId: id,
+        values: ALL_COUNTRIES,
+        getLabel: (c) => c,
+        stateArray: arr,
+        preselect: "all",
+        onChange: () => {},
+      });
+    });
 
-        fillTableSkeleton("table-payrate", [
-          "国家",
-          "自然量 D0 付费率",
-          "自然量 D7 付费率",
-          "买量 D0 付费率",
-          "买量 D7 付费率",
-        ]);
+    fillTableSkeleton("table-reg", [
+      "国家",
+      "自然量注册占比 (%)",
+      "买量注册占比 (%)",
+      "自然量注册数",
+      "买量注册数",
+      "总注册数",
+    ]);
 
-        fillTableSkeleton("table-arppu", [
-          "国家",
-          "自然量 D0 ARPPU",
-          "自然量 D7 ARPPU",
-          "买量 D0 ARPPU",
-          "买量 D7 ARPPU",
-        ]);
+    fillTableSkeleton("table-payrate", [
+      "国家",
+      "自然量 D0 付费率",
+      "自然量 D7 付费率",
+      "买量 D0 付费率",
+      "买量 D7 付费率",
+    ]);
 
-        fillTableSkeleton("table-flow", [
-          "国家",
-          "自然量 D0 人均流水",
-          "自然量 D7 人均流水",
-          "买量 D0 人均流水",
-          "买量 D7 人均流水",
-        ]);
+    fillTableSkeleton("table-arppu", [
+      "国家",
+      "自然量 D0 ARPPU",
+      "自然量 D7 ARPPU",
+      "买量 D0 ARPPU",
+      "买量 D7 ARPPU",
+    ]);
 
-        fillTableSkeleton("table-ratio", [
-          "国家",
-          "自然量体/游 D0",
-          "自然量体/游 D7",
-          "买量体/游 D0",
-          "买量体/游 D7",
-        ]);
+    fillTableSkeleton("table-flow", [
+      "国家",
+      "自然量 D0 人均流水",
+      "自然量 D7 人均流水",
+      "买量 D0 人均流水",
+      "买量 D7 人均流水",
+    ]);
 
-        fillTableSkeleton("table-retention", [
-          "国家",
-          "自然量 D1 留存率",
-          "自然量 D7 留存率",
-          "买量 D1 留存率",
-          "买量 D7 留存率",
-        ]);
+    fillTableSkeleton("table-ratio", [
+      "国家",
+      "自然量体/游D0",
+      "自然量体/游D7",
+      "买量体/游D0",
+      "买量体/游D7",
+    ]);
 
-        // 占位图（ECharts）
-        if (window.echarts) {
-          const chartIds = [
-            ["chart-reg", "注册量模块（占位）"],
-            ["chart-payrate", "付费率模块（占位）"],
-            ["chart-arppu", "ARPPU 模块（占位）"],
-            ["chart-flow", "人均流水模块（占位）"],
-            ["chart-ratio", "体/游比例模块（占位）"],
-            ["chart-retention", "留存模块（占位）"],
-          ];
+    fillTableSkeleton("table-retention", [
+      "国家",
+      "自然量 D1 留存率",
+      "自然量 D7 留存率",
+      "买量 D1 留存率",
+      "买量 D7 留存率",
+    ]);
 
-          chartIds.forEach(([id, title]) => {
-            const dom = document.getElementById(id);
-            if (!dom) return;
-            const c = echarts.init(dom);
-            c.setOption(placeholderOption(title));
-            charts.push(c);
-          });
+    if (window.echarts) {
+      const chartIds = [
+        ["chart-reg", "注册量模块"],
+        ["chart-payrate", "付费率模块"],
+        ["chart-arppu", "ARPPU 模块"],
+        ["chart-flow", "人均流水模块"],
+        ["chart-ratio", "体/游比例模块"],
+        ["chart-retention", "留存模块"],
+      ];
 
-          window.addEventListener("resize", () => {
-            charts.forEach((c) => c && c.resize && c.resize());
-          });
-        }
-      })();
-    </script>
+      chartIds.forEach(([id, title]) => {
+        const dom = document.getElementById(id);
+        if (!dom) return;
+        const c = echarts.init(dom);
+        c.setOption(placeholderOption(title));
+        charts.push(c);
+        chartsById[id] = c;
+      });
+
+      window.addEventListener("resize", () => {
+        charts.forEach((c) => c && c.resize && c.resize());
+      });
+    }
+
+    renderGlobalPreview();
+    onGlobalChange();
+  })();
+</script>
+
   </body>
 </html>
