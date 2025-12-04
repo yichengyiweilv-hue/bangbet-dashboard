@@ -3,9 +3,9 @@
    字段可包含买量专属字段（例如 spent / media 等），但至少要覆盖看板用到的那些指标字段。
 */
 
-window.RAW_PAID_BY_MONTH = window.RAW_PAID_BY_MONTH || {
+window.RAW_PAID_BY_MONTH = window.RAW_PAID_BY_MONTH || {};
    // 九月
-     "2025-09": [
+  window.RAW_PAID_BY_MONTH["2025-09"] = [
     {
       date: "2025-09-01",
       country: "GH",
@@ -9863,7 +9863,7 @@ window.RAW_PAID_BY_MONTH = window.RAW_PAID_BY_MONTH || {
   ],
         
    // 十月
-   "2025-10": [
+  window.RAW_PAID_BY_MONTH["2025-10"] = [
     {
       date: "2025-10-01",
       country: "GH",
@@ -19718,5 +19718,9 @@ window.RAW_PAID_BY_MONTH = window.RAW_PAID_BY_MONTH || {
       D1_retained_users: 1,
       D7_retained_users: 0,
     }
-  ]
-};
+  ]；
+
+//11月  格式：window.RAW_PAID_BY_MONTH["2025-09"] = [ ]
+
+
+
