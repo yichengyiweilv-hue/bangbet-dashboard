@@ -717,7 +717,7 @@
                 <span class="chart-mini-label">月份：</span>
                 <div class="chart-mini-chips" id="arppu-month"></div>
               </div>
-              <<div class="chart-mini-filter">
+              <div class="chart-mini-filter">
                 <span class="chart-mini-label">国家：</span>
                 <div class="chart-mini-chips" id="arppu-countries"></div>
               </div>
@@ -756,7 +756,7 @@
 
             <div class="chart-controls">
               <span class="chart-badge">单位：USD 等值 / 下注用户</span>
-              <div class="chart-mini-filter disabled" title="Step3 后启用">
+              <div class="chart-mini-filter" >
                 <span class="chart-mini-label">玩法：</span>
                 <div class="chart-mini-radio">
                   <label>
@@ -1792,13 +1792,23 @@ function renderArppuSummary({ month, countries, allCountries }) {
     }
 
         function onGlobalChange() {
-  syncAllModulesFromGlobal();
   renderGlobalPreview();
 
-  // Step5：注册量 + 付费率 + ARPPU 都要跟随全局筛选刷新
+  // 总筛选器变化 → 覆盖同步到所有模块子筛选器
+  syncAllModulesFromGlobal();
+  renderAllModuleFilters();
+
+  // Step5：注册量 + 付费率 + ARPPU 都要刷新
   renderRegAll();
   renderPayrateAll();
   renderArppuAll();
+
+  // 其余模块暂时只放预览文案（等后续 step 接入）
+  const preview = `当前筛选（预览）：月份=${globalState.month || "-"}；国家=${(globalState.countries || []).join(", ") || "全量国家"}`;
+  ["flow", "ratio", "retention"].forEach((k) => {
+    const el = document.getElementById(`summary-${k}`);
+    if (el) el.textContent = preview;
+  });
 }
 
 
@@ -1871,18 +1881,14 @@ function renderArppuSummary({ month, countries, allCountries }) {
     };
 
     const MODULE_FILTER_CONFIG = [
-      {
-        key: "reg",
-        monthId: "reg-month",
-        countriesId: "reg-countries",
-        onChange: () => renderRegAll(),
-      },
-      { key: "payrate", monthId: "payrate-month", countriesId: "payrate-countries", onChange: () => renderPayrateAll() },
-      { key: "arppu", monthId: "arppu-month", countriesId: "arppu-countries", onChange: () => renderArppuAll() },
-      { key: "flow", monthId: "flow-month", countriesId: "flow-countries", onChange: () => {} },
-      { key: "ratio", monthId: "ratio-month", countriesId: "ratio-countries", onChange: () => {} },
-      { key: "retention", monthId: "ret-month", countriesId: "ret-countries", onChange: () => {} },
-    ];
+  { key: "reg", monthId: "reg-month", countriesId: "reg-countries", onChange: () => renderRegAll() },
+  { key: "payrate", monthId: "payrate-month", countriesId: "payrate-countries", onChange: () => renderPayrateAll() },
+  { key: "arppu", monthId: "arppu-month", countriesId: "arppu-countries", onChange: () => renderArppuAll() },
+  { key: "flow", monthId: "flow-month", countriesId: "flow-countries", onChange: () => {} },
+  { key: "ratio", monthId: "ratio-month", countriesId: "ratio-countries", onChange: () => {} },
+  { key: "retention", monthId: "ret-month", countriesId: "ret-countries", onChange: () => {} },
+];
+
 
     function copyArray(target, source) {
       target.length = 0;
