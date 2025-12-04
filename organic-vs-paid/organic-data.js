@@ -9,12 +9,7 @@
   root.RAW_ORGANIC_BY_MONTH = root.RAW_ORGANIC_BY_MONTH || {};
 
   // =========================
-  // 例子开始：
-  // root.RAW_ORGANIC_BY_MONTH["2025-11"] = [
-  //   { date: "2025-11-01", country: "GH", registration: 0 },
-  //   { date: "2025-11-01", country: "KE", registration: 0 }
-  // ];
-  // 例子结束
+
   // =========================
   root.RAW_ORGANIC_BY_MONTH["2025-09"] = [
     // 建议：每行 = 1 天 × 1 国家；没数据可以写 0 或者不写该行（不写会导致折线断点）
