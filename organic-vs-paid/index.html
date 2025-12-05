@@ -1,1 +1,292 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>自然量 vs 买量 · 月度对比</title>
+
+  <!-- Fallback minimalist theme (will be overridden if organic-monthly theme is loaded) -->
+  <style>
+    :root{
+      color-scheme: light dark;
+      --bg:#0b0f14;
+      --card:rgba(255,255,255,.06);
+      --text:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.62);
+      --border:rgba(255,255,255,.12);
+      --shadow:0 10px 30px rgba(0,0,0,.35);
+      --radius:14px;
+      --container:1200px;
+    }
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial,sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+    a{color:inherit}
+    .ovp-shell{max-width:var(--container);margin:0 auto;padding:18px 16px 28px}
+    .ovp-page-title{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:10px 0 14px}
+    .ovp-page-title h1{margin:0;font-size:20px;letter-spacing:.2px}
+    .ovp-page-title .ovp-meta{font-size:12px;color:var(--muted)}
+    .ovp-note{margin:0 0 16px;color:var(--muted);font-size:12px;line-height:1.5}
+    .ovp-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+    .ovp-card{grid-column:span 12;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+    @media (min-width:980px){
+      .ovp-card.half{grid-column:span 6}
+      .ovp-card.full{grid-column:span 12}
+    }
+    .ovp-card-head{
+      padding:14px 14px 10px;
+      border-bottom:1px solid var(--border);
+      display:flex;align-items:flex-end;justify-content:space-between;gap:12px
+    }
+    .ovp-card-title{font-size:14px;margin:0}
+    .ovp-card-sub{font-size:12px;color:var(--muted);margin:2px 0 0}
+    .ovp-card-body{padding:14px}
+    .ovp-placeholder{border:1px dashed var(--border);border-radius:12px;padding:14px;color:var(--muted);line-height:1.55}
+    .ovp-skeleton{
+      margin-top:10px;height:180px;border-radius:10px;
+      background:linear-gradient(90deg,rgba(255,255,255,.06),rgba(255,255,255,.10),rgba(255,255,255,.06));
+    }
+    .ovp-alert{
+      padding:10px 12px;border:1px solid var(--border);border-radius:12px;
+      background:rgba(255,255,255,.04);color:var(--muted);font-size:12px;line-height:1.5;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Will be replaced by organic-monthly header if available -->
+  <div id="header-slot"></div>
+
+  <div class="ovp-shell">
+    <div class="ovp-page-title">
+      <h1>自然量 vs 买量 · 月度对比看板</h1>
+      <div class="ovp-meta" id="ovp-meta">数据加载中…</div>
+    </div>
+
+    <p class="ovp-note">
+      指标模块：1 注册量对比；2 D0/D7 付费率；3 D0/D7 ARPPU；
+      4 D0/D7 人均流水（体育/游戏/总）；5 体育 vs 游戏玩家比例；6 次日/7日留存率。
+    </p>
+
+    <div id="ovp-data-status" class="ovp-alert" style="display:none;"></div>
+
+    <div id="modules-grid" class="ovp-grid"></div>
+  </div>
+
+  <!-- Will be replaced by organic-monthly footer if available -->
+  <div id="footer-slot"></div>
+
+  <script>
+    // Namespace + registry
+    window.OVP = window.OVP || {};
+    OVP.modules = OVP.modules || [];
+    OVP.registerModule = function registerModule(mod) {
+      if (!mod || !mod.id) return;
+      OVP.modules.push(mod);
+    };
+
+    OVP.utils = {
+      safeNumber(v){ const n = Number(v); return Number.isFinite(n) ? n : null; },
+      fmtInt(v){ const n = this.safeNumber(v); return n===null ? '—' : n.toLocaleString('en-US'); },
+      fmtPct(v, digits=2){ const n = this.safeNumber(v); return n===null ? '—' : `${(n*100).toFixed(digits)}%`; },
+      fmtMoney(v, currency='USD', digits=0){
+        const n = this.safeNumber(v);
+        if (n===null) return '—';
+        try{
+          return new Intl.NumberFormat('en-US',{style:'currency',currency,maximumFractionDigits:digits}).format(n);
+        }catch(_){
+          return `${n.toLocaleString('en-US',{maximumFractionDigits:digits})} ${currency}`;
+        }
+      }
+    };
+
+    // Inherit theme/header/footer from organic-monthly at runtime (GitHub Pages friendly)
+    (async function inheritOrganicMonthlyTheme(){
+      const target = '../organic-monthly/index.html';
+      try{
+        const res = await fetch(target, { cache:'no-store' });
+        if(!res.ok) return;
+
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const base = new URL('../organic-monthly/', location.href);
+        const isAbs = (u)=>/^(https?:|data:|blob:|mailto:|tel:|\/)/i.test(u);
+
+        const rewriteCssUrls = (cssText)=>cssText.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g,(m,q,url)=>{
+          const raw = (url||'').trim();
+          if(!raw || raw.startsWith('#') || isAbs(raw)) return m;
+          return `url(${q}${new URL(raw, base).href}${q})`;
+        });
+
+        // Copy external style links
+        for (const link of doc.querySelectorAll('link[rel="stylesheet"]')){
+          const href = link.getAttribute('href');
+          if(!href) continue;
+          const cloned = document.createElement('link');
+          cloned.rel = 'stylesheet';
+          cloned.href = isAbs(href) ? href : new URL(href, base).href;
+          cloned.setAttribute('data-inherited-from','organic-monthly');
+          document.head.appendChild(cloned);
+        }
+
+        // Copy inline styles
+        const styles = [...doc.querySelectorAll('style')].map(s=>s.textContent||'').join('\n\n');
+        if(styles.trim()){
+          const styleEl = document.createElement('style');
+          styleEl.setAttribute('data-inherited-from','organic-monthly');
+          styleEl.textContent = rewriteCssUrls(styles);
+          document.head.appendChild(styleEl);
+        }
+
+        // Fix relative src/href in injected header/footer
+        const fixRelativeAttrs = (root)=>{
+          for (const el of root.querySelectorAll('[src],[href],[poster]')){
+            for (const attr of ['src','href','poster']){
+              const val = el.getAttribute(attr);
+              if(!val || val.startsWith('#') || isAbs(val)) continue;
+              el.setAttribute(attr, new URL(val, base).href);
+            }
+          }
+        };
+
+        const header = doc.querySelector('header');
+        if(header){
+          const injected = header.cloneNode(true);
+          fixRelativeAttrs(injected);
+          const slot = document.getElementById('header-slot');
+          slot.innerHTML = '';
+          slot.appendChild(injected);
+        }
+
+        const footer = doc.querySelector('footer');
+        if(footer){
+          const injected = footer.cloneNode(true);
+          fixRelativeAttrs(injected);
+          const slot = document.getElementById('footer-slot');
+          slot.innerHTML = '';
+          slot.appendChild(injected);
+        }
+      }catch(_e){
+        // keep fallback theme silently
+      }
+    })();
+  </script>
+
+  <!-- Data sources (you already prepared) -->
+  <script src="./organic-data.js"></script>
+  <script src="./paid-data.js"></script>
+
+  <!-- Module placeholders -->
+  <script src="./module-registration-compare.js"></script>
+  <script src="./module-payrate.js"></script>
+  <script src="./module-arppu.js"></script>
+  <script src="./module-betflow-percapita.js"></script>
+  <script src="./module-player-mix.js"></script>
+  <script src="./module-retention.js"></script>
+
+  <script>
+    (function initDashboard(){
+      const statusEl = document.getElementById('ovp-data-status');
+      const metaEl = document.getElementById('ovp-meta');
+      const grid = document.getElementById('modules-grid');
+
+      function readGlobal(name){
+        // Works for global var/let/const in non-module scripts
+        try{
+          return Function(`return (typeof ${name} !== "undefined") ? ${name} : undefined;`)();
+        }catch(_){
+          return undefined;
+        }
+      }
+
+      function resolveData(which){
+        const candidates = which === 'organic'
+          ? ['organicData','organic_data','ORGANIC_DATA','organicMonthlyData','ORGANIC_MONTHLY_DATA']
+          : ['paidData','paid_data','PAID_DATA','paidMonthlyData','PAID_MONTHLY_DATA'];
+
+        for(const key of candidates){
+          const v = readGlobal(key);
+          if(v !== undefined) return v;
+        }
+        return undefined;
+      }
+
+      const organic = resolveData('organic');
+      const paid = resolveData('paid');
+
+      const problems = [];
+      if (organic === undefined) problems.push('未检测到自然量数据（organic-data.js 需暴露一个全局变量，如 organicData / organicMonthlyData / ORGANIC_DATA）');
+      if (paid === undefined) problems.push('未检测到买量数据（paid-data.js 需暴露一个全局变量，如 paidData / paidMonthlyData / PAID_DATA）');
+
+      if (problems.length){
+        statusEl.style.display = '';
+        statusEl.textContent = problems.join('；');
+        metaEl.textContent = '数据未就绪';
+      } else {
+        metaEl.textContent = '数据已就绪 · 载入：自然量 + 买量（月度）';
+      }
+
+      const modules = Array.isArray(OVP.modules) ? OVP.modules : [];
+      if (!modules.length){
+        const empty = document.createElement('div');
+        empty.className = 'ovp-alert';
+        empty.textContent = '模块未注册：请检查 6 个 module-*.js 是否正常加载。';
+        grid.appendChild(empty);
+        return;
+      }
+
+      const ctxBase = { organic, paid, utils: OVP.utils };
+      const spanOf = (m)=> (m && (m.span==='full' || m.span==='half')) ? m.span : 'half';
+
+      for (const m of modules){
+        const card = document.createElement('section');
+        card.className = `ovp-card ${spanOf(m)}`;
+        card.id = `card-${m.id}`;
+
+        const head = document.createElement('div');
+        head.className = 'ovp-card-head';
+        head.innerHTML = `
+          <div>
+            <h2 class="ovp-card-title">${m.title || m.id}</h2>
+            <div class="ovp-card-sub">${m.subtitle || '模块占位：下一步接入图表与计算逻辑'}</div>
+          </div>
+        `;
+
+        const body = document.createElement('div');
+        body.className = 'ovp-card-body';
+        const mount = document.createElement('div');
+        mount.id = `mount-${m.id}`;
+        body.appendChild(mount);
+
+        card.appendChild(head);
+        card.appendChild(body);
+        grid.appendChild(card);
+
+        try{
+          if (typeof m.render === 'function'){
+            m.render({ mountEl: mount, ...ctxBase });
+          } else {
+            mount.innerHTML = `
+              <div class="ovp-placeholder">
+                <div>本模块未提供 render()。</div>
+                <div class="ovp-skeleton"></div>
+              </div>
+            `;
+          }
+        }catch(e){
+          mount.innerHTML = `
+            <div class="ovp-placeholder">
+              <div>模块渲染出错：${(e && e.message) ? e.message : 'unknown error'}</div>
+            </div>
+          `;
+        }
+      }
+    })();
+  </script>
+</body>
+</html>
 
