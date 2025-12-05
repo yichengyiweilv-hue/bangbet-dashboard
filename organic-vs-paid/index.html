@@ -1,0 +1,1735 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Bangbet 自然量 vs 买量月度数据对比</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Bangbet 自然量&买量 月度数据对比看板" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+
+
+      :root {
+
+        --bg-main: #f3f5f9;
+
+        --bg-card: #ffffff;
+
+        --border-subtle: rgba(148, 163, 184, 0.4);
+
+        --accent: #2563eb;
+
+        --accent-soft: #e0edff;
+
+        --accent-strong: #1d4ed8;
+
+        --accent-green: #16a34a;
+
+        --text-main: #0f172a;
+
+        --text-sub: #6b7280;
+
+        --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.1);
+
+        --radius-lg: 18px;
+
+        --radius-md: 12px;
+
+        --radius-pill: 999px;
+
+        --transition-fast: 0.18s ease-out;
+
+      }
+
+
+
+
+      * {
+
+        box-sizing: border-box;
+
+      }
+
+
+
+
+      html,
+
+      body {
+
+        margin: 0;
+
+        padding: 0;
+
+        height: 100%;
+
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+
+          "Segoe UI", sans-serif;
+
+        background: radial-gradient(
+
+          circle at 0 0,
+
+          #f9fbff 0,
+
+          #edf1f9 45%,
+
+          #e5ebf7 100%
+
+        );
+
+        color: var(--text-main);
+
+        -webkit-font-smoothing: antialiased;
+
+      }
+
+
+
+
+      .page {
+
+        min-height: 100vh;
+
+        display: flex;
+
+        flex-direction: column;
+
+      }
+
+
+
+
+      .top-bar {
+
+        padding: 16px 24px 10px;
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: space-between;
+
+        gap: 10px;
+
+      }
+
+
+
+
+      .top-left {
+
+        display: flex;
+
+        align-items: center;
+
+        gap: 12px;
+
+      }
+
+
+
+
+      .brand-mark {
+
+        width: 34px;
+
+        height: 34px;
+
+        border-radius: 14px;
+
+        background: conic-gradient(
+
+          from 160deg,
+
+          #2563eb,
+
+          #22c55e,
+
+          #38bdf8,
+
+          #2563eb
+
+        );
+
+        position: relative;
+
+        overflow: hidden;
+
+        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.45);
+
+      }
+
+
+
+
+      .brand-mark::after {
+
+        content: "";
+
+        position: absolute;
+
+        inset: 7px;
+
+        border-radius: 10px;
+
+        background: rgba(255, 255, 255, 0.92);
+
+        backdrop-filter: blur(12px);
+
+      }
+
+
+
+
+      .brand-mark-inner {
+
+        position: absolute;
+
+        inset: 10px 11px 10px 9px;
+
+        border-radius: 9px;
+
+        background: linear-gradient(135deg, #2563eb, #22c55e);
+
+        opacity: 0.9;
+
+        clip-path: polygon(0 30%, 60% 0, 100% 40%, 70% 100%, 20% 80%);
+
+      }
+
+
+
+
+      .brand-text-main {
+
+        font-size: 16px;
+
+        font-weight: 600;
+
+        letter-spacing: 0.03em;
+
+      }
+
+
+
+
+      .brand-text-sub {
+
+        font-size: 11px;
+
+        letter-spacing: 0.12em;
+
+        text-transform: uppercase;
+
+        color: var(--text-sub);
+
+      }
+
+
+
+
+      .breadcrumb {
+
+        font-size: 11px;
+
+        color: var(--text-sub);
+
+      }
+
+
+
+
+      .breadcrumb a {
+
+        color: var(--accent-strong);
+
+        text-decoration: none;
+
+      }
+
+
+
+
+      .breadcrumb a:hover {
+
+        text-decoration: underline;
+
+      }
+
+
+
+
+      .top-right {
+
+        display: flex;
+
+        flex-direction: column;
+
+        align-items: flex-end;
+
+        gap: 4px;
+
+        font-size: 11px;
+
+        color: var(--text-sub);
+
+      }
+
+
+
+
+      .badge-env {
+
+        padding: 4px 10px;
+
+        border-radius: var(--radius-pill);
+
+        border: 1px solid rgba(148, 163, 184, 0.5);
+
+        background: rgba(255, 255, 255, 0.9);
+
+        display: inline-flex;
+
+        align-items: center;
+
+        gap: 6px;
+
+      }
+
+
+
+
+      .badge-dot {
+
+        width: 8px;
+
+        height: 8px;
+
+        border-radius: 999px;
+
+        background: radial-gradient(circle at 30% 30%, #22c55e, #16a34a);
+
+        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.22);
+
+      }
+
+
+
+
+      .hero {
+
+        margin: 4px auto 20px;
+
+        padding: 18px 20px 16px;
+
+        border-radius: 22px;
+
+        background: radial-gradient(
+
+            circle at 0 0,
+
+            rgba(59, 130, 246, 0.16) 0,
+
+            transparent 50%
+
+          ),
+
+          radial-gradient(
+
+            circle at 100% 0,
+
+            rgba(34, 197, 94, 0.15) 0,
+
+            transparent 55%
+
+          ),
+
+          rgba(255, 255, 255, 0.95);
+
+        border: 1px solid rgba(148, 163, 184, 0.45);
+
+        box-shadow: var(--shadow-soft);
+
+        display: flex;
+
+        flex-wrap: wrap;
+
+        justify-content: space-between;
+
+        gap: 16px;
+
+        max-width: 1400px;
+
+      }
+
+
+
+
+      .hero-main {
+
+        max-width: 750px;
+
+      }
+
+
+
+
+      .hero-title {
+
+        font-size: 20px;
+
+        font-weight: 600;
+
+        display: flex;
+
+        align-items: center;
+
+        gap: 8px;
+
+        margin-bottom: 6px;
+
+      }
+
+
+
+
+      .hero-title span.bar {
+
+        width: 3px;
+
+        height: 20px;
+
+        border-radius: 999px;
+
+        background: linear-gradient(180deg, #22c55e, #2563eb);
+
+      }
+
+
+
+
+      .hero-sub {
+
+        font-size: 13px;
+
+        color: var(--text-sub);
+
+        margin-bottom: 10px;
+
+      }
+
+
+
+
+      .hero-tags {
+
+        display: flex;
+
+        flex-wrap: wrap;
+
+        gap: 6px;
+
+      }
+
+
+
+
+      .hero-tag {
+
+        font-size: 11px;
+
+        padding: 4px 9px;
+
+        border-radius: var(--radius-pill);
+
+        background: rgba(15, 23, 42, 0.03);
+
+        border: 1px solid rgba(148, 163, 184, 0.45);
+
+        color: var(--text-sub);
+
+      }
+
+
+
+
+      .hero-side {
+
+        min-width: 240px;
+
+        max-width: 320px;
+
+        font-size: 11px;
+
+        color: var(--text-sub);
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 6px;
+
+        align-items: flex-end;
+
+        text-align: right;
+
+      }
+
+
+
+
+      .hero-pill {
+
+        padding: 6px 11px;
+
+        border-radius: var(--radius-pill);
+
+        background: linear-gradient(120deg, var(--accent-strong), #22c55e);
+
+        color: #f9fafb;
+
+        font-size: 11px;
+
+        font-weight: 500;
+
+        box-shadow: 0 10px 30px rgba(37, 99, 235, 0.7);
+
+      }
+
+
+
+
+      .content {
+
+        flex: 1;
+
+        padding: 0 24px 22px;
+
+        max-width: 1400px;
+
+        margin: 0 auto;
+
+        display: grid;
+
+        grid-template-columns: minmax(0, 1fr);
+
+        gap: 22px;
+
+        align-items: flex-start;
+
+      }
+
+
+
+
+      .chart-card {
+
+        border-radius: var(--radius-lg);
+
+        background: rgba(255, 255, 255, 0.97);
+
+        border: 1px solid rgba(148, 163, 184, 0.6);
+
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+
+        padding: 18px 18px 14px;
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 12px;
+
+        min-height: 380px;
+
+      }
+
+
+
+
+      .chart-card-header {
+
+        display: flex;
+
+        justify-content: space-between;
+
+        align-items: flex-start;
+
+        gap: 12px;
+
+      }
+
+
+
+
+      .chart-title-block {
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 2px;
+
+        max-width: 60%;
+
+      }
+
+
+
+
+      .chart-kicker {
+
+        font-size: 10px;
+
+        text-transform: uppercase;
+
+        letter-spacing: 0.16em;
+
+        color: var(--text-sub);
+
+      }
+
+
+
+
+      .chart-title {
+
+        font-size: 14px;
+
+        font-weight: 600;
+
+      }
+
+
+
+
+      .chart-sub {
+
+        font-size: 11px;
+
+        color: var(--text-sub);
+
+      }
+
+
+
+
+      .chart-badge {
+
+        font-size: 10px;
+
+        border-radius: var(--radius-pill);
+
+        padding: 3px 7px;
+
+        background: rgba(239, 246, 255, 0.9);
+
+        border: 1px solid rgba(191, 219, 254, 0.9);
+
+        color: var(--accent-strong);
+
+      }
+
+
+
+
+      .chart-controls {
+
+        display: flex;
+
+        flex-direction: column;
+
+        align-items: flex-end;
+
+        gap: 6px;
+
+        min-width: 260px;
+
+      }
+
+
+
+
+      .chart-mini-filter {
+
+        display: flex;
+
+        align-items: center;
+
+        gap: 4px;
+
+        flex-wrap: wrap;
+
+        justify-content: flex-end;
+
+      }
+
+
+
+
+      .chart-mini-label {
+
+        font-size: 11px;
+
+        color: var(--text-sub);
+
+      }
+
+
+
+
+      .chart-mini-chips {
+
+        display: flex;
+
+        flex-wrap: wrap;
+
+        justify-content: flex-end;
+
+        gap: 4px;
+
+      }
+
+
+
+
+      .chart-mini-radio {
+
+        font-size: 11px;
+
+        color: var(--text-sub);
+
+        display: inline-flex;
+
+        flex-wrap: wrap;
+
+        gap: 6px;
+
+        justify-content: flex-end;
+
+      }
+
+
+
+
+      .chart-mini-radio label {
+
+        display: inline-flex;
+
+        align-items: center;
+
+        gap: 3px;
+
+        cursor: pointer;
+
+      }
+
+
+
+
+      .chart-mini-radio input {
+
+        accent-color: var(--accent-strong);
+
+        cursor: pointer;
+
+      }
+
+
+
+
+      .chart {
+
+        width: 100%;
+
+        height: 320px;
+
+      }
+
+
+
+
+      .chart-summary {
+
+        font-size: 11px;
+
+        color: var(--text-sub);
+
+        padding-top: 4px;
+
+        border-top: 1px dashed rgba(148, 163, 184, 0.5);
+
+      }
+
+
+
+
+      .chart-summary strong {
+
+        color: var(--text-main);
+
+      }
+
+      /* 图表下方：按月份切换的数据分析块 */
+
+      .chart-analysis-box {
+
+        margin-top: 4px;
+
+        border-radius: var(--radius-md);
+
+        border: 1px solid rgba(209, 213, 219, 0.9);
+
+        background: rgba(249, 250, 251, 0.96);
+
+        display: flex;
+
+        align-items: stretch;
+
+        overflow: hidden;
+
+      }
+
+
+
+
+      .chart-analysis-months {
+
+        flex: 0 0 70px;
+
+        border-right: 1px solid rgba(209, 213, 219, 0.9);
+
+        padding: 6px 4px;
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 4px;
+
+        background: rgba(243, 244, 246, 0.95);
+
+      }
+
+
+
+
+      .chart-analysis-months-title {
+
+        font-size: 11px;
+
+        color: var(--text-sub);
+
+        margin-bottom: 2px;
+
+      }
+
+
+
+
+      .chart-analysis-month-btn {
+
+        width: 100%;
+
+        font-size: 11px;
+
+        border-radius: var(--radius-sm);
+
+        border: 1px solid transparent;
+
+        padding: 3px 6px;
+
+        background: transparent;
+
+        color: var(--text-sub);
+
+        text-align: left;
+
+        cursor: pointer;
+
+        white-space: nowrap;
+
+      }
+
+
+
+
+      .chart-analysis-month-btn:hover {
+
+        background: rgba(229, 231, 235, 0.9);
+
+      }
+
+
+
+
+      .chart-analysis-month-btn.active {
+
+        background: rgba(129, 140, 248, 0.08);
+
+        border-color: var(--accent-strong);
+
+        color: var(--text-main);
+
+        font-weight: 500;
+
+      }
+
+
+
+
+      .chart-analysis-body {
+
+        flex: 1;
+
+        padding: 6px 8px;
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 4px;
+
+      }
+
+
+
+
+      .chart-analysis-title {
+
+        font-size: 11px;
+
+        color: var(--text-sub);
+
+        font-weight: 500;
+
+      }
+
+
+
+
+      .chart-analysis-text {
+
+        font-size: 11px;
+
+        color: var(--text-main);
+
+        line-height: 1.6;
+
+        white-space: pre-wrap;
+
+      }
+
+
+
+
+      .chart-comment {
+
+        margin-top: 4px;
+
+        border-radius: var(--radius-md);
+
+        border: 1px solid rgba(209, 213, 219, 0.8);
+
+        padding: 6px 8px;
+
+        background: rgba(249, 250, 251, 0.95);
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 4px;
+
+      }
+
+
+
+
+      .chart-comment-label {
+
+        font-size: 11px;
+
+        color: var(--text-sub);
+
+        display: flex;
+
+        justify-content: space-between;
+
+        align-items: center;
+
+        gap: 6px;
+
+      }
+
+
+
+
+      .chart-comment textarea {
+
+        width: 100%;
+
+        min-height: 52px;
+
+        max-height: 130px;
+
+        font-size: 11px;
+
+        font-family: inherit;
+
+        border-radius: 8px;
+
+        border: 1px solid rgba(209, 213, 219, 0.9);
+
+        padding: 4px 6px;
+
+        resize: vertical;
+
+        outline: none;
+
+        background-color: #fff;
+
+      }
+
+
+
+
+      .chart-comment textarea:focus {
+
+        border-color: var(--accent-strong);
+
+        box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.15);
+
+      }
+
+
+
+
+      .comment-actions {
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: space-between;
+
+        gap: 6px;
+
+      }
+
+
+
+
+      .btn-save {
+
+        padding: 3px 10px;
+
+        font-size: 11px;
+
+        border-radius: var(--radius-pill);
+
+        border: none;
+
+        cursor: pointer;
+
+        background: linear-gradient(120deg, var(--accent-strong), #22c55e);
+
+        color: white;
+
+        font-weight: 500;
+
+        box-shadow: 0 8px 18px rgba(37, 99, 235, 0.5);
+
+        transition: transform var(--transition-fast),
+
+          box-shadow var(--transition-fast);
+
+      }
+
+
+
+
+      .btn-save:active {
+
+        transform: translateY(1px);
+
+        box-shadow: 0 5px 12px rgba(37, 99, 235, 0.5);
+
+      }
+
+
+
+
+      .comment-status {
+
+        font-size: 10px;
+
+        color: var(--text-sub);
+
+      }
+
+
+
+
+      .filter-chip {
+
+        font-size: 11px;
+
+        padding: 3px 8px;
+
+        border-radius: var(--radius-pill);
+
+        border: 1px solid rgba(148, 163, 184, 0.6);
+
+        background: rgba(249, 250, 251, 0.9);
+
+        display: inline-flex;
+
+        align-items: center;
+
+        gap: 4px;
+
+        cursor: pointer;
+
+        user-select: none;
+
+        white-space: nowrap;
+
+      }
+
+
+
+
+      .filter-chip input {
+
+        accent-color: var(--accent-strong);
+
+        cursor: pointer;
+
+      }
+
+
+
+
+      .filter-chip-active {
+
+        border-color: rgba(37, 99, 235, 0.9);
+
+        background: var(--accent-soft);
+
+        color: var(--accent-strong);
+
+      }
+
+
+
+
+      .footer {
+
+        padding: 8px 24px 14px;
+
+        font-size: 10px;
+
+        color: var(--text-sub);
+
+        display: flex;
+
+        justify-content: space-between;
+
+        gap: 10px;
+
+        border-top: 1px solid rgba(148, 163, 184, 0.35);
+
+        background: linear-gradient(
+
+          to right,
+
+          rgba(248, 250, 252, 0.92),
+
+          rgba(241, 245, 249, 0.96)
+
+        );
+
+      }
+
+
+
+
+      .footer strong {
+
+        font-weight: 600;
+
+      }
+
+
+
+
+      @media (max-width: 900px) {
+
+        .chart-card-header {
+
+          flex-direction: column;
+
+          align-items: flex-start;
+
+        }
+
+        .chart-title-block {
+
+          max-width: 100%;
+
+        }
+
+        .chart-controls {
+
+          align-items: flex-start;
+
+          min-width: 0;
+
+        }
+
+        .hero {
+
+          flex-direction: column;
+
+          align-items: flex-start;
+
+        }
+
+        .hero-side {
+
+          align-items: flex-start;
+
+          text-align: left;
+
+        }
+
+      }
+
+      /* ========= 图下方数据表 ========= */
+
+      .chart-table-section {
+
+        margin-top: 6px;
+
+        padding-top: 6px;
+
+        border-top: 1px dashed rgba(148, 163, 184, 0.5);
+
+      }
+
+
+
+
+      .chart-table-title {
+
+        font-size: 11px;
+
+        color: var(--text-sub);
+
+        margin-bottom: 4px;
+
+      }
+
+
+
+
+      .chart-table-wrapper {
+
+        max-height: 260px;
+
+        overflow: auto;
+
+        border-radius: 6px;
+
+        border: 1px solid rgba(209, 213, 219, 0.9);
+
+        background: #ffffff;
+
+      }
+
+
+
+
+      table.chart-table {
+
+        width: 100%;
+
+        border-collapse: collapse;
+
+        font-size: 11px;
+
+      }
+
+
+
+
+      .chart-table thead th,
+
+      .chart-table tbody td {
+
+        padding: 4px 8px;
+
+        border-bottom: 1px solid #f3f4f6;
+
+        white-space: nowrap;
+
+      }
+
+
+
+
+      .chart-table thead th {
+
+        position: sticky;
+
+        top: 0;
+
+        z-index: 1;
+
+        background: #f9fafb;
+
+        text-align: center;
+
+        font-weight: 500;
+
+        color: var(--text-sub);
+
+      }
+
+
+
+
+      .chart-table tbody tr:nth-child(odd) td {
+
+        background: #fcfcff;
+
+      }
+
+
+
+
+      .chart-table tbody tr:hover td {
+
+        background: #eef2ff;
+
+      }
+
+
+
+
+      .chart-table td.num {
+
+        text-align: right;
+
+        font-variant-numeric: tabular-nums;
+
+      }
+
+
+
+
+      .chart-table td.highlight {
+
+        color: #d4380d;
+
+        font-weight: 600;
+
+      }
+
+      /* ===========
+         OVP 空位样式
+         =========== */
+      .chart-coming {
+        position: relative;
+        background: linear-gradient(
+          to bottom,
+          rgba(241, 245, 249, 0.7),
+          rgba(248, 250, 252, 0.95)
+        );
+        border: 1px dashed rgba(148, 163, 184, 0.6);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+      }
+
+      .chart-coming-inner {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 14px 10px;
+        text-align: center;
+      }
+
+      .chart-coming-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-main);
+      }
+
+      .chart-coming-sub {
+        font-size: 11px;
+        color: var(--text-sub);
+        max-width: 520px;
+        line-height: 1.5;
+      }
+
+      .inline-kbd {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1px 8px;
+        border-radius: var(--radius-pill);
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(255, 255, 255, 0.9);
+        font-size: 11px;
+        color: var(--text-main);
+        font-variant-numeric: tabular-nums;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="page">
+<header class="top-bar">
+
+        <div class="top-left">
+
+          <div class="brand-mark">
+
+            <div class="brand-mark-inner"></div>
+
+          </div>
+
+          <div>
+
+            <div class="brand-text-main">Bangbet Growth Console</div>
+
+            <div class="brand-text-sub">Organic · Monthly Comparison</div>
+
+            <div class="breadcrumb">
+
+              <a href="../index.html">首页目录</a> / 自然量月度数据对比
+
+            </div>
+
+          </div>
+
+        </div>
+
+        <div class="top-right">
+
+          <div class="badge-env">
+
+            <span class="badge-dot"></span>
+
+            <span>Prod · Light · 自然渠道</span>
+
+          </div>
+
+          <div>单位：人数 / % / USD 等值 · 周期：按月 + 按日</div>
+
+        </div>
+
+      </header>
+
+      <section class="hero">
+        <div class="hero-main">
+          <div class="hero-title">
+            <span class="bar"></span>
+            <span>自然量 vs 买量月度数据对比 · 看板</span>
+          </div>
+          <div class="hero-sub">
+            目标：同口径对比自然量与买量在注册规模、付费、ARPPU、下注深度、玩法结构与留存上的差异。
+            数据入口：<span class="inline-kbd">organic-data.js</span> 与 <span class="inline-kbd">paid-data.js</span>（均为日维度明细，按月分包）。
+          </div>
+          <div class="hero-tags">
+            <span class="hero-tag">范围：GH / KE / NG / TZ / UG</span>
+            <span class="hero-tag">模块：注册 · 付费率 · ARPPU · 人均流水 · 玩法结构 · 留存</span>
+            <span class="hero-tag">来源：自然渠道 + 买量渠道</span>
+          </div>
+        </div>
+
+        <div class="hero-side">
+          <div>当前版本：v0.1 · 先搭结构，图表逻辑按模块逐步接入。</div>
+          <div>
+            每月新增数据：在两个数据文件里各新增一个月份 key（YYYY-MM），把当月对象列表粘贴进数组即可。
+          </div>
+          <div class="hero-pill" id="data-health">
+            数据加载状态：等待读取（请确保数据文件已放在同级目录）。
+          </div>
+        </div>
+      </section>
+
+      <main class="content">
+        <!-- 1. 自然量 vs 买量注册量 -->
+        <section class="chart-card" id="card-reg-vs-paid">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Scale</div>
+              <div class="chart-title">自然量 vs 买量注册量</div>
+              <div class="chart-sub">
+                空位：对比 registration（人），支持按月/按日，维度包含国家、媒体、产品等。
+              </div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：人（registration）</span>
+              <!-- TODO: 控件区（月份/国家/媒体/产品/视图） -->
+            </div>
+          </header>
+
+          <div class="chart chart-coming" id="chart-reg-vs-paid">
+            <div class="chart-coming-inner">
+              <div class="chart-coming-title">模块待接入</div>
+              <div class="chart-coming-sub">下一步：实现「自然量 vs 买量注册量」图表与明细表。</div>
+            </div>
+          </div>
+
+          <div class="chart-summary" data-analysis-key="reg-vs-paid">
+            备注：后续这里会输出“结论摘要”（例如占比变化、国家贡献与异常波动）。
+          </div>
+
+          <div class="chart-table-section">
+            <div class="chart-table-title">当前筛选 · 自然量 vs 买量注册量（月度）</div>
+            <div class="chart-table-wrapper">
+              <table id="table-reg-vs-paid" class="chart-table"></table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. D0 / D7 付费率 -->
+        <section class="chart-card" id="card-payrate">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Monetization</div>
+              <div class="chart-title">D0 / D7 付费率</div>
+              <div class="chart-sub">
+                空位：付费率 = D0_unique_purchase/registration 与 D7_unique_purchase/registration；自然 vs 买量对比。
+              </div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：%（pay rate）</span>
+              <!-- TODO: 控件区 -->
+            </div>
+          </header>
+
+          <div class="chart chart-coming" id="chart-payrate">
+            <div class="chart-coming-inner">
+              <div class="chart-coming-title">模块待接入</div>
+              <div class="chart-coming-sub">下一步：实现「D0 / D7 付费率」对比（自然 vs 买量）。</div>
+            </div>
+          </div>
+
+          <div class="chart-summary" data-analysis-key="payrate">
+            备注：后续将输出按国家、按媒体的差异诊断与波动原因记录。
+          </div>
+
+          <div class="chart-table-section">
+            <div class="chart-table-title">当前筛选 · D0 / D7 付费率（月度）</div>
+            <div class="chart-table-wrapper">
+              <table id="table-payrate" class="chart-table"></table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. D0 / D7 ARPPU -->
+        <section class="chart-card" id="card-arppu">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Value</div>
+              <div class="chart-title">D0 / D7 ARPPU</div>
+              <div class="chart-sub">
+                空位：ARPPU = PURCHASE_VALUE / unique_purchase；自然 vs 买量对比。
+              </div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：USD 等值 / 付费用户</span>
+              <!-- TODO: 控件区 -->
+            </div>
+          </header>
+
+          <div class="chart chart-coming" id="chart-arppu">
+            <div class="chart-coming-inner">
+              <div class="chart-coming-title">模块待接入</div>
+              <div class="chart-coming-sub">下一步：实现「D0 / D7 ARPPU」对比（自然 vs 买量）。</div>
+            </div>
+          </div>
+
+          <div class="chart-summary" data-analysis-key="arppu">
+            备注：后续将输出异常值识别（高 ARPPU 是否由少量大额用户驱动等）。
+          </div>
+
+          <div class="chart-table-section">
+            <div class="chart-table-title">当前筛选 · D0 / D7 ARPPU（月度）</div>
+            <div class="chart-table-wrapper">
+              <table id="table-arppu" class="chart-table"></table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. D0 / D7 人均流水 -->
+        <section class="chart-card" id="card-flow">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Betting Depth</div>
+              <div class="chart-title">D0 / D7 人均流水（体育 / 游戏 / 总）</div>
+              <div class="chart-sub">
+                空位：人均流水 = BET_FLOW / BET_PLACED_USER；自然 vs 买量对比，可切到体育/游戏/总。
+              </div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：USD 等值 / 下注用户</span>
+              <!-- TODO: 控件区 -->
+            </div>
+          </header>
+
+          <div class="chart chart-coming" id="chart-flow">
+            <div class="chart-coming-inner">
+              <div class="chart-coming-title">模块待接入</div>
+              <div class="chart-coming-sub">下一步：实现「D0 / D7 人均流水」对比（自然 vs 买量）。</div>
+            </div>
+          </div>
+
+          <div class="chart-summary" data-analysis-key="flow">
+            备注：后续将输出玩法维度差异（体育/游戏占比与深度）。
+          </div>
+
+          <div class="chart-table-section">
+            <div class="chart-table-title">当前筛选 · D0 / D7 人均流水（月度）</div>
+            <div class="chart-table-wrapper">
+              <table id="table-flow" class="chart-table"></table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. 体育 vs 游戏玩家比例 -->
+        <section class="chart-card" id="card-ratio">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Mix</div>
+              <div class="chart-title">体育 vs 游戏玩家比例</div>
+              <div class="chart-sub">
+                空位：SPORTS_BET_PLACED_USER / GAMES_BET_PLACED_USER；自然 vs 买量对比（D0/D7）。
+              </div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：比值（sports / games）</span>
+              <!-- TODO: 控件区 -->
+            </div>
+          </header>
+
+          <div class="chart chart-coming" id="chart-ratio">
+            <div class="chart-coming-inner">
+              <div class="chart-coming-title">模块待接入</div>
+              <div class="chart-coming-sub">下一步：实现「体育 vs 游戏玩家比例」对比（自然 vs 买量）。</div>
+            </div>
+          </div>
+
+          <div class="chart-summary" data-analysis-key="ratio">
+            备注：后续将输出结构性变化（例如买量偏游戏导致付费/留存波动）。
+          </div>
+
+          <div class="chart-table-section">
+            <div class="chart-table-title">当前筛选 · 体育 vs 游戏玩家比例（月度）</div>
+            <div class="chart-table-wrapper">
+              <table id="table-ratio" class="chart-table"></table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. 次日 / 7 日留存率 -->
+        <section class="chart-card" id="card-retention">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Retention</div>
+              <div class="chart-title">次日 / 7 日留存率</div>
+              <div class="chart-sub">
+                空位：次留 = D1_retained_users/registration；七留 = D7_retained_users/registration；自然 vs 买量对比。
+              </div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：%</span>
+              <!-- TODO: 控件区 -->
+            </div>
+          </header>
+
+          <div class="chart chart-coming" id="chart-retention">
+            <div class="chart-coming-inner">
+              <div class="chart-coming-title">模块待接入</div>
+              <div class="chart-coming-sub">下一步：实现「次日 / 7 日留存率」对比（自然 vs 买量）。</div>
+            </div>
+          </div>
+
+          <div class="chart-summary" data-analysis-key="retention">
+            备注：后续将输出留存曲线与关键国家/媒体的流失来源假设。
+          </div>
+
+          <div class="chart-table-section">
+            <div class="chart-table-title">当前筛选 · 次日 / 7 日留存率（月度）</div>
+            <div class="chart-table-wrapper">
+              <table id="table-retention" class="chart-table"></table>
+            </div>
+          </div>
+        </section>
+      </main>
+
+<footer class="footer">
+
+        <span
+
+          >Owner：<strong>用户增长部-Jerry Lyu</strong> · 自然量看板 v3.1（从
+
+          RAW_ORGANIC_BY_MONTH 聚合）</span
+
+        >
+
+        <span>数据来源：内部自然量报表 · 时间口径建议统一为 UTC+0 日切。</span>
+
+      </footer>
+    </div>
+
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+
+    <script src="./organic-data.js"></script>
+    <script src="./paid-data.js"></script>
+
+    <script>
+      // 仅做数据加载提示（图表逻辑后续逐模块补齐）
+      (function () {
+        const o = window.RAW_ORGANIC_BY_MONTH || {};
+        const p = window.RAW_PAID_BY_MONTH || {};
+        const el = document.getElementById("data-health");
+        if (!el) return;
+
+        const oMonths = Object.keys(o).sort();
+        const pMonths = Object.keys(p).sort();
+        el.textContent =
+          "数据加载状态：自然月数 " +
+          oMonths.length +
+          "（" +
+          (oMonths[0] || "-") +
+          " ~ " +
+          (oMonths[oMonths.length - 1] || "-") +
+          "），买量月数 " +
+          pMonths.length +
+          "（" +
+          (pMonths[0] || "-") +
+          " ~ " +
+          (pMonths[pMonths.length - 1] || "-") +
+          "）。";
+      })();
+    </script>
+  </body>
+</html>
