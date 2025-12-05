@@ -1,1 +1,874 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Bangbet 买量月度数据对比</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Bangbet 海外买量月度数据对比看板" />
 
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --bg-top: #0b1220;
+        --bg-mid: #0f172a;
+        --bg-bottom: #020617;
+        --card: rgba(255, 255, 255, 0.92);
+        --card-strong: rgba(255, 255, 255, 0.97);
+        --text-main: #0f172a;
+        --text-sub: rgba(71, 85, 105, 0.9);
+        --text-mute: rgba(100, 116, 139, 0.9);
+        --accent: #2563eb;
+        --accent-strong: #1d4ed8;
+        --accent-soft: rgba(37, 99, 235, 0.15);
+        --ok: #16a34a;
+        --warn: #f97316;
+        --bad: #e11d48;
+        --border: rgba(148, 163, 184, 0.6);
+        --radius-lg: 18px;
+        --radius-md: 14px;
+        --radius-sm: 12px;
+        --shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+        --glass: rgba(255, 255, 255, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto,
+          "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei", sans-serif;
+        color: rgba(226, 232, 240, 0.92);
+        background: radial-gradient(
+            circle at 16% 0%,
+            rgba(37, 99, 235, 0.35),
+            transparent 38%
+          ),
+          radial-gradient(
+            circle at 80% 12%,
+            rgba(249, 115, 22, 0.25),
+            transparent 44%
+          ),
+          linear-gradient(160deg, var(--bg-top), var(--bg-mid) 55%, var(--bg-bottom));
+        padding: 22px 18px 30px;
+      }
+
+      a {
+        color: rgba(226, 232, 240, 0.92);
+        text-decoration: none;
+      }
+
+      a:hover {
+        color: #fff;
+      }
+
+      .page {
+        width: min(1440px, 100%);
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .top-bar {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .top-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .brand-mark {
+        width: 34px;
+        height: 34px;
+        border-radius: 14px;
+        background: conic-gradient(
+          from 160deg,
+          rgba(37, 99, 235, 0.95),
+          rgba(124, 58, 237, 0.9),
+          rgba(249, 115, 22, 0.88),
+          rgba(37, 99, 235, 0.95)
+        );
+        box-shadow: 0 10px 18px rgba(37, 99, 235, 0.22);
+        padding: 6px;
+        flex: 0 0 auto;
+      }
+
+      .brand-mark-inner {
+        width: 100%;
+        height: 100%;
+        border-radius: 10px;
+        background: rgba(2, 6, 23, 0.7);
+        border: 1px solid rgba(148, 163, 184, 0.35);
+      }
+
+      .brand-text-main {
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        font-size: 14px;
+      }
+
+      .brand-text-sub {
+        font-size: 12px;
+        color: rgba(203, 213, 225, 0.85);
+        margin-top: 2px;
+      }
+
+      .breadcrumb {
+        font-size: 11px;
+        margin-top: 4px;
+        color: rgba(148, 163, 184, 0.95);
+      }
+
+      .breadcrumb a {
+        color: rgba(203, 213, 225, 0.95);
+      }
+
+      .top-right {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+        font-size: 11px;
+        color: rgba(203, 213, 225, 0.85);
+      }
+
+      .badge-env {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+      }
+
+      .badge-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 99px;
+        background: rgba(34, 197, 94, 0.9);
+        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+      }
+
+      .hero {
+        display: flex;
+        justify-content: space-between;
+        gap: 22px;
+        padding: 18px 18px 16px;
+        border-radius: var(--radius-lg);
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        box-shadow: 0 22px 45px rgba(2, 6, 23, 0.55);
+      }
+
+      .hero-main {
+        min-width: 0;
+      }
+
+      .hero-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 700;
+        color: rgba(241, 245, 249, 0.95);
+        letter-spacing: 0.25px;
+      }
+
+      .bar {
+        width: 10px;
+        height: 26px;
+        border-radius: 8px;
+        background: linear-gradient(180deg, rgba(37, 99, 235, 0.95), rgba(249, 115, 22, 0.85));
+        box-shadow: 0 10px 18px rgba(37, 99, 235, 0.25);
+      }
+
+      .hero-sub {
+        margin-top: 10px;
+        line-height: 1.5;
+        color: rgba(226, 232, 240, 0.9);
+        font-size: 12px;
+        max-width: 820px;
+      }
+
+      .hero-tags {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .hero-tag {
+        font-size: 11px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        color: rgba(226, 232, 240, 0.85);
+      }
+
+      .hero-side {
+        width: 360px;
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 11px;
+        color: rgba(226, 232, 240, 0.8);
+      }
+
+      .hero-pill {
+        margin-top: 2px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(37, 99, 235, 0.15);
+        border: 1px solid rgba(37, 99, 235, 0.22);
+        color: rgba(226, 232, 240, 0.92);
+        line-height: 1.45;
+      }
+
+      .content {
+        width: min(1400px, 100%);
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 22px;
+        align-items: flex-start;
+      }
+
+      .chart-card {
+        border-radius: var(--radius-lg);
+        background: rgba(255, 255, 255, 0.97);
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+        padding: 18px 18px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        color: var(--text-main);
+      }
+
+      .chart-card-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: flex-start;
+      }
+
+      .chart-title-block {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .chart-kicker {
+        font-size: 11px;
+        letter-spacing: 0.25px;
+        color: rgba(71, 85, 105, 0.9);
+      }
+
+      .chart-title {
+        margin-top: 4px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        font-size: 15px;
+      }
+
+      .chart-sub {
+        margin-top: 6px;
+        line-height: 1.5;
+        font-size: 11px;
+        color: rgba(71, 85, 105, 0.88);
+        max-width: 760px;
+      }
+
+      .chart-controls {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+        min-width: 260px;
+      }
+
+      .chart-badge {
+        font-size: 11px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(239, 246, 255, 0.9);
+        border: 1px solid rgba(191, 219, 254, 0.9);
+        color: var(--accent-strong);
+      }
+
+      .chart {
+        width: 100%;
+        height: 320px;
+      }
+
+      .chart-summary {
+        font-size: 11px;
+        color: var(--text-sub);
+        padding-top: 4px;
+        border-top: 1px dashed rgba(148, 163, 184, 0.5);
+      }
+
+      .chart-summary strong {
+        color: var(--text-main);
+      }
+
+      .chart-table-wrapper {
+        overflow-x: auto;
+        border-radius: 14px;
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        background: rgba(248, 250, 252, 0.96);
+      }
+
+      .chart-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+
+      .chart-table th,
+      .chart-table td {
+        padding: 9px 10px;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .chart-table th:first-child,
+      .chart-table td:first-child {
+        text-align: left;
+        font-weight: 600;
+        color: rgba(15, 23, 42, 0.9);
+      }
+
+      .chart-comment {
+        margin-top: 4px;
+        border-top: 1px dashed rgba(148, 163, 184, 0.55);
+        padding-top: 10px;
+      }
+
+      .chart-comment-label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      .chart-comment-label span {
+        font-size: 11px;
+        color: rgba(71, 85, 105, 0.92);
+        font-weight: 600;
+      }
+
+      .chart-comment textarea {
+        width: 100%;
+        min-height: 84px;
+        resize: vertical;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.55);
+        padding: 10px 12px;
+        font-size: 12px;
+        line-height: 1.5;
+        outline: none;
+        background: rgba(255, 255, 255, 0.95);
+      }
+
+      .comment-actions {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        justify-content: space-between;
+      }
+
+      .btn-save {
+        border: 0;
+        padding: 8px 12px;
+        border-radius: 12px;
+        background: rgba(37, 99, 235, 0.95);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 10px 18px rgba(37, 99, 235, 0.22);
+      }
+
+      .btn-save:hover {
+        background: rgba(29, 78, 216, 0.98);
+      }
+
+      .comment-status {
+        font-size: 11px;
+        color: rgba(71, 85, 105, 0.82);
+        line-height: 1.4;
+        max-width: 720px;
+      }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        font-size: 11px;
+        color: rgba(226, 232, 240, 0.82);
+        padding: 8px 4px 0;
+      }
+
+      .footer strong {
+        color: rgba(248, 250, 252, 0.98);
+      }
+
+      @media (max-width: 980px) {
+        .top-bar {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 10px;
+        }
+        .top-right {
+          align-items: flex-start;
+        }
+        .hero {
+          flex-direction: column;
+        }
+        .hero-side {
+          width: 100%;
+        }
+        .chart-card-header {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        .chart-controls {
+          align-items: flex-start;
+          min-width: auto;
+        }
+        .comment-actions {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+
+      /* 占位态：还没接入图表逻辑时，给一个明确的视觉提示 */
+      .chart-empty {
+        height: 100%;
+        border-radius: 14px;
+        border: 1px dashed rgba(148, 163, 184, 0.8);
+        background: rgba(248, 250, 252, 0.92);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-sub);
+        font-size: 12px;
+        letter-spacing: 0.2px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="page">
+      <header class="top-bar">
+        <div class="top-left">
+          <div class="brand-mark">
+            <div class="brand-mark-inner"></div>
+          </div>
+          <div>
+            <div class="brand-text-main">Bangbet Growth Console</div>
+            <div class="brand-text-sub">Paid · Monthly Comparison</div>
+            <div class="breadcrumb">
+              <a href="../index.html">首页目录</a> / 买量月度数据对比
+            </div>
+          </div>
+        </div>
+        <div class="top-right">
+          <div class="badge-env">
+            <span class="badge-dot"></span>
+            <span>Prod · Light · 买量渠道</span>
+          </div>
+          <div>单位：人数 / % / USD 等值 · 周期：按月 + 按日</div>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div class="hero-main">
+          <div class="hero-title">
+            <span class="bar"></span>
+            <span>买量月度数据对比 · 看板（框架版）</span>
+          </div>
+          <div class="hero-sub">
+            对齐自然量看板的页面风格与交互组件；本页先把 6 个数据模块的卡片位留出来，
+            后续逐模块接入计算口径与图表逻辑。
+          </div>
+          <div class="hero-tags">
+            <span class="hero-tag">范围：GH / KE / NG / TZ / UG</span>
+            <span class="hero-tag">维度：月份 · 国家 · 媒体 · 产品形态（app/web）</span>
+            <span class="hero-tag">来源：买量渠道（RAW_PAID_BY_MONTH）</span>
+          </div>
+        </div>
+
+        <div class="hero-side">
+          <div>当前版本：v0.1 · 指标将统一从 RAW_PAID_BY_MONTH 聚合。</div>
+          <div>每月新增数据：只需在 paid-data.js 里追加一个月份数组，无需改图表逻辑。</div>
+          <div class="hero-pill">
+            提示：保存备注后复制浏览器地址，发给同事即可共享同一版备注。
+          </div>
+        </div>
+      </section>
+
+      <main class="content">
+        <!-- 1. 自然量 vs 买量注册量 -->
+        <section class="chart-card" id="card-org-vs-paid-registrations">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Acquisition</div>
+              <div class="chart-title">自然量 vs 买量注册量</div>
+              <div class="chart-sub">
+                占位：月度对比（自然/买量）+ 可切日维度趋势；后续补注册单价（USD/Reg）。
+              </div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：人（注册）</span>
+            </div>
+          </header>
+
+          <div
+            class="chart"
+            id="chart-org-vs-paid-registrations"
+            data-placeholder="自然量 vs 买量注册量"
+          ></div>
+
+          <div class="chart-summary">
+            <strong>待接入：</strong>自然量数据源（RAW_ORGANIC_BY_MONTH）与买量数据源（RAW_PAID_BY_MONTH）对齐到同一国家/月份口径。
+          </div>
+
+          <div class="chart-table-wrapper">
+            <table
+              id="table-org-vs-paid-registrations"
+              class="chart-table"
+            ></table>
+          </div>
+
+          <div class="chart-comment" data-comment-key="org-vs-paid-registrations">
+            <div class="chart-comment-label"><span>我的备注（注册规模 / 成本）</span></div>
+            <textarea placeholder="例如：预算波动、素材迭代、归因变更、渠道限量/放量、自然占比变化等"></textarea>
+            <div class="comment-actions">
+              <button type="button" class="btn-save">保存备注</button>
+              <span class="comment-status">备注保存在浏览器本地，并写入当前链接；保存后复制地址栏即可分享。</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. D0 / D7 付费率 -->
+        <section class="chart-card" id="card-paid-conversion">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Monetization</div>
+              <div class="chart-title">D0 / D7 付费率</div>
+              <div class="chart-sub">
+                占位：D0_unique_purchase/registration 与 D7_unique_purchase/registration。
+              </div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：%</span>
+            </div>
+          </header>
+
+          <div class="chart" id="chart-paid-conversion" data-placeholder="D0 / D7 付费率"></div>
+
+          <div class="chart-table-wrapper">
+            <table id="table-paid-conversion" class="chart-table"></table>
+          </div>
+
+          <div class="chart-comment" data-comment-key="paid-conversion">
+            <div class="chart-comment-label"><span>我的备注（付费率）</span></div>
+            <textarea placeholder="例如：首充活动、落地页改版、支付通道、国家结构变化、投放人群变化等"></textarea>
+            <div class="comment-actions">
+              <button type="button" class="btn-save">保存备注</button>
+              <span class="comment-status">备注保存在浏览器本地，并写入当前链接；保存后复制地址栏即可分享。</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. D0 / D7 ARPPU -->
+        <section class="chart-card" id="card-arppu">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Monetization</div>
+              <div class="chart-title">D0 / D7 ARPPU</div>
+              <div class="chart-sub">
+                占位：D0_PURCHASE_VALUE/D0_unique_purchase 与 D7_PURCHASE_VALUE/D7_unique_purchase。
+              </div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：USD/人</span>
+            </div>
+          </header>
+
+          <div class="chart" id="chart-arppu" data-placeholder="D0 / D7 ARPPU"></div>
+
+          <div class="chart-table-wrapper">
+            <table id="table-arppu" class="chart-table"></table>
+          </div>
+
+          <div class="chart-comment" data-comment-key="arppu">
+            <div class="chart-comment-label"><span>我的备注（ARPPU）</span></div>
+            <textarea placeholder="例如：充值梯度、支付失败率、用户质量变化、活动周期、币种汇率等"></textarea>
+            <div class="comment-actions">
+              <button type="button" class="btn-save">保存备注</button>
+              <span class="comment-status">备注保存在浏览器本地，并写入当前链接；保存后复制地址栏即可分享。</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. D0 / D7 人均流水（体育 / 游戏 / 总） -->
+        <section class="chart-card" id="card-bet-flow-per-user">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Engagement</div>
+              <div class="chart-title">D0 / D7 人均流水（体育 / 游戏 / 总）</div>
+              <div class="chart-sub">
+                占位：TOTAL/Sports/Games 人均流水 = Bet Flow / Bet Placed User（D0/D7）。
+              </div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：USD/人</span>
+            </div>
+          </header>
+
+          <div
+            class="chart"
+            id="chart-bet-flow-per-user"
+            data-placeholder="D0 / D7 人均流水（体育/游戏/总）"
+          ></div>
+
+          <div class="chart-summary">
+            口径提示：D0_TOTAL_BET_FLOW/D0_TOTAL_BET_PLACED_USER；D0_SPORTS_BET_FLOW/D0_SPORTS_BET_PLACED_USER；
+            D0_GAMES_BET_FLOW/D0_GAMES_BET_PLACED_USER（D7 同理）。
+          </div>
+
+          <div class="chart-table-wrapper">
+            <table id="table-bet-flow-per-user" class="chart-table"></table>
+          </div>
+
+          <div class="chart-comment" data-comment-key="bet-flow-per-user">
+            <div class="chart-comment-label"><span>我的备注（人均流水）</span></div>
+            <textarea placeholder="例如：赛事密度、玩法导流、推荐位/入口改动、游戏 RTP 波动、国家结构等"></textarea>
+            <div class="comment-actions">
+              <button type="button" class="btn-save">保存备注</button>
+              <span class="comment-status">备注保存在浏览器本地，并写入当前链接；保存后复制地址栏即可分享。</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. 体育 vs 游戏玩家比例 -->
+        <section class="chart-card" id="card-sport-vs-game-ratio">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Mix</div>
+              <div class="chart-title">体育 vs 游戏玩家比例</div>
+              <div class="chart-sub">
+                占位：体育/游戏用户比例 = SPORTS_BET_PLACED_USER / GAMES_BET_PLACED_USER（D0/D7）。
+              </div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：比例</span>
+            </div>
+          </header>
+
+          <div class="chart" id="chart-sport-vs-game-ratio" data-placeholder="体育 vs 游戏玩家比例"></div>
+
+          <div class="chart-table-wrapper">
+            <table id="table-sport-vs-game-ratio" class="chart-table"></table>
+          </div>
+
+          <div class="chart-comment" data-comment-key="sport-vs-game-ratio">
+            <div class="chart-comment-label"><span>我的备注（玩法结构）</span></div>
+            <textarea placeholder="例如：投放素材偏好、落地页引导、主推赛事/主推游戏、活动倾斜等"></textarea>
+            <div class="comment-actions">
+              <button type="button" class="btn-save">保存备注</button>
+              <span class="comment-status">备注保存在浏览器本地，并写入当前链接；保存后复制地址栏即可分享。</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. 次日 / 7 日留存率 -->
+        <section class="chart-card" id="card-retention">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Retention</div>
+              <div class="chart-title">次日 / 7 日留存率</div>
+              <div class="chart-sub">
+                占位：次留 = D1_retained_users/registration；七留 = D7_retained_users/registration。
+              </div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：%</span>
+            </div>
+          </header>
+
+          <div class="chart" id="chart-retention" data-placeholder="次日 / 7 日留存率"></div>
+
+          <div class="chart-table-wrapper">
+            <table id="table-retention" class="chart-table"></table>
+          </div>
+
+          <div class="chart-comment" data-comment-key="retention">
+            <div class="chart-comment-label"><span>我的备注（留存）</span></div>
+            <textarea placeholder="例如：新手引导、Push/短信触达、活动节奏、支付体验、赛事周期、产品 Bug 等"></textarea>
+            <div class="comment-actions">
+              <button type="button" class="btn-save">保存备注</button>
+              <span class="comment-status">备注保存在浏览器本地，并写入当前链接；保存后复制地址栏即可分享。</span>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span
+          >Owner：<strong>用户增长部-Jerry Lyu</strong> · 买量看板 v0.1（从
+          RAW_PAID_BY_MONTH 聚合）</span
+        >
+        <span>数据来源：内部买量报表 · 时间口径建议统一为 UTC+0 日切。</span>
+      </footer>
+    </div>
+
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+
+    <!-- Source data -->
+    <script src="paid-data.js"></script>
+
+    <script>
+      // ===========================
+      // 0. 占位态（还没接入图表逻辑时先把卡片撑起来）
+      // ===========================
+      function initPlaceholders() {
+        const chartEls = document.querySelectorAll(".chart[data-placeholder]");
+        chartEls.forEach((el) => {
+          const label = el.getAttribute("data-placeholder") || "图表";
+          el.innerHTML = '<div class="chart-empty">待接入：' + label + "</div>";
+        });
+
+        const tableEls = document.querySelectorAll("table.chart-table");
+        tableEls.forEach((tb) => {
+          tb.innerHTML =
+            '<tr><th style="text-align:left;">提示</th></tr>' +
+            '<tr><td style="color:rgba(71,85,105,0.9);">这张表后续会输出月度汇总（国家/媒体/产品形态可切）。</td></tr>';
+        });
+      }
+
+      // ===========================
+      // 1. 备注保存：本地 + 链接共享（复用自然量看板逻辑）
+      // ===========================
+      function initCommentBlocks() {
+        const STORAGE_KEY = "paid_monthly_comments_v1";
+
+        function loadFromUrl() {
+          const hash = window.location.hash || "";
+          const prefix = "#comments=";
+          if (!hash.startsWith(prefix)) return null;
+          const encoded = hash.slice(prefix.length);
+          if (!encoded) return null;
+          try {
+            const json = decodeURIComponent(encoded);
+            const obj = JSON.parse(json);
+            if (obj && typeof obj === "object") return obj;
+          } catch (e) {
+            console.warn("解析 URL 备注失败", e);
+          }
+          return null;
+        }
+
+        function saveToUrl(comments) {
+          try {
+            const json = JSON.stringify(comments || {});
+            const encoded = encodeURIComponent(json);
+            const base = window.location.href.split("#")[0];
+            const newUrl = base + "#comments=" + encoded;
+            window.history.replaceState(null, "", newUrl);
+          } catch (e) {
+            console.warn("写入 URL 备注失败", e);
+          }
+        }
+
+        function loadFromStorage() {
+          try {
+            const raw = window.localStorage.getItem(STORAGE_KEY);
+            if (!raw) return null;
+            const obj = JSON.parse(raw);
+            if (obj && typeof obj === "object") return obj;
+          } catch (e) {
+            console.warn("读取本地备注失败", e);
+          }
+          return null;
+        }
+
+        function saveToStorage(comments) {
+          try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(comments || {}));
+          } catch (e) {
+            console.warn("写入本地备注失败", e);
+          }
+        }
+
+        const comments = loadFromUrl() || loadFromStorage() || {};
+        const blocks = document.querySelectorAll(".chart-comment");
+
+        blocks.forEach((block) => {
+          const key = block.getAttribute("data-comment-key");
+          if (!key) return;
+          const textarea = block.querySelector("textarea");
+          const btn = block.querySelector(".btn-save");
+          const status = block.querySelector(".comment-status");
+          if (!textarea || !btn) return;
+
+          if (typeof comments[key] === "string") {
+            textarea.value = comments[key];
+          }
+
+          btn.addEventListener("click", () => {
+            const allComments = {};
+            document.querySelectorAll(".chart-comment").forEach((b2) => {
+              const k2 = b2.getAttribute("data-comment-key");
+              const t2 = b2.querySelector("textarea");
+              if (!k2 || !t2) return;
+              const val = t2.value.trim();
+              if (val) allComments[k2] = val;
+            });
+
+            saveToStorage(allComments);
+            saveToUrl(allComments);
+
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2, "0");
+            const mm = String(now.getMinutes()).padStart(2, "0");
+            if (status) {
+              status.textContent = "已保存 " + hh + ":" + mm + " · 当前浏览器 + 链接可见";
+            }
+          });
+        });
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        initPlaceholders();
+        initCommentBlocks();
+      });
+    </script>
+  </body>
+</html>
