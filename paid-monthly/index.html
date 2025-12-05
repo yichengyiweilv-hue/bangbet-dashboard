@@ -650,36 +650,60 @@
   </div>
 </section>
 
-        <!-- 3. D0 / D7 ARPPU -->
-        <section class="chart-card" id="card-arppu">
-          <header class="chart-card-header">
-            <div class="chart-title-block">
-              <div class="chart-kicker">Monetization</div>
-              <div class="chart-title">D0 / D7 ARPPU</div>
-              <div class="chart-sub">
-                占位：D0_PURCHASE_VALUE/D0_unique_purchase 与 D7_PURCHASE_VALUE/D7_unique_purchase。
-              </div>
-            </div>
-            <div class="chart-controls">
-              <span class="chart-badge">单位：USD/人</span>
-            </div>
-          </header>
+        <!-- MODULE-03: D0/D7 ARPPU (keep IDs) -->
+<section class="chart-card" id="card-arppu">
+  <header class="chart-card-header">
+    <div class="chart-title-block">
+      <div class="chart-kicker">Monetization</div>
+      <div class="chart-title">D0 / D7 ARPPU</div>
+      <div class="chart-sub">
+        口径：D0 ARPPU = ΣD0_PURCHASE_VALUE / ΣD0_unique_purchase（USD/人），D7同理。折线支持媒体/产品拆线与“全选但不区分”聚合。
+      </div>
+    </div>
 
-          <div class="chart" id="chart-arppu" data-placeholder="D0 / D7 ARPPU"></div>
+    <div class="chart-controls">
+      <span class="chart-badge">单位：USD/人</span>
 
-          <div class="chart-table-wrapper">
-            <table id="table-arppu" class="chart-table"></table>
-          </div>
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">视图：</span>
+        <div class="chart-mini-radio">
+          <label><input type="radio" name="arppu-view" value="bar" checked />柱状（月度）</label>
+          <label><input type="radio" name="arppu-view" value="line" />折线（日度）</label>
+        </div>
+      </div>
 
-          <div class="chart-comment" data-comment-key="arppu">
-            <div class="chart-comment-label"><span>我的备注（ARPPU）</span></div>
-            <textarea placeholder="例如：充值梯度、支付失败率、用户质量变化、活动周期、币种汇率等"></textarea>
-            <div class="comment-actions">
-              <button type="button" class="btn-save">保存备注</button>
-              <span class="comment-status">备注保存在浏览器本地，并写入当前链接；保存后复制地址栏即可分享。</span>
-            </div>
-          </div>
-        </section>
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">月份（≤3）：</span>
+        <div class="chart-mini-chips" id="arppu-months"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">国家：</span>
+        <div class="chart-mini-chips" id="arppu-countries"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">媒体：</span>
+        <div class="chart-mini-chips" id="arppu-media"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">产品类型：</span>
+        <div class="chart-mini-chips" id="arppu-products"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="chart" id="chart-arppu"></div>
+
+  <div class="chart-table-section">
+    <div class="chart-table-title">当前筛选 · D0 / D7 ARPPU（月度汇总）</div>
+    <div class="chart-table-wrapper">
+      <table class="chart-table" id="table-arppu"></table>
+    </div>
+  </div>
+</section>
+
 
         <!-- 4. D0 / D7 人均流水（体育 / 游戏 / 总） -->
         <section class="chart-card" id="card-bet-flow-per-user">
