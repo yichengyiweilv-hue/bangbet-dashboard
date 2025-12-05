@@ -2,9 +2,9 @@
   "use strict";
 
   // =========================================================
-  // Global config
+  // Common: “全选但不区分”
   // =========================================================
-  const MERGE_VALUE = "__ALL_MERGED__"; // “全选但不区分”
+  const MERGE_VALUE = "__ALL_MERGED__";
   const MERGE_LABEL = "全选但不区分";
 
   // =========================================================
@@ -89,7 +89,7 @@
     return MONTH_COLOR_MAP[month] || BASE_PALETTE[idx % BASE_PALETTE.length];
   }
 
-  // 国家固定色（保证跨图一致）
+  // 国家固定色（跨图一致，国家维度用）
   const COUNTRY_COLOR_MAP = { GH: "#2563eb", KE: "#16a34a", NG: "#f97316", TZ: "#db2777", UG: "#7c3aed" };
   function getColorForCountry(country, idx) {
     return COUNTRY_COLOR_MAP[country] || BASE_PALETTE[idx % BASE_PALETTE.length];
@@ -191,7 +191,7 @@
     const vals = Array.isArray(values) ? values.slice() : [];
     const st = Array.isArray(stateArray) ? stateArray : [];
 
-    // init state
+    // init selection
     if (st.length === 0) {
       if (Array.isArray(preselectValues) && preselectValues.length) {
         st.push(...preselectValues);
@@ -206,12 +206,11 @@
       }
     }
 
-    // Normalize: if merge selected, keep only it
+    // normalize: merge is exclusive
     if (mergeValue && st.includes(mergeValue)) {
       st.length = 0;
       st.push(mergeValue);
     } else {
-      // de-dup
       const uniq = Array.from(new Set(st));
       st.length = 0;
       st.push(...uniq);
@@ -235,12 +234,12 @@
       input.type = "checkbox";
       input.value = value;
 
-      const label =
-        mergeValue && value === mergeValue
-          ? (mergeLabel || MERGE_LABEL)
-          : typeof getLabel === "function"
-            ? getLabel(value, idx)
-            : String(value);
+      const isMerge = mergeValue && value === mergeValue;
+      const label = isMerge
+        ? mergeLabel || MERGE_LABEL
+        : typeof getLabel === "function"
+          ? getLabel(value, idx)
+          : String(value);
 
       const selected = st.includes(value);
       input.checked = selected;
@@ -252,44 +251,42 @@
       itemMap.set(value, { input, labelEl });
 
       input.addEventListener("change", () => {
-        const isMerge = mergeValue && value === mergeValue;
+        const exists = st.indexOf(value);
 
         if (isMerge) {
           if (input.checked) {
-            // switch to merged-only
+            // switch to merge-only
             st.length = 0;
             st.push(mergeValue);
-
             vals.forEach((v) => {
-              if (v === mergeValue) return;
-              setChecked(v, false);
+              if (v === mergeValue) setChecked(v, true);
+              else setChecked(v, false);
             });
-            setChecked(mergeValue, true);
           } else {
-            // uncheck merge => select all normal values (保持“全选”语义)
+            // uncheck merge => select all normal values
             const normal = vals.filter((v) => v !== mergeValue);
-
             st.length = 0;
-            // if there is a max constraint, pick first max normals
+
+            // respect max if provided
             const chosen = max ? normal.slice(0, max) : normal.slice();
             st.push(...chosen);
 
             setChecked(mergeValue, false);
             normal.forEach((v) => setChecked(v, st.includes(v)));
           }
+
           if (typeof onChange === "function") onChange();
           return;
         }
 
-        // normal value clicked
         if (input.checked) {
-          // if merge checked, remove merge
+          // remove merge if present
           if (mergeValue && st.includes(mergeValue)) {
             st.splice(st.indexOf(mergeValue), 1);
             setChecked(mergeValue, false);
           }
 
-          if (!st.includes(value)) {
+          if (exists === -1) {
             if (max && st.length >= max) {
               // exceed max => rollback
               setChecked(value, false);
@@ -300,11 +297,10 @@
           setChecked(value, true);
         } else {
           // uncheck
-          const i = st.indexOf(value);
-          if (i !== -1) st.splice(i, 1);
+          if (exists !== -1) st.splice(exists, 1);
 
           if (min && st.length < min) {
-            // rollback
+            // below min => rollback
             st.push(value);
             setChecked(value, true);
             return;
@@ -318,12 +314,9 @@
       container.appendChild(labelEl);
     });
 
-    // Ensure UI reflects merge mode
+    // reflect merge-only state
     if (mergeValue && st.includes(mergeValue)) {
-      vals.forEach((v) => {
-        if (v === mergeValue) setChecked(v, true);
-        else setChecked(v, false);
-      });
+      vals.forEach((v) => setChecked(v, v === mergeValue));
     }
 
     if (typeof onChange === "function") onChange();
@@ -333,6 +326,7 @@
     return Array.isArray(selected) && selected.length ? selected : (Array.isArray(allValues) ? allValues : []);
   }
 
+  // mode helper: selection + merge flag
   function getMode(selectedArr, allValues) {
     const arr = Array.isArray(selectedArr) ? selectedArr : [];
     const merge = arr.includes(MERGE_VALUE);
@@ -381,12 +375,7 @@
   }
 
   function initAgg() {
-    return {
-      spent: 0,
-      registration: 0,
-      d0_payers: 0,
-      d7_payers: 0,
-    };
+    return { spent: 0, registration: 0, d0_payers: 0, d7_payers: 0 };
   }
 
   function addAgg(agg, row) {
@@ -464,13 +453,15 @@
 
   function sortGroupKeys(keys) {
     const rank = (x) => (x === "ALL" ? "zzzz_ALL" : x);
-    return (keys || []).slice().sort((a, b) => {
-      const [ac, am, ap] = String(a || "").split("||");
-      const [bc, bm, bp] = String(b || "").split("||");
-      if (rank(ac) !== rank(bc)) return rank(ac).localeCompare(rank(bc));
-      if (rank(am) !== rank(bm)) return rank(am).localeCompare(rank(bm));
-      return rank(ap).localeCompare(rank(bp));
-    });
+    return (keys || [])
+      .slice()
+      .sort((a, b) => {
+        const [ac, am, ap] = String(a || "").split("||");
+        const [bc, bm, bp] = String(b || "").split("||");
+        if (rank(ac) !== rank(bc)) return rank(ac).localeCompare(rank(bc));
+        if (rank(am) !== rank(bm)) return rank(am).localeCompare(rank(bm));
+        return rank(ap).localeCompare(rank(bp));
+      });
   }
 
   // =========================================================
@@ -495,29 +486,42 @@
   // =========================================================
   // Module 01: Paid registrations & CPR
   // =========================================================
-  function updateTablePaidReg(months, countries, showReg, showCpr, monthAgg) {
+  function updateTablePaidReg(months, metrics, view, splitFlagsForTable, monthAgg, metaMap, groupKeysSorted) {
     const table = document.getElementById("table-paidreg");
     if (!table) return;
+
+    const showReg = metrics.includes("reg");
+    const showCpr = metrics.includes("cpr");
 
     table.innerHTML = "";
 
     const thead = document.createElement("thead");
     const trh = document.createElement("tr");
 
-    const th0 = document.createElement("th");
-    th0.textContent = "国家";
-    trh.appendChild(th0);
+    const thCountry = document.createElement("th");
+    thCountry.textContent = "国家";
+    trh.appendChild(thCountry);
+
+    if (view === "line") {
+      const thMedia = document.createElement("th");
+      thMedia.textContent = "媒体";
+      trh.appendChild(thMedia);
+
+      const thProd = document.createElement("th");
+      thProd.textContent = "产品类型";
+      trh.appendChild(thProd);
+    }
 
     months.forEach((m) => {
-      const label = m;
+      const ml = fmtMonthShort(m);
       if (showReg) {
         const th = document.createElement("th");
-        th.textContent = `${label} 注册数`;
+        th.textContent = `${ml} 注册数`;
         trh.appendChild(th);
       }
       if (showCpr) {
         const th = document.createElement("th");
-        th.textContent = `${label} 注册单价`;
+        th.textContent = `${ml} 注册单价`;
         trh.appendChild(th);
       }
     });
@@ -526,16 +530,27 @@
     table.appendChild(thead);
 
     const tbody = document.createElement("tbody");
-    countries.forEach((c) => {
+
+    groupKeysSorted.forEach((gkey) => {
+      const meta = metaMap.get(gkey) || { country: "ALL", media: "ALL", product: "ALL" };
       const tr = document.createElement("tr");
 
       const tdC = document.createElement("td");
-      tdC.textContent = c;
+      tdC.textContent = meta.country;
       tr.appendChild(tdC);
 
+      if (view === "line") {
+        const tdM = document.createElement("td");
+        tdM.textContent = splitFlagsForTable.splitMedia ? meta.media.toUpperCase() : "ALL";
+        tr.appendChild(tdM);
+
+        const tdP = document.createElement("td");
+        tdP.textContent = splitFlagsForTable.splitProduct ? meta.product : "ALL";
+        tr.appendChild(tdP);
+      }
+
       months.forEach((m) => {
-        const key = `${c}||ALL||ALL`;
-        const agg = (monthAgg[m] && monthAgg[m][key]) || null;
+        const agg = (monthAgg[m] && monthAgg[m][gkey]) || null;
 
         if (showReg) {
           const td = document.createElement("td");
@@ -543,6 +558,7 @@
           td.textContent = agg ? fmtInt(agg.registration) : "-";
           tr.appendChild(td);
         }
+
         if (showCpr) {
           const td = document.createElement("td");
           td.className = "num";
@@ -561,31 +577,32 @@
   function updateChartPaidReg(chart, st) {
     if (!chart) return;
 
-    // months <= 3, keep ascending for continuity
     let months = selectedOrAll(st.months, ALL_MONTHS).slice(0, 3);
     months = Array.from(new Set(months)).sort();
-
-    const countries = selectedOrAll(st.countries, ALL_COUNTRIES).slice().sort();
-    const medias = selectedOrAll(st.medias, ALL_MEDIA);
-    const products = selectedOrAll(st.products, ALL_PRODUCTS);
 
     const metrics = selectedOrAll(st.metrics, ["reg"]);
     const showReg = metrics.includes("reg");
     const showCpr = metrics.includes("cpr");
 
+    const countryMode = getMode(st.countries, ALL_COUNTRIES);
+    const mediaMode = getMode(st.medias, ALL_MEDIA);
+    const productMode = getMode(st.products, ALL_PRODUCTS);
+
     const sets = {
-      countries: new Set(countries),
-      media: new Set(medias),
-      product: new Set(products),
+      countries: new Set(countryMode.values),
+      media: new Set(mediaMode.values),
+      product: new Set(productMode.values),
     };
 
-    // group only by country
-    const splitFlags = { splitCountry: true, splitMedia: false, splitProduct: false };
-    const { monthAgg } = aggMonthByGroup(months, sets, splitFlags);
+    const splitFlagsTable =
+      st.view === "line"
+        ? { splitCountry: !countryMode.merge, splitMedia: !mediaMode.merge, splitProduct: !productMode.merge }
+        : { splitCountry: !countryMode.merge, splitMedia: false, splitProduct: false };
 
-    updateTablePaidReg(months, countries, showReg, showCpr, monthAgg);
+    const { monthAgg, meta: metaMonth } = aggMonthByGroup(months, sets, splitFlagsTable);
+    const groupKeysForTable = sortGroupKeys(Array.from(metaMonth.keys()));
+    updateTablePaidReg(months, metrics, st.view, splitFlagsTable, monthAgg, metaMonth, groupKeysForTable);
 
-    // axis
     const yAxis = [];
     if (showReg && showCpr) {
       yAxis.push({
@@ -616,16 +633,22 @@
       });
     }
 
-    // Line (daily): keep country as legend item; reg+cpr share name => toggle together
     if (st.view === "line") {
-      const { dates, index, byGroup } = aggDailyByGroup(months, sets, splitFlags);
+      const splitFlagsLine = { splitCountry: !countryMode.merge, splitMedia: !mediaMode.merge, splitProduct: !productMode.merge };
+      const { dates, index, byGroup, meta } = aggDailyByGroup(months, sets, splitFlagsLine);
+      const groupKeys = sortGroupKeys(Object.keys(byGroup));
+      const legendLabels = groupKeys.map((k) => (meta.get(k) ? meta.get(k).label : k));
 
       const series = [];
-      const meta = []; // seriesIndex -> {metric, country}
+      const sMeta = []; // seriesIndex -> {metric,label}
 
-      countries.forEach((c, idxC) => {
-        const color = getColorForCountry(c, idxC);
-        const gkey = `${c}||ALL||ALL`;
+      groupKeys.forEach((gkey, idxG) => {
+        const info = meta.get(gkey) || { label: gkey, country: "ALL" };
+        const label = info.label;
+
+        const useCountryColor = splitFlagsLine.splitCountry && !splitFlagsLine.splitMedia && !splitFlagsLine.splitProduct;
+        const color = useCountryColor ? getColorForCountry(info.country, idxG) : getColorForGroup(gkey);
+
         const map = byGroup[gkey] || {};
 
         if (showReg) {
@@ -635,8 +658,9 @@
             if (i == null) return;
             data[i] = map[d].registration;
           });
+
           series.push({
-            name: c,
+            name: label,
             type: "line",
             yAxisIndex: 0,
             smooth: true,
@@ -646,7 +670,7 @@
             itemStyle: { color },
             data,
           });
-          meta.push({ metric: "reg", country: c });
+          sMeta.push({ metric: "reg", label });
         }
 
         if (showCpr) {
@@ -656,8 +680,9 @@
             if (i == null) return;
             data[i] = calcCPR(map[d].spent, map[d].registration);
           });
+
           series.push({
-            name: c, // same name
+            name: label,
             type: "line",
             yAxisIndex: showReg ? 1 : 0,
             smooth: true,
@@ -667,13 +692,13 @@
             itemStyle: { color },
             data,
           });
-          meta.push({ metric: "cpr", country: c });
+          sMeta.push({ metric: "cpr", label });
         }
       });
 
       chart.setOption(
         {
-          legend: { type: "scroll", data: countries },
+          legend: { type: "scroll", data: Array.from(new Set(legendLabels)) },
           grid: { left: 52, right: showReg && showCpr ? 60 : 22, top: 40, bottom: 42, containLabel: true },
           tooltip: {
             trigger: "axis",
@@ -686,25 +711,27 @@
               if (!params || !params.length) return "";
               const axisValue = params[0].axisValue;
 
-              const byC = new Map();
+              const byLabel = new Map();
               params.forEach((p) => {
-                const m = meta[p.seriesIndex] || {};
-                const c = m.country || p.seriesName || "-";
-                if (!byC.has(c)) byC.set(c, { marker: p.marker, reg: null, cpr: null });
-                const g = byC.get(c);
+                const m = sMeta[p.seriesIndex] || {};
+                const label = m.label || p.seriesName || "-";
+                if (!byLabel.has(label)) byLabel.set(label, { marker: p.marker, reg: null, cpr: null });
+                const g = byLabel.get(label);
                 if (m.metric === "reg") g.reg = p.value;
                 if (m.metric === "cpr") g.cpr = p.value;
               });
 
               const lines = [];
               lines.push(`<div style="font-weight:700;margin-bottom:4px;">日期：${axisValue}</div>`);
-              countries.forEach((c) => {
-                const g = byC.get(c);
+              groupKeys.forEach((gkey) => {
+                const info = meta.get(gkey);
+                const label = info ? info.label : gkey;
+                const g = byLabel.get(label);
                 if (!g) return;
                 const parts = [];
                 if (showReg) parts.push(`注册数 ${fmtInt(g.reg)}`);
                 if (showCpr) parts.push(`注册单价 ${fmtUSD(g.cpr)}`);
-                lines.push(`${g.marker || ""} ${c} · ${parts.join(" / ")}`);
+                lines.push(`${g.marker || ""} ${label} · ${parts.join(" / ")}`);
               });
               return lines.join("<br/>");
             },
@@ -718,40 +745,42 @@
       return;
     }
 
-    // Bar (monthly): x = month, series = country (reg bars + CPR dashed line)
-    const xMonths = months;
-    const series = [];
-    const meta = []; // seriesIndex -> {metric, country}
+    const splitFlagsBar = { splitCountry: !countryMode.merge, splitMedia: false, splitProduct: false };
+    const { monthAgg: monthAggBar } = aggMonthByGroup(months, sets, splitFlagsBar);
 
-    countries.forEach((c, idxC) => {
-      const color = getColorForCountry(c, idxC);
+    const xCountries = countryMode.merge ? ["ALL"] : countryMode.values.slice().sort();
+    const monthLabels = months.map((m) => fmtMonthShort(m));
+
+    const series = [];
+    const sMeta = []; // seriesIndex -> {metric, monthLabel}
+
+    months.forEach((m, idxM) => {
+      const ml = fmtMonthShort(m);
+      const color = getColorForMonth(m, idxM);
+
+      const buildAgg = (country) => {
+        const key = `${country}||ALL||ALL`;
+        return (monthAggBar[m] && monthAggBar[m][key]) || null;
+      };
 
       if (showReg) {
-        const data = xMonths.map((m) => {
-          const key = `${c}||ALL||ALL`;
-          const agg = (monthAgg[m] && monthAgg[m][key]) || null;
-          return agg ? agg.registration : null;
-        });
         series.push({
-          name: c,
+          name: ml,
           type: "bar",
           yAxisIndex: 0,
           barMaxWidth: 18,
           itemStyle: { color, borderRadius: [6, 6, 0, 0] },
-          data,
+          data: xCountries.map((c) => {
+            const agg = buildAgg(c);
+            return agg ? agg.registration : null;
+          }),
         });
-        meta.push({ metric: "reg", country: c });
+        sMeta.push({ metric: "reg", monthLabel: ml });
       }
 
       if (showCpr) {
-        const data = xMonths.map((m) => {
-          const key = `${c}||ALL||ALL`;
-          const agg = (monthAgg[m] && monthAgg[m][key]) || null;
-          return agg ? calcCPR(agg.spent, agg.registration) : null;
-        });
-
         series.push({
-          name: c, // same
+          name: ml,
           type: showReg ? "line" : "bar",
           yAxisIndex: showReg ? 1 : 0,
           smooth: true,
@@ -759,15 +788,18 @@
           symbolSize: 6,
           lineStyle: showReg ? { width: 2, type: "dashed", color } : undefined,
           itemStyle: { color, borderRadius: showReg ? undefined : [6, 6, 0, 0] },
-          data,
+          data: xCountries.map((c) => {
+            const agg = buildAgg(c);
+            return agg ? calcCPR(agg.spent, agg.registration) : null;
+          }),
         });
-        meta.push({ metric: "cpr", country: c });
+        sMeta.push({ metric: "cpr", monthLabel: ml });
       }
     });
 
     chart.setOption(
       {
-        legend: { type: "scroll", data: countries },
+        legend: { type: "scroll", data: monthLabels },
         grid: { left: 48, right: showReg && showCpr ? 60 : 22, top: 40, bottom: 42, containLabel: true },
         tooltip: {
           trigger: "axis",
@@ -778,32 +810,32 @@
           textStyle: { color: "#0f172a", fontSize: 12 },
           formatter: (params) => {
             if (!params || !params.length) return "";
-            const month = params[0].axisValue;
+            const country = params[0].axisValue;
 
-            const byC = new Map();
+            const byMonth = new Map();
             params.forEach((p) => {
-              const m = meta[p.seriesIndex] || {};
-              const c = m.country || p.seriesName || "-";
-              if (!byC.has(c)) byC.set(c, { marker: p.marker, reg: null, cpr: null });
-              const g = byC.get(c);
+              const m = sMeta[p.seriesIndex] || {};
+              const ml = m.monthLabel || p.seriesName || "-";
+              if (!byMonth.has(ml)) byMonth.set(ml, { marker: p.marker, reg: null, cpr: null });
+              const g = byMonth.get(ml);
               if (m.metric === "reg") g.reg = p.value;
               if (m.metric === "cpr") g.cpr = p.value;
             });
 
             const lines = [];
-            lines.push(`<div style="font-weight:700;margin-bottom:4px;">月份：${month}</div>`);
-            countries.forEach((c) => {
-              const g = byC.get(c);
+            lines.push(`<div style="font-weight:700;margin-bottom:4px;">国家：${country}</div>`);
+            monthLabels.forEach((ml) => {
+              const g = byMonth.get(ml);
               if (!g) return;
               const parts = [];
               if (showReg) parts.push(`注册数 ${fmtInt(g.reg)}`);
               if (showCpr) parts.push(`注册单价 ${fmtUSD(g.cpr)}`);
-              lines.push(`${g.marker || ""} ${c} · ${parts.join(" / ")}`);
+              lines.push(`${g.marker || ""} ${ml} · ${parts.join(" / ")}`);
             });
             return lines.join("<br/>");
           },
         },
-        xAxis: { type: "category", data: xMonths },
+        xAxis: { type: "category", data: xCountries },
         yAxis,
         series,
       },
@@ -816,6 +848,7 @@
     if (!dom || !window.echarts) return;
 
     const chart = echarts.init(dom);
+
     const st = { view: "bar", months: [], countries: [], medias: [], products: [], metrics: [] };
 
     bindRadio("paidreg-view", st, "view", () => updateChartPaidReg(chart, st));
@@ -833,31 +866,37 @@
 
     createMultiSelectChips({
       containerId: "paidreg-countries",
-      values: ALL_COUNTRIES,
+      values: [MERGE_VALUE, ...ALL_COUNTRIES],
       getLabel: (c) => c,
       stateArray: st.countries,
       min: 1,
-      preselect: "all",
+      preselectValues: ALL_COUNTRIES.slice(),
+      mergeValue: MERGE_VALUE,
+      mergeLabel: MERGE_LABEL,
       onChange: () => updateChartPaidReg(chart, st),
     });
 
     createMultiSelectChips({
       containerId: "paidreg-media",
-      values: ALL_MEDIA,
+      values: [MERGE_VALUE, ...ALL_MEDIA],
       getLabel: (m) => (m === "unknown" ? "UNKNOWN" : m.toUpperCase()),
       stateArray: st.medias,
       min: 1,
-      preselect: "all",
+      preselectValues: ALL_MEDIA.slice(), // 默认拆线
+      mergeValue: MERGE_VALUE,
+      mergeLabel: MERGE_LABEL,
       onChange: () => updateChartPaidReg(chart, st),
     });
 
     createMultiSelectChips({
       containerId: "paidreg-products",
-      values: ALL_PRODUCTS,
+      values: [MERGE_VALUE, ...ALL_PRODUCTS],
       getLabel: (p) => (p === "unknown" ? "UNKNOWN" : p),
       stateArray: st.products,
       min: 1,
-      preselect: "all",
+      preselectValues: ALL_PRODUCTS.slice(), // 默认拆线
+      mergeValue: MERGE_VALUE,
+      mergeLabel: MERGE_LABEL,
       onChange: () => updateChartPaidReg(chart, st),
     });
 
@@ -868,7 +907,7 @@
       stateArray: st.metrics,
       max: 2,
       min: 1,
-      preselect: 1,
+      preselectValues: ["reg"],
       onChange: () => updateChartPaidReg(chart, st),
     });
 
@@ -877,7 +916,7 @@
   }
 
   // =========================================================
-  // Module 02: D0/D7 Pay rate (optimized)
+  // Module 02: D0/D7 Pay rate
   // =========================================================
   function updateTablePayRate(months, metrics, view, splitFlagsForTable, monthAgg, metaMap, groupKeysSorted) {
     const table = document.getElementById("table-payrate");
@@ -946,6 +985,7 @@
       months.forEach((m) => {
         const agg = (monthAgg[m] && monthAgg[m][gkey]) || null;
         const reg = agg ? agg.registration : null;
+
         const v0 = agg ? calcRatePct(agg.d0_payers, reg) : null;
         const v7 = agg ? calcRatePct(agg.d7_payers, reg) : null;
 
@@ -975,11 +1015,10 @@
     let months = selectedOrAll(st.months, ALL_MONTHS).slice(0, 3);
     months = Array.from(new Set(months)).sort();
 
-    const metrics = selectedOrAll(st.metrics, ["d0"]);
+    const metrics = selectedOrAll(st.metrics, ["d0", "d7"]);
     const showD0 = metrics.includes("d0");
     const showD7 = metrics.includes("d7");
 
-    // modes with “全选但不区分”
     const countryMode = getMode(st.countries, ALL_COUNTRIES);
     const mediaMode = getMode(st.medias, ALL_MEDIA);
     const productMode = getMode(st.products, ALL_PRODUCTS);
@@ -990,7 +1029,6 @@
       product: new Set(productMode.values),
     };
 
-    // Table split flags: line follows merge flags; bar only splits country
     const splitFlagsTable =
       st.view === "line"
         ? { splitCountry: !countryMode.merge, splitMedia: !mediaMode.merge, splitProduct: !productMode.merge }
@@ -1009,30 +1047,23 @@
       },
     ];
 
-    // LINE (daily): split by (country/media/product) unless “全选但不区分” is checked
     if (st.view === "line") {
-      const splitFlagsLine = {
-        splitCountry: !countryMode.merge,
-        splitMedia: !mediaMode.merge,
-        splitProduct: !productMode.merge,
-      };
-
+      const splitFlagsLine = { splitCountry: !countryMode.merge, splitMedia: !mediaMode.merge, splitProduct: !productMode.merge };
       const { dates, index, byGroup, meta } = aggDailyByGroup(months, sets, splitFlagsLine);
       const groupKeys = sortGroupKeys(Object.keys(byGroup));
-
       const legendLabels = groupKeys.map((k) => (meta.get(k) ? meta.get(k).label : k));
 
       const series = [];
-      const sMeta = []; // seriesIndex -> {metric, label, key}
+      const sMeta = []; // seriesIndex -> {metric,label}
 
       groupKeys.forEach((gkey) => {
         const info = meta.get(gkey) || { label: gkey };
         const label = info.label;
         const color = getColorForGroup(gkey);
+        const map = byGroup[gkey] || {};
 
         if (showD0) {
           const data = new Array(dates.length).fill(null);
-          const map = byGroup[gkey] || {};
           Object.keys(map).forEach((d) => {
             const i = index.get(d);
             if (i == null) return;
@@ -1050,12 +1081,11 @@
             itemStyle: { color },
             data,
           });
-          sMeta.push({ metric: "d0", label, key: gkey });
+          sMeta.push({ metric: "d0", label });
         }
 
         if (showD7) {
           const data = new Array(dates.length).fill(null);
-          const map = byGroup[gkey] || {};
           Object.keys(map).forEach((d) => {
             const i = index.get(d);
             if (i == null) return;
@@ -1063,7 +1093,7 @@
           });
 
           series.push({
-            name: label, // same name => legend toggles both
+            name: label,
             type: "line",
             yAxisIndex: 0,
             smooth: true,
@@ -1073,7 +1103,7 @@
             itemStyle: { color },
             data,
           });
-          sMeta.push({ metric: "d7", label, key: gkey });
+          sMeta.push({ metric: "d7", label });
         }
       });
 
@@ -1126,18 +1156,17 @@
       return;
     }
 
-    // BAR (monthly): per country, order = 9月D0, 9月D7, 10月D0, 10月D7...
     const splitFlagsBar = { splitCountry: !countryMode.merge, splitMedia: false, splitProduct: false };
     const { monthAgg: monthAggBar } = aggMonthByGroup(months, sets, splitFlagsBar);
 
     const xCountries = countryMode.merge ? ["ALL"] : countryMode.values.slice().sort();
-    const legendData = months.map((m) => fmtMonthShort(m)); // one legend item per month
+    const monthLabels = months.map((m) => fmtMonthShort(m));
 
     const series = [];
     const sMeta = []; // seriesIndex -> {monthLabel, metric}
 
     months.forEach((m, idxM) => {
-      const monthLabel = fmtMonthShort(m);
+      const ml = fmtMonthShort(m);
       const color = getColorForMonth(m, idxM);
 
       const buildData = (metric) =>
@@ -1145,13 +1174,12 @@
           const key = `${c}||ALL||ALL`;
           const agg = (monthAggBar[m] && monthAggBar[m][key]) || null;
           if (!agg) return null;
-          const reg = agg.registration;
-          return metric === "d0" ? calcRatePct(agg.d0_payers, reg) : calcRatePct(agg.d7_payers, reg);
+          return metric === "d0" ? calcRatePct(agg.d0_payers, agg.registration) : calcRatePct(agg.d7_payers, agg.registration);
         });
 
       if (showD0) {
         series.push({
-          name: monthLabel, // same name => legend toggles both D0/D7
+          name: ml,
           type: "bar",
           yAxisIndex: 0,
           barMaxWidth: 12,
@@ -1159,12 +1187,12 @@
           itemStyle: { color, borderRadius: [6, 6, 0, 0] },
           data: buildData("d0"),
         });
-        sMeta.push({ monthLabel, metric: "d0" });
+        sMeta.push({ monthLabel: ml, metric: "d0" });
       }
 
       if (showD7) {
         series.push({
-          name: monthLabel,
+          name: ml,
           type: "bar",
           yAxisIndex: 0,
           barMaxWidth: 12,
@@ -1172,19 +1200,30 @@
           itemStyle: {
             color,
             borderRadius: [6, 6, 0, 0],
-            shadowBlur: 10,
-            shadowColor: "rgba(15,23,42,0.20)",
-            shadowOffsetY: 2,
+            shadowBlur: 18,
+            shadowColor: "rgba(15,23,42,0.28)",
+            shadowOffsetX: 2,
+            shadowOffsetY: 6,
+            borderWidth: 1,
+            borderColor: "rgba(15,23,42,0.18)",
+            decal: {
+              symbol: "rect",
+              symbolSize: 1,
+              dashArrayX: [1, 0],
+              dashArrayY: [4, 2],
+              rotation: Math.PI / 4,
+              color: "rgba(15,23,42,0.22)",
+            },
           },
           data: buildData("d7"),
         });
-        sMeta.push({ monthLabel, metric: "d7" });
+        sMeta.push({ monthLabel: ml, metric: "d7" });
       }
     });
 
     chart.setOption(
       {
-        legend: { type: "scroll", data: legendData },
+        legend: { type: "scroll", data: monthLabels },
         grid: { left: 52, right: 22, top: 40, bottom: 42, containLabel: true },
         tooltip: {
           trigger: "axis",
@@ -1197,7 +1236,7 @@
             if (!params || !params.length) return "";
             const country = params[0].axisValue;
 
-            const byMonth = new Map(); // monthLabel -> {d0,d7,marker}
+            const byMonth = new Map();
             params.forEach((p) => {
               const m = sMeta[p.seriesIndex] || {};
               const ml = m.monthLabel || p.seriesName || "-";
@@ -1209,8 +1248,7 @@
 
             const lines = [];
             lines.push(`<div style="font-weight:700;margin-bottom:4px;">国家：${country}</div>`);
-            months.forEach((mm) => {
-              const ml = fmtMonthShort(mm);
+            monthLabels.forEach((ml) => {
               const g = byMonth.get(ml);
               if (!g) return;
               const parts = [];
@@ -1235,14 +1273,7 @@
 
     const chart = echarts.init(dom);
 
-    const st = {
-      view: "bar",
-      months: [],
-      countries: [],
-      medias: [],
-      products: [],
-      metrics: [],
-    };
+    const st = { view: "bar", months: [], countries: [], medias: [], products: [], metrics: [] };
 
     bindRadio("payrate-view", st, "view", () => updateChartPayRate(chart, st));
 
@@ -1257,7 +1288,6 @@
       onChange: () => updateChartPayRate(chart, st),
     });
 
-    // 国家：默认全选且区分（不勾 merge）
     createMultiSelectChips({
       containerId: "payrate-countries",
       values: [MERGE_VALUE, ...ALL_COUNTRIES],
@@ -1270,7 +1300,6 @@
       onChange: () => updateChartPayRate(chart, st),
     });
 
-    // 媒体：默认勾 merge（全选但不区分）
     createMultiSelectChips({
       containerId: "payrate-media",
       values: [MERGE_VALUE, ...ALL_MEDIA],
@@ -1283,7 +1312,6 @@
       onChange: () => updateChartPayRate(chart, st),
     });
 
-    // 产品：默认勾 merge（全选但不区分）
     createMultiSelectChips({
       containerId: "payrate-products",
       values: [MERGE_VALUE, ...ALL_PRODUCTS],
@@ -1316,7 +1344,6 @@
   // =========================================================
   document.addEventListener("DOMContentLoaded", () => {
     if (!ALL_MONTHS.length) return;
-
     initModule01();
     initModule02();
   });
