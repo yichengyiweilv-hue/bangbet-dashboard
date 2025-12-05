@@ -591,36 +591,64 @@
 </section>
 
 
-        <!-- 2. D0 / D7 付费率 -->
-        <section class="chart-card" id="card-paid-conversion">
-          <header class="chart-card-header">
-            <div class="chart-title-block">
-              <div class="chart-kicker">Monetization</div>
-              <div class="chart-title">D0 / D7 付费率</div>
-              <div class="chart-sub">
-                占位：D0_unique_purchase/registration 与 D7_unique_purchase/registration。
-              </div>
-            </div>
-            <div class="chart-controls">
-              <span class="chart-badge">单位：%</span>
-            </div>
-          </header>
+        <!-- MODULE-02: D0/D7 PAY RATE (keep IDs) -->
+<section class="chart-card" id="card-payrate">
+  <header class="chart-card-header">
+    <div class="chart-title-block">
+      <div class="chart-kicker">Monetization</div>
+      <div class="chart-title">D0 / D7 付费率</div>
+      <div class="chart-sub">
+        口径：D0付费率 = ΣD0_unique_purchase / Σregistration（%），D7同理（%）。日级折线支持跨月连续（同一国家一条线）。
+      </div>
+    </div>
 
-          <div class="chart" id="chart-paid-conversion" data-placeholder="D0 / D7 付费率"></div>
+    <div class="chart-controls">
+      <span class="chart-badge">单位：%</span>
 
-          <div class="chart-table-wrapper">
-            <table id="table-paid-conversion" class="chart-table"></table>
-          </div>
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">视图：</span>
+        <div class="chart-mini-radio">
+          <label><input type="radio" name="payrate-view" value="bar" checked />柱状（月度）</label>
+          <label><input type="radio" name="payrate-view" value="line" />折线（日度）</label>
+        </div>
+      </div>
 
-          <div class="chart-comment" data-comment-key="paid-conversion">
-            <div class="chart-comment-label"><span>我的备注（付费率）</span></div>
-            <textarea placeholder="例如：首充活动、落地页改版、支付通道、国家结构变化、投放人群变化等"></textarea>
-            <div class="comment-actions">
-              <button type="button" class="btn-save">保存备注</button>
-              <span class="comment-status">备注保存在浏览器本地，并写入当前链接；保存后复制地址栏即可分享。</span>
-            </div>
-          </div>
-        </section>
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">月份（≤3）：</span>
+        <div class="chart-mini-chips" id="payrate-months"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">国家：</span>
+        <div class="chart-mini-chips" id="payrate-countries"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">媒体：</span>
+        <div class="chart-mini-chips" id="payrate-media"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">产品类型：</span>
+        <div class="chart-mini-chips" id="payrate-products"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">指标：</span>
+        <div class="chart-mini-chips" id="payrate-metrics"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="chart" id="chart-payrate"></div>
+
+  <div class="chart-table-section">
+    <div class="chart-table-title">当前筛选 · D0 / D7 付费率（月度汇总）</div>
+    <div class="chart-table-wrapper">
+      <table class="chart-table" id="table-payrate"></table>
+    </div>
+  </div>
+</section>
 
         <!-- 3. D0 / D7 ARPPU -->
         <section class="chart-card" id="card-arppu">
