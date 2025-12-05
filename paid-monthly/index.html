@@ -532,47 +532,55 @@
       </section>
 
       <main class="content">
-        <!-- 1. 自然量 vs 买量注册量 -->
-        <section class="chart-card" id="card-org-vs-paid-registrations">
-          <header class="chart-card-header">
-            <div class="chart-title-block">
-              <div class="chart-kicker">Acquisition</div>
-              <div class="chart-title">自然量 vs 买量注册量</div>
-              <div class="chart-sub">
-                占位：月度对比（自然/买量）+ 可切日维度趋势；后续补注册单价（USD/Reg）。
-              </div>
-            </div>
-            <div class="chart-controls">
-              <span class="chart-badge">单位：人（注册）</span>
-            </div>
-          </header>
+        <!-- MODULE-01: PAID REG & CPR (keep IDs) -->
+<section class="chart-card" id="card-paidreg">
+  <header class="chart-card-header">
+    <div class="chart-title-block">
+      <div class="chart-kicker">Acquisition</div>
+      <div class="chart-title">买量注册数、注册单价</div>
+      <div class="chart-sub">
+        注册单价 = Spend / Registration（USD/人）。月度柱状图：按国家对比所选月份；日级折线：跨月连续（同一国家一条线）。
+      </div>
+    </div>
 
-          <div
-            class="chart"
-            id="chart-org-vs-paid-registrations"
-            data-placeholder="自然量 vs 买量注册量"
-          ></div>
+    <div class="chart-controls">
+      <span class="chart-badge">单位：人（注册） / USD（注册单价）</span>
 
-          <div class="chart-summary">
-            <strong>待接入：</strong>自然量数据源（RAW_ORGANIC_BY_MONTH）与买量数据源（RAW_PAID_BY_MONTH）对齐到同一国家/月份口径。
-          </div>
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">视图：</span>
+        <div class="chart-mini-radio">
+          <label><input type="radio" name="paidreg-view" value="bar" checked />柱状（月度）</label>
+          <label><input type="radio" name="paidreg-view" value="line" />折线（日度）</label>
+        </div>
+      </div>
 
-          <div class="chart-table-wrapper">
-            <table
-              id="table-org-vs-paid-registrations"
-              class="chart-table"
-            ></table>
-          </div>
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">月份（≤3）：</span>
+        <div class="chart-mini-chips" id="paidreg-months"></div>
+      </div>
 
-          <div class="chart-comment" data-comment-key="org-vs-paid-registrations">
-            <div class="chart-comment-label"><span>我的备注（注册规模 / 成本）</span></div>
-            <textarea placeholder="例如：预算波动、素材迭代、归因变更、渠道限量/放量、自然占比变化等"></textarea>
-            <div class="comment-actions">
-              <button type="button" class="btn-save">保存备注</button>
-              <span class="comment-status">备注保存在浏览器本地，并写入当前链接；保存后复制地址栏即可分享。</span>
-            </div>
-          </div>
-        </section>
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">国家：</span>
+        <div class="chart-mini-chips" id="paidreg-countries"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">指标：</span>
+        <div class="chart-mini-chips" id="paidreg-metrics"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="chart" id="chart-paidreg"></div>
+
+  <div class="chart-table-section">
+    <div class="chart-table-title">当前筛选 · 买量注册数 & 注册单价（月度汇总）</div>
+    <div class="chart-table-wrapper">
+      <table class="chart-table" id="table-paidreg"></table>
+    </div>
+  </div>
+</section>
+
 
         <!-- 2. D0 / D7 付费率 -->
         <section class="chart-card" id="card-paid-conversion">
@@ -753,7 +761,7 @@
 
     <!-- Source data -->
     <script src="paid-data.js"></script>
-
+<script src="./paid-dashboard.js"></script>
     <script>
       // ===========================
       // 0. 占位态（还没接入图表逻辑时先把卡片撑起来）
