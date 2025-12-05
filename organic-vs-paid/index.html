@@ -1528,40 +1528,59 @@
 </section>
 
 
-        <!-- 2. D0 / D7 付费率 -->
-        <section class="chart-card" id="card-payrate">
-          <header class="chart-card-header">
-            <div class="chart-title-block">
-              <div class="chart-kicker">Monetization</div>
-              <div class="chart-title">D0 / D7 付费率</div>
-              <div class="chart-sub">
-                空位：付费率 = D0_unique_purchase/registration 与 D7_unique_purchase/registration；自然 vs 买量对比。
-              </div>
-            </div>
-            <div class="chart-controls">
-              <span class="chart-badge">单位：%（pay rate）</span>
-              <!-- TODO: 控件区 -->
-            </div>
-          </header>
+        <!-- 2、D0 / D7 付费率（自然 vs 买量） -->
+<section class="chart-card" id="card-payrate">
+  <header class="chart-card-header">
+    <div class="chart-title-row">
+      <div>
+        <div class="chart-title">2、D0 / D7 付费率</div>
+        <div class="chart-subtitle">口径：Unique Purchasers ÷ 注册（单位：%）</div>
+      </div>
+    </div>
 
-          <div class="chart chart-coming" id="chart-payrate">
-            <div class="chart-coming-inner">
-              <div class="chart-coming-title">模块待接入</div>
-              <div class="chart-coming-sub">下一步：实现「D0 / D7 付费率」对比（自然 vs 买量）。</div>
-            </div>
-          </div>
+    <div class="chart-controls">
+      <span class="chart-badge">单位：%</span>
 
-          <div class="chart-summary" data-analysis-key="payrate">
-            备注：后续将输出按国家、按媒体的差异诊断与波动原因记录。
-          </div>
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">视图：</span>
+        <div class="chart-mini-radio">
+          <label><input type="radio" name="payrate-view" value="bar" checked />月度柱状图</label>
+          <label><input type="radio" name="payrate-view" value="line" />日级折线图</label>
+        </div>
+      </div>
 
-          <div class="chart-table-section">
-            <div class="chart-table-title">当前筛选 · D0 / D7 付费率（月度）</div>
-            <div class="chart-table-wrapper">
-              <table id="table-payrate" class="chart-table"></table>
-            </div>
-          </div>
-        </section>
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">天数：</span>
+        <div class="chart-mini-radio">
+          <label><input type="radio" name="payrate-day-type" value="both" checked />D0 + D7</label>
+          <label><input type="radio" name="payrate-day-type" value="D0" />仅 D0</label>
+          <label><input type="radio" name="payrate-day-type" value="D7" />仅 D7</label>
+        </div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">月份（单选）：</span>
+        <div class="chart-mini-chips" id="payrate-month"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">国家：</span>
+        <div class="chart-mini-chips" id="payrate-countries"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="chart" id="chart-payrate"></div>
+  <div class="chart-summary" data-analysis-key="payrate"></div>
+
+  <div class="chart-table-section">
+    <div class="chart-table-title">当前筛选 · D0 / D7 付费率（月度汇总，单月）</div>
+    <div class="chart-table-wrapper">
+      <table id="table-payrate" class="chart-table"></table>
+    </div>
+  </div>
+</section>
+
 
         <!-- 3. D0 / D7 ARPPU -->
         <section class="chart-card" id="card-arppu">
@@ -2248,6 +2267,634 @@
   }
 
   document.addEventListener("DOMContentLoaded", initM1);
+})();
+/***********************
+ * 模块2：D0 / D7 付费率（自然 vs 买量）
+ * 口径：D0 付费率 = D0_unique_purchase / registration；D7 同理（输出为 %）
+ ***********************/
+(function () {
+  if (typeof echarts === "undefined") {
+    console.error("[payrate] echarts 未加载");
+    return;
+  }
+
+  // === 0) 数据入口（跟你的 data.js 变量名保持一致） ===
+  const ORGANIC_DATA = window.ORGANIC_DATA || [];
+  const PAID_DATA = window.PAID_DATA || [];
+
+  // === 1) 全局规则（全看板一致） ===
+  const COUNTRY_ORDER = ["GH", "KE", "NG", "TZ", "UG"];
+
+  // 月度柱状：颜色编码“自然 vs 买量”
+  const CHANNEL_COLOR = { organic: "#2563eb", paid: "#f97316" };
+
+  // 日级折线：颜色编码“国家”，线型编码“自然/买量”
+  const COUNTRY_COLOR = {
+    GH: "#2563eb",
+    KE: "#16a34a",
+    NG: "#f97316",
+    TZ: "#7c3aed",
+    UG: "#ef4444",
+  };
+
+  // 先把未来模块需要的数值字段都并进来（不会影响本模块）
+  const NUMERIC_FIELDS = [
+    "spent",
+    "registration",
+    "D0_unique_purchase",
+    "D7_unique_purchase",
+    "D0_PURCHASE_VALUE",
+    "D7_PURCHASE_VALUE",
+    "D0_TOTAL_BET_PLACED_USER",
+    "D7_TOTAL_BET_PLACED_USER",
+    "D0_SPORTS_BET_PLACED_USER",
+    "D0_GAMES_BET_PLACED_USER",
+    "D7_SPORTS_BET_PLACED_USER",
+    "D7_GAMES_BET_PLACED_USER",
+    "D0_SPORTS_BET_FLOW",
+    "D0_GAMES_BET_FLOW",
+    "D0_TOTAL_BET_FLOW",
+    "D7_SPORTS_BET_FLOW",
+    "D7_GAMES_BET_FLOW",
+    "D7_TOTAL_BET_FLOW",
+    "D1_retained_users",
+    "D7_retained_users",
+  ];
+
+  // === 2) 工具函数 ===
+  function toNumber(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function safeDivide(n, d) {
+    return d > 0 ? n / d : null;
+  }
+
+  function getMonthKey(dateStr) {
+    return String(dateStr || "").slice(0, 7);
+  }
+
+  function formatMonthShort(monthKey) {
+    const bits = String(monthKey || "").split("-");
+    if (bits.length !== 2) return String(monthKey || "");
+    return String(Number(bits[1])) + "月";
+  }
+
+  function formatPercent(v) {
+    if (v == null || !Number.isFinite(v)) return "-";
+    return v.toFixed(1) + "%";
+  }
+
+  function getOrderedCountries(selectedArr) {
+    const set = new Set((selectedArr || []).filter(Boolean));
+    const ordered = COUNTRY_ORDER.filter((c) => set.has(c));
+    return ordered.length ? ordered : COUNTRY_ORDER.slice();
+  }
+
+  function mergeSortedUnique(a, b) {
+    const set = new Set([...(a || []), ...(b || [])]);
+    return Array.from(set).sort();
+  }
+
+  // === 3) 索引：month/date × country -> agg ===
+  function emptyAgg() {
+    const obj = {};
+    NUMERIC_FIELDS.forEach((k) => (obj[k] = 0));
+    return obj;
+  }
+
+  function addToAgg(agg, row) {
+    if (!agg || !row) return;
+    NUMERIC_FIELDS.forEach((k) => {
+      if (row[k] != null) agg[k] += toNumber(row[k]);
+    });
+  }
+
+  function buildIndex(rows) {
+    const idx = { monthCountry: {}, dateCountry: {} };
+    (rows || []).forEach((r) => {
+      const date = String(r.date || "");
+      const country = String(r.country || "");
+      if (!date || !country) return;
+
+      const month = getMonthKey(date);
+
+      if (!idx.monthCountry[month]) idx.monthCountry[month] = {};
+      if (!idx.monthCountry[month][country]) idx.monthCountry[month][country] = emptyAgg();
+
+      if (!idx.dateCountry[date]) idx.dateCountry[date] = {};
+      if (!idx.dateCountry[date][country]) idx.dateCountry[date][country] = emptyAgg();
+
+      addToAgg(idx.monthCountry[month][country], r);
+      addToAgg(idx.dateCountry[date][country], r);
+    });
+
+    idx.allMonths = Object.keys(idx.monthCountry).sort();
+    idx.allDates = Object.keys(idx.dateCountry).sort();
+    return idx;
+  }
+
+  // 缓存到 window，后面模块 3/4/5/6 可以直接复用
+  const OVP = (window.__OVP__ = window.__OVP__ || {});
+  OVP.idx = OVP.idx || {
+    organic: buildIndex(ORGANIC_DATA),
+    paid: buildIndex(PAID_DATA),
+  };
+  OVP.allMonths = OVP.allMonths || mergeSortedUnique(OVP.idx.organic.allMonths, OVP.idx.paid.allMonths);
+
+  function getAgg(idx, grain, key, country) {
+    const map = grain === "date" ? idx.dateCountry : idx.monthCountry;
+    return map[key] && map[key][country] ? map[key][country] : null;
+  }
+
+  function payRateFromAgg(agg, dayType) {
+    if (!agg || !Number.isFinite(agg.registration) || agg.registration <= 0) return null;
+    const payers = dayType === "D7" ? toNumber(agg.D7_unique_purchase) : toNumber(agg.D0_unique_purchase);
+    const r = safeDivide(payers, toNumber(agg.registration));
+    return r == null ? null : r * 100; // 0-100
+  }
+
+  function listDatesForMonth(monthKey, countries) {
+    const set = new Set();
+    const cs = countries || COUNTRY_ORDER;
+
+    const addFrom = (idx) => {
+      Object.keys(idx.dateCountry).forEach((date) => {
+        if (!date.startsWith(monthKey)) return;
+        const byCountry = idx.dateCountry[date] || {};
+        for (let i = 0; i < cs.length; i++) {
+          if (byCountry[cs[i]]) {
+            set.add(date);
+            break;
+          }
+        }
+      });
+    };
+
+    addFrom(OVP.idx.organic);
+    addFrom(OVP.idx.paid);
+
+    return Array.from(set).sort();
+  }
+
+  // === 4) Chips：单选月份（新） ===
+  function createSingleSelectChips(options) {
+    const { containerId, values, getLabel, stateObj, stateKey, preselect, onChange } = options || {};
+    const container = document.getElementById(containerId);
+    if (!container || !Array.isArray(values) || !stateObj || !stateKey) return;
+
+    container.innerHTML = "";
+    const radioName = containerId + "-radio";
+
+    // 默认：优先 preselect，否则取最新
+    if (!stateObj[stateKey]) {
+      if (typeof preselect === "string" && values.indexOf(preselect) !== -1) stateObj[stateKey] = preselect;
+      else if (typeof preselect === "number" && values[preselect]) stateObj[stateKey] = values[preselect];
+      else stateObj[stateKey] = values.length ? values[values.length - 1] : "";
+    }
+
+    values.forEach((value, idx) => {
+      const labelEl = document.createElement("label");
+      labelEl.className = "filter-chip";
+
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = radioName;
+      input.value = value;
+
+      const selected = stateObj[stateKey] === value;
+      input.checked = selected;
+      labelEl.classList.toggle("filter-chip-active", selected);
+
+      labelEl.appendChild(input);
+      labelEl.appendChild(document.createTextNode(typeof getLabel === "function" ? getLabel(value, idx) : value));
+
+      input.addEventListener("change", () => {
+        if (!input.checked) return;
+        stateObj[stateKey] = value;
+
+        Array.from(container.querySelectorAll("label.filter-chip")).forEach((lab) =>
+          lab.classList.remove("filter-chip-active")
+        );
+        labelEl.classList.add("filter-chip-active");
+
+        if (typeof onChange === "function") onChange();
+      });
+
+      container.appendChild(labelEl);
+    });
+
+    if (typeof onChange === "function") onChange();
+  }
+
+  // === 5) Multi chips + Radio bind（如果你主文件已有同名函数，可删这一段） ===
+  function createMultiSelectChips(options) {
+    const { containerId, values, getLabel, stateArray, max, preselect, onChange } = options || {};
+    const container = document.getElementById(containerId);
+    if (!container || !Array.isArray(values) || !Array.isArray(stateArray)) return;
+
+    container.innerHTML = "";
+
+    if (stateArray.length === 0) {
+      if (preselect === "all") values.forEach((v) => stateArray.push(v));
+      else if (typeof preselect === "number") {
+        for (let i = 0; i < Math.min(preselect, values.length); i++) stateArray.push(values[i]);
+      }
+    }
+
+    values.forEach((value, idx) => {
+      const labelEl = document.createElement("label");
+      labelEl.className = "filter-chip";
+
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = value;
+
+      const selected = stateArray.indexOf(value) !== -1;
+      input.checked = selected;
+      labelEl.classList.toggle("filter-chip-active", selected);
+
+      labelEl.appendChild(input);
+      labelEl.appendChild(document.createTextNode(typeof getLabel === "function" ? getLabel(value, idx) : value));
+
+      input.addEventListener("change", () => {
+        const existsIndex = stateArray.indexOf(value);
+
+        if (input.checked) {
+          if (max && stateArray.length >= max && existsIndex === -1) {
+            input.checked = false;
+            return;
+          }
+          if (existsIndex === -1) stateArray.push(value);
+        } else {
+          if (existsIndex !== -1) stateArray.splice(existsIndex, 1);
+        }
+
+        labelEl.classList.toggle("filter-chip-active", input.checked);
+        if (typeof onChange === "function") onChange();
+      });
+
+      container.appendChild(labelEl);
+    });
+
+    if (typeof onChange === "function") onChange();
+  }
+
+  function bindRadioGroup(name, stateObj, key, onChange) {
+    const radios = document.querySelectorAll('input[name="' + name + '"]');
+    radios.forEach((r) => {
+      if (r.checked) stateObj[key] = r.value;
+      r.addEventListener("change", () => {
+        if (!r.checked) return;
+        stateObj[key] = r.value;
+        if (typeof onChange === "function") onChange();
+      });
+    });
+  }
+
+  function renderEmptyTable(tableEl, msg) {
+    if (!tableEl) return;
+    tableEl.innerHTML = "<tbody><tr><td>" + (msg || "无数据：请先在上方选择月份和国家") + "</td></tr></tbody>";
+  }
+
+  function renderEmptyChart(chart, msg) {
+    chart.setOption(
+      {
+        title: {
+          text: msg || "无数据",
+          left: "center",
+          top: "middle",
+          textStyle: { fontSize: 12, fontWeight: 500, color: "#64748b" },
+        },
+        xAxis: { show: false },
+        yAxis: { show: false },
+        series: [],
+      },
+      true
+    );
+  }
+
+  // === 6) 月度柱状图 ===
+  function renderPayRateBar(chart, monthKey, countries, dayType) {
+    const monthLabel = formatMonthShort(monthKey);
+    const idxOrg = OVP.idx.organic;
+    const idxPaid = OVP.idx.paid;
+
+    const d0Org = countries.map((c) => payRateFromAgg(getAgg(idxOrg, "month", monthKey, c), "D0"));
+    const d0Paid = countries.map((c) => payRateFromAgg(getAgg(idxPaid, "month", monthKey, c), "D0"));
+    const d7Org = countries.map((c) => payRateFromAgg(getAgg(idxOrg, "month", monthKey, c), "D7"));
+    const d7Paid = countries.map((c) => payRateFromAgg(getAgg(idxPaid, "month", monthKey, c), "D7"));
+
+    const series = [];
+    const barCommon = { type: "bar", barWidth: 10, emphasis: { focus: "series" } };
+
+    if (dayType === "D0" || dayType === "both") {
+      // 顺序固定：自然在左、买量在右
+      series.push({ ...barCommon, name: "自然 D0", data: d0Org, itemStyle: { color: CHANNEL_COLOR.organic } });
+      series.push({ ...barCommon, name: "买量 D0", data: d0Paid, itemStyle: { color: CHANNEL_COLOR.paid } });
+    }
+
+    if (dayType === "D7" || dayType === "both") {
+      const d7Style = { opacity: 0.45 };
+      const d7Decal = { symbol: "rect", dashArrayX: [1, 2], dashArrayY: [1, 2], rotation: Math.PI / 4 };
+
+      series.push({
+        ...barCommon,
+        name: "自然 D7",
+        data: d7Org,
+        itemStyle: { color: CHANNEL_COLOR.organic, ...d7Style },
+        decal: d7Decal,
+      });
+      series.push({
+        ...barCommon,
+        name: "买量 D7",
+        data: d7Paid,
+        itemStyle: { color: CHANNEL_COLOR.paid, ...d7Style },
+        decal: d7Decal,
+      });
+    }
+
+    chart.setOption(
+      {
+        grid: { left: 40, right: 20, top: 50, bottom: 40, containLabel: true },
+        legend: { top: 10, left: 0, itemHeight: 10, itemWidth: 14 },
+        tooltip: {
+          trigger: "axis",
+          axisPointer: { type: "shadow" },
+          formatter: function (params) {
+            const name = (params && params[0] && params[0].axisValue) || "";
+            let html = name + "<br/>";
+            (params || []).forEach((p) => {
+              html += p.marker + p.seriesName + ": " + formatPercent(p.data) + "<br/>";
+            });
+            return html;
+          },
+        },
+        xAxis: {
+          type: "category",
+          data: countries, // 固定为 GH/KE/NG/TZ/UG 相对顺序
+          axisTick: { alignWithLabel: true },
+          axisLabel: { interval: 0 },
+        },
+        yAxis: {
+          type: "value",
+          name: monthLabel + " 付费率",
+          axisLabel: { formatter: (v) => v + "%" },
+          splitLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+        },
+        series,
+      },
+      true
+    );
+  }
+
+  // === 7) 日级折线图 ===
+  function buildLineSeries(monthKey, countries, dayType) {
+    const dates = listDatesForMonth(monthKey, countries);
+    const idxOrg = OVP.idx.organic;
+    const idxPaid = OVP.idx.paid;
+
+    const makeData = (idx, c, dType) => dates.map((dt) => payRateFromAgg(getAgg(idx, "date", dt, c), dType));
+
+    const series = [];
+    countries.forEach((c) => {
+      const color = COUNTRY_COLOR[c] || "#2563eb";
+
+      // 自然：实线
+      series.push({
+        name: c + " 自然",
+        type: "line",
+        data: makeData(idxOrg, c, dayType),
+        showSymbol: false,
+        lineStyle: { width: 2, type: "solid" },
+        itemStyle: { color },
+        emphasis: { focus: "series" },
+      });
+
+      // 买量：虚线
+      series.push({
+        name: c + " 买量",
+        type: "line",
+        data: makeData(idxPaid, c, dayType),
+        showSymbol: false,
+        lineStyle: { width: 2, type: "dashed" },
+        itemStyle: { color },
+        emphasis: { focus: "series" },
+      });
+    });
+
+    return { dates, series };
+  }
+
+  function renderPayRateLine(chart, monthKey, countries, dayType) {
+    const monthLabel = formatMonthShort(monthKey);
+    const dayLabel = (v) => String(v || "").slice(8); // 01-31
+
+    // D0+D7：上下双面板，避免一屏 4 条线/国家
+    if (dayType === "both") {
+      const d0 = buildLineSeries(monthKey, countries, "D0");
+      const d7 = buildLineSeries(monthKey, countries, "D7");
+
+      const legendNames = [];
+      countries.forEach((c) => {
+        legendNames.push(c + " 自然");
+        legendNames.push(c + " 买量");
+      });
+
+      const series = [];
+      d0.series.forEach((s) => series.push({ ...s, xAxisIndex: 0, yAxisIndex: 0 }));
+      d7.series.forEach((s) => series.push({ ...s, xAxisIndex: 1, yAxisIndex: 1 }));
+
+      chart.setOption(
+        {
+          title: [
+            { text: monthLabel + " · D0 付费率", left: 0, top: 6, textStyle: { fontSize: 11, fontWeight: 500, color: "#334155" } },
+            { text: monthLabel + " · D7 付费率", left: 0, top: "52%", textStyle: { fontSize: 11, fontWeight: 500, color: "#334155" } },
+          ],
+          legend: { top: 24, left: 0, type: "scroll", data: legendNames, itemHeight: 10, itemWidth: 14 },
+          grid: [
+            { left: 40, right: 20, top: 46, height: "35%", containLabel: true },
+            { left: 40, right: 20, top: "58%", height: "35%", containLabel: true },
+          ],
+          axisPointer: { link: [{ xAxisIndex: [0, 1] }] },
+          tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "line" },
+            formatter: function (params) {
+              const byAxis = { 0: [], 1: [] };
+              (params || []).forEach((p) => {
+                const ax = p.xAxisIndex == null ? 0 : p.xAxisIndex;
+                (byAxis[ax] || (byAxis[ax] = [])).push(p);
+              });
+
+              const date = (params && params[0] && params[0].axisValue) || "";
+              let html = date + "<br/>";
+
+              const appendBlock = (title, arr) => {
+                if (!arr || !arr.length) return;
+                html += '<span style="color:#64748b">' + title + "</span><br/>";
+                arr.forEach((p) => {
+                  html += p.marker + p.seriesName + ": " + formatPercent(p.data) + "<br/>";
+                });
+              };
+
+              appendBlock("D0", byAxis[0]);
+              appendBlock("D7", byAxis[1]);
+              return html;
+            },
+          },
+          xAxis: [
+            { type: "category", data: d0.dates, boundaryGap: false, axisLabel: { show: false }, axisLine: { lineStyle: { color: "rgba(148,163,184,0.45)" } } },
+            { type: "category", data: d7.dates, boundaryGap: false, axisLabel: { formatter: dayLabel }, axisLine: { lineStyle: { color: "rgba(148,163,184,0.45)" } } },
+          ],
+          yAxis: [
+            { type: "value", axisLabel: { formatter: (v) => v + "%" }, splitLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } } },
+            { type: "value", axisLabel: { formatter: (v) => v + "%" }, splitLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } } },
+          ],
+          series,
+        },
+        true
+      );
+      return;
+    }
+
+    // 单口径（D0 或 D7）
+    const built = buildLineSeries(monthKey, countries, dayType);
+
+    chart.setOption(
+      {
+        grid: { left: 40, right: 20, top: 50, bottom: 40, containLabel: true },
+        legend: { top: 10, left: 0, type: "scroll", itemHeight: 10, itemWidth: 14 },
+        tooltip: {
+          trigger: "axis",
+          axisPointer: { type: "line" },
+          formatter: function (params) {
+            const date = (params && params[0] && params[0].axisValue) || "";
+            let html = date + "<br/>";
+            (params || []).forEach((p) => {
+              html += p.marker + p.seriesName + ": " + formatPercent(p.data) + "<br/>";
+            });
+            return html;
+          },
+        },
+        xAxis: { type: "category", data: built.dates, boundaryGap: false, axisLabel: { formatter: dayLabel }, axisLine: { lineStyle: { color: "rgba(148,163,184,0.45)" } } },
+        yAxis: { type: "value", name: monthLabel + " · " + dayType + " 付费率", axisLabel: { formatter: (v) => v + "%" }, splitLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } } },
+        series: built.series,
+      },
+      true
+    );
+  }
+
+  // === 8) 表格：国家 × (D0/D7 付费率)，每格“自然/买量” ===
+  function updatePayRateTable(monthKey, countries) {
+    const table = document.getElementById("table-payrate");
+    if (!table) return;
+
+    if (!monthKey || !countries || !countries.length) {
+      renderEmptyTable(table);
+      return;
+    }
+
+    const label = formatMonthShort(monthKey);
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    headRow.innerHTML = "<th>国家</th><th>" + label + " D0付费率</th><th>" + label + " D7付费率</th>";
+    thead.appendChild(headRow);
+
+    const tbody = document.createElement("tbody");
+    const idxOrg = OVP.idx.organic;
+    const idxPaid = OVP.idx.paid;
+
+    countries.forEach((c) => {
+      const tr = document.createElement("tr");
+
+      const tdC = document.createElement("td");
+      tdC.textContent = c;
+      tr.appendChild(tdC);
+
+      const orgAgg = getAgg(idxOrg, "month", monthKey, c);
+      const paidAgg = getAgg(idxPaid, "month", monthKey, c);
+
+      const d0Org = payRateFromAgg(orgAgg, "D0");
+      const d0Paid = payRateFromAgg(paidAgg, "D0");
+      const d7Org = payRateFromAgg(orgAgg, "D7");
+      const d7Paid = payRateFromAgg(paidAgg, "D7");
+
+      const td0 = document.createElement("td");
+      td0.className = "num";
+      td0.textContent = "自然 " + formatPercent(d0Org) + " / 买量 " + formatPercent(d0Paid);
+      tr.appendChild(td0);
+
+      const td7 = document.createElement("td");
+      td7.className = "num";
+      td7.textContent = "自然 " + formatPercent(d7Org) + " / 买量 " + formatPercent(d7Paid);
+      tr.appendChild(td7);
+
+      tbody.appendChild(tr);
+    });
+
+    table.innerHTML = "";
+    table.appendChild(thead);
+    table.appendChild(tbody);
+  }
+
+  // === 9) 模块状态 & 初始化 ===
+  window.chartState = window.chartState || {};
+  window.chartState.payrate = window.chartState.payrate || { month: "", countries: [], view: "bar", dayType: "both" };
+
+  function updatePayRateModule(chart, st) {
+    const monthKey = st.month || (OVP.allMonths.length ? OVP.allMonths[OVP.allMonths.length - 1] : "");
+    const countries = getOrderedCountries(st.countries);
+    const view = st.view || "bar";
+    const dayType = st.dayType || "both";
+
+    if (!monthKey || !countries.length) {
+      renderEmptyChart(chart, "请先选择月份和国家");
+      renderEmptyTable(document.getElementById("table-payrate"));
+      return;
+    }
+
+    if (view === "line") renderPayRateLine(chart, monthKey, countries, dayType);
+    else renderPayRateBar(chart, monthKey, countries, dayType);
+
+    updatePayRateTable(monthKey, countries);
+  }
+
+  function initPayRateModule() {
+    const dom = document.getElementById("chart-payrate");
+    if (!dom) return;
+
+    const chart = echarts.init(dom);
+    const st = window.chartState.payrate;
+
+    createSingleSelectChips({
+      containerId: "payrate-month",
+      values: OVP.allMonths,
+      getLabel: (m) => m,
+      stateObj: st,
+      stateKey: "month",
+      preselect: OVP.allMonths.length ? OVP.allMonths[OVP.allMonths.length - 1] : "",
+      onChange: () => updatePayRateModule(chart, st),
+    });
+
+    createMultiSelectChips({
+      containerId: "payrate-countries",
+      values: COUNTRY_ORDER,
+      getLabel: (c) => c,
+      stateArray: st.countries,
+      preselect: "all",
+      onChange: () => updatePayRateModule(chart, st),
+    });
+
+    bindRadioGroup("payrate-view", st, "view", () => updatePayRateModule(chart, st));
+    bindRadioGroup("payrate-day-type", st, "dayType", () => updatePayRateModule(chart, st));
+
+    updatePayRateModule(chart, st);
+    window.addEventListener("resize", () => chart.resize());
+  }
+
+  document.addEventListener("DOMContentLoaded", initPayRateModule);
 })();
 
     </script>
