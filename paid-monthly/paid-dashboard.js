@@ -1,14 +1,15 @@
-/* paid-monthly/paid-dashboard.js
- * Module-01: Paid Registrations & CPR（注册单价=Spend/Registration，USD/人）
- * Module-02: D0/D7 Pay Rate（付费率=Purchasers/Registration，%）
- */
-
 (() => {
   "use strict";
 
-  // ===========================
-  // 0) 读数据 + 维度字典
-  // ===========================
+  // =========================================================
+  // Global config
+  // =========================================================
+  const MERGE_VALUE = "__ALL_MERGED__"; // “全选但不区分”
+  const MERGE_LABEL = "全选但不区分";
+
+  // =========================================================
+  // Data
+  // =========================================================
   const RAW = window.RAW_PAID_BY_MONTH || {};
   const ALL_MONTHS = Object.keys(RAW).sort(); // YYYY-MM 升序（老→新）
 
@@ -38,50 +39,78 @@
     return Array.from(set);
   }
 
-  const ALL_COUNTRIES = collectDistinct((r) => normStr(r.country)).filter(Boolean).sort();
-
   function sortWithPreferred(list, preferred) {
-    const pref = new Map(preferred.map((v, i) => [v, i]));
-    return list.slice().sort((a, b) => {
-      const aa = a === "unknown" ? "zzzz_unknown" : a;
-      const bb = b === "unknown" ? "zzzz_unknown" : b;
-      const ia = pref.has(aa) ? pref.get(aa) : 999;
-      const ib = pref.has(bb) ? pref.get(bb) : 999;
-      if (ia !== ib) return ia - ib;
-      return aa.localeCompare(bb);
-    });
+    const pref = new Map((preferred || []).map((v, i) => [v, i]));
+    return (list || [])
+      .slice()
+      .sort((a0, b0) => {
+        const a = a0 === "unknown" ? "zzzz_unknown" : a0;
+        const b = b0 === "unknown" ? "zzzz_unknown" : b0;
+        const ia = pref.has(a) ? pref.get(a) : 999;
+        const ib = pref.has(b) ? pref.get(b) : 999;
+        if (ia !== ib) return ia - ib;
+        return a.localeCompare(b);
+      });
   }
 
-  const ALL_MEDIA = sortWithPreferred(
-    collectDistinct((r) => normMedia(r.media)),
-    ["fb", "gg"]
-  );
+  const ALL_COUNTRIES = collectDistinct((r) => normStr(r.country)).filter(Boolean).sort();
+  const ALL_MEDIA = sortWithPreferred(collectDistinct((r) => normMedia(r.media)), ["fb", "gg"]);
+  const ALL_PRODUCTS = sortWithPreferred(collectDistinct((r) => normProduct(r.productType)), ["app", "h5"]);
 
-  const ALL_PRODUCTS = sortWithPreferred(
-    collectDistinct((r) => normProduct(r.productType)),
-    ["app", "h5"]
-  );
+  // =========================================================
+  // Colors
+  // =========================================================
+  const BASE_PALETTE = [
+    "#2563eb",
+    "#16a34a",
+    "#f97316",
+    "#7c3aed",
+    "#ef4444",
+    "#0f766e",
+    "#0ea5e9",
+    "#db2777",
+    "#84cc16",
+    "#f59e0b",
+    "#10b981",
+    "#8b5cf6",
+    "#22c55e",
+    "#e11d48",
+    "#14b8a6",
+    "#3b82f6",
+    "#a855f7",
+    "#f43f5e",
+    "#06b6d4",
+    "#65a30d",
+  ];
 
-  // ===========================
-  // 1) 配色（保持视觉稳）
-  // ===========================
-  const DEFAULT_COLOR_PALETTE = ["#2563eb", "#16a34a", "#f97316", "#7c3aed", "#ef4444", "#0f766e"];
-
-  // 月份色（可手工固定某几个月；不填就走色盘）
-  const MONTH_COLOR_MAP = {}; // e.g. { "2025-10":"#2563eb" }
+  // 月份颜色（可手工固定；不填则用色盘）
+  const MONTH_COLOR_MAP = {}; // e.g. { "2025-09":"#2563eb" }
   function getColorForMonth(month, idx) {
-    return MONTH_COLOR_MAP[month] || DEFAULT_COLOR_PALETTE[idx % DEFAULT_COLOR_PALETTE.length];
+    return MONTH_COLOR_MAP[month] || BASE_PALETTE[idx % BASE_PALETTE.length];
   }
 
-  // 国家色（跨月/跨视图一致）
+  // 国家固定色（保证跨图一致）
   const COUNTRY_COLOR_MAP = { GH: "#2563eb", KE: "#16a34a", NG: "#f97316", TZ: "#db2777", UG: "#7c3aed" };
   function getColorForCountry(country, idx) {
-    return COUNTRY_COLOR_MAP[country] || DEFAULT_COLOR_PALETTE[idx % DEFAULT_COLOR_PALETTE.length];
+    return COUNTRY_COLOR_MAP[country] || BASE_PALETTE[idx % BASE_PALETTE.length];
   }
 
-  // ===========================
-  // 2) 格式化
-  // ===========================
+  function hashToIndex(str, mod) {
+    let h = 0;
+    const s = String(str || "");
+    for (let i = 0; i < s.length; i++) {
+      h = (h << 5) - h + s.charCodeAt(i);
+      h |= 0;
+    }
+    return Math.abs(h) % mod;
+  }
+  function getColorForGroup(groupKey) {
+    return BASE_PALETTE[hashToIndex(groupKey, BASE_PALETTE.length)];
+  }
+
+  // =========================================================
+  // Formatting
+  // =========================================================
   function isFiniteNumber(v) {
     return Number.isFinite(Number(v));
   }
@@ -119,84 +148,9 @@
     return s;
   }
 
-  // ===========================
-  // 3) UI：多选 chips + radio
-  // ===========================
-  function createMultiSelectChips(options) {
-    const {
-      containerId,
-      values,
-      getLabel,
-      stateArray,
-      max,
-      min = 0,
-      preselect,
-      preselectLastN,
-      onChange,
-    } = options;
-
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    container.innerHTML = "";
-    const vals = Array.isArray(values) ? values : [];
-    const st = Array.isArray(stateArray) ? stateArray : [];
-
-    // 初始化默认选中
-    if (st.length === 0) {
-      if (preselect === "all") {
-        vals.forEach((v) => st.push(v));
-      } else if (typeof preselectLastN === "number") {
-        const n = Math.max(0, Math.min(preselectLastN, vals.length));
-        vals.slice(vals.length - n).forEach((v) => st.push(v));
-      } else if (typeof preselect === "number") {
-        const n = Math.max(0, Math.min(preselect, vals.length));
-        vals.slice(0, n).forEach((v) => st.push(v));
-      }
-    }
-
-    vals.forEach((value, idx) => {
-      const labelEl = document.createElement("label");
-      labelEl.className = "filter-chip";
-
-      const input = document.createElement("input");
-      input.type = "checkbox";
-      input.value = value;
-
-      const selected = st.indexOf(value) !== -1;
-      input.checked = selected;
-      if (selected) labelEl.classList.add("filter-chip-active");
-
-      labelEl.appendChild(input);
-      labelEl.appendChild(document.createTextNode(typeof getLabel === "function" ? getLabel(value, idx) : String(value)));
-
-      input.addEventListener("change", () => {
-        const existsIndex = st.indexOf(value);
-
-        if (input.checked) {
-          if (max && st.length >= max && existsIndex === -1) {
-            input.checked = false; // 超上限回滚
-            return;
-          }
-          if (existsIndex === -1) st.push(value);
-        } else {
-          if (min && st.length <= min && existsIndex !== -1) {
-            input.checked = true; // 低于下限回滚
-            return;
-          }
-          if (existsIndex !== -1) st.splice(existsIndex, 1);
-        }
-
-        labelEl.classList.toggle("filter-chip-active", input.checked);
-        if (typeof onChange === "function") onChange();
-      });
-
-      container.appendChild(labelEl);
-    });
-
-    if (typeof onChange === "function") onChange();
-  }
-
+  // =========================================================
+  // UI helpers
+  // =========================================================
   function bindRadio(name, stateObj, key, onChange) {
     document.querySelectorAll(`input[name="${name}"]`).forEach((r) => {
       if (r.checked) stateObj[key] = r.value;
@@ -208,87 +162,320 @@
     });
   }
 
+  /**
+   * Multi-select chips with optional MERGE option (exclusive).
+   *
+   * - If mergeValue is selected: stateArray becomes [mergeValue] only.
+   * - Selecting any normal value will auto-unselect mergeValue.
+   * - Unselect mergeValue will auto-select all normal values (to keep “全选”语义).
+   */
+  function createMultiSelectChips(options) {
+    const {
+      containerId,
+      values,
+      getLabel,
+      stateArray,
+      max,
+      min = 0,
+      preselect,
+      preselectLastN,
+      preselectValues,
+      mergeValue,
+      mergeLabel,
+      onChange,
+    } = options;
+
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const vals = Array.isArray(values) ? values.slice() : [];
+    const st = Array.isArray(stateArray) ? stateArray : [];
+
+    // init state
+    if (st.length === 0) {
+      if (Array.isArray(preselectValues) && preselectValues.length) {
+        st.push(...preselectValues);
+      } else if (preselect === "all") {
+        st.push(...vals);
+      } else if (typeof preselectLastN === "number") {
+        const n = Math.max(0, Math.min(preselectLastN, vals.length));
+        st.push(...vals.slice(vals.length - n));
+      } else if (typeof preselect === "number") {
+        const n = Math.max(0, Math.min(preselect, vals.length));
+        st.push(...vals.slice(0, n));
+      }
+    }
+
+    // Normalize: if merge selected, keep only it
+    if (mergeValue && st.includes(mergeValue)) {
+      st.length = 0;
+      st.push(mergeValue);
+    } else {
+      // de-dup
+      const uniq = Array.from(new Set(st));
+      st.length = 0;
+      st.push(...uniq);
+    }
+
+    container.innerHTML = "";
+    const itemMap = new Map();
+
+    function setChecked(value, checked) {
+      const it = itemMap.get(value);
+      if (!it) return;
+      it.input.checked = checked;
+      it.labelEl.classList.toggle("filter-chip-active", checked);
+    }
+
+    vals.forEach((value, idx) => {
+      const labelEl = document.createElement("label");
+      labelEl.className = "filter-chip";
+
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = value;
+
+      const label =
+        mergeValue && value === mergeValue
+          ? (mergeLabel || MERGE_LABEL)
+          : typeof getLabel === "function"
+            ? getLabel(value, idx)
+            : String(value);
+
+      const selected = st.includes(value);
+      input.checked = selected;
+      if (selected) labelEl.classList.add("filter-chip-active");
+
+      labelEl.appendChild(input);
+      labelEl.appendChild(document.createTextNode(label));
+
+      itemMap.set(value, { input, labelEl });
+
+      input.addEventListener("change", () => {
+        const isMerge = mergeValue && value === mergeValue;
+
+        if (isMerge) {
+          if (input.checked) {
+            // switch to merged-only
+            st.length = 0;
+            st.push(mergeValue);
+
+            vals.forEach((v) => {
+              if (v === mergeValue) return;
+              setChecked(v, false);
+            });
+            setChecked(mergeValue, true);
+          } else {
+            // uncheck merge => select all normal values (保持“全选”语义)
+            const normal = vals.filter((v) => v !== mergeValue);
+
+            st.length = 0;
+            // if there is a max constraint, pick first max normals
+            const chosen = max ? normal.slice(0, max) : normal.slice();
+            st.push(...chosen);
+
+            setChecked(mergeValue, false);
+            normal.forEach((v) => setChecked(v, st.includes(v)));
+          }
+          if (typeof onChange === "function") onChange();
+          return;
+        }
+
+        // normal value clicked
+        if (input.checked) {
+          // if merge checked, remove merge
+          if (mergeValue && st.includes(mergeValue)) {
+            st.splice(st.indexOf(mergeValue), 1);
+            setChecked(mergeValue, false);
+          }
+
+          if (!st.includes(value)) {
+            if (max && st.length >= max) {
+              // exceed max => rollback
+              setChecked(value, false);
+              return;
+            }
+            st.push(value);
+          }
+          setChecked(value, true);
+        } else {
+          // uncheck
+          const i = st.indexOf(value);
+          if (i !== -1) st.splice(i, 1);
+
+          if (min && st.length < min) {
+            // rollback
+            st.push(value);
+            setChecked(value, true);
+            return;
+          }
+          setChecked(value, false);
+        }
+
+        if (typeof onChange === "function") onChange();
+      });
+
+      container.appendChild(labelEl);
+    });
+
+    // Ensure UI reflects merge mode
+    if (mergeValue && st.includes(mergeValue)) {
+      vals.forEach((v) => {
+        if (v === mergeValue) setChecked(v, true);
+        else setChecked(v, false);
+      });
+    }
+
+    if (typeof onChange === "function") onChange();
+  }
+
   function selectedOrAll(selected, allValues) {
     return Array.isArray(selected) && selected.length ? selected : (Array.isArray(allValues) ? allValues : []);
   }
 
-  // ===========================
-  // 4) 聚合（按筛选条件）
-  // ===========================
-  function buildAggMonthCountry(months, filter) {
-    const out = {};
+  function getMode(selectedArr, allValues) {
+    const arr = Array.isArray(selectedArr) ? selectedArr : [];
+    const merge = arr.includes(MERGE_VALUE);
+    const actual = arr.filter((v) => v !== MERGE_VALUE);
+    if (merge) return { merge: true, values: allValues.slice() };
+    if (!actual.length) return { merge: false, values: allValues.slice() };
+    return { merge: false, values: actual.slice() };
+  }
+
+  // =========================================================
+  // Aggregation helpers (month / daily, support grouping)
+  // =========================================================
+  function rowPasses(row, sets) {
+    const country = normStr(row.country);
+    const media = normMedia(row.media);
+    const product = normProduct(row.productType);
+
+    if (sets.countries && !sets.countries.has(country)) return false;
+    if (sets.media && !sets.media.has(media)) return false;
+    if (sets.product && !sets.product.has(product)) return false;
+    return true;
+  }
+
+  function makeParts(row, splitFlags) {
+    const rawCountry = normStr(row.country);
+    const rawMedia = normMedia(row.media);
+    const rawProduct = normProduct(row.productType);
+
+    return {
+      country: splitFlags.splitCountry ? rawCountry : "ALL",
+      media: splitFlags.splitMedia ? rawMedia : "ALL",
+      product: splitFlags.splitProduct ? rawProduct : "ALL",
+    };
+  }
+
+  function makeKey(parts) {
+    return `${parts.country}||${parts.media}||${parts.product}`;
+  }
+
+  function makeLabel(parts, splitFlags) {
+    const segs = [];
+    if (splitFlags.splitCountry) segs.push(parts.country);
+    if (splitFlags.splitMedia) segs.push(parts.media.toUpperCase());
+    if (splitFlags.splitProduct) segs.push(parts.product);
+    return segs.length ? segs.join(" | ") : "ALL";
+  }
+
+  function initAgg() {
+    return {
+      spent: 0,
+      registration: 0,
+      d0_payers: 0,
+      d7_payers: 0,
+    };
+  }
+
+  function addAgg(agg, row) {
+    agg.spent += safeNum(row.spent);
+    agg.registration += safeNum(row.registration);
+    agg.d0_payers += safeNum(row.D0_unique_purchase);
+    agg.d7_payers += safeNum(row.D7_unique_purchase);
+  }
+
+  function aggMonthByGroup(months, sets, splitFlags) {
+    const monthAgg = {};
+    const meta = new Map();
+
     months.forEach((month) => {
       const map = {};
       (RAW[month] || []).forEach((row) => {
         if (!row) return;
-        const country = normStr(row.country);
-        if (!country) return;
+        if (!rowPasses(row, sets)) return;
 
-        if (filter.countriesSet && !filter.countriesSet.has(country)) return;
+        const parts = makeParts(row, splitFlags);
+        const key = makeKey(parts);
+        if (!map[key]) map[key] = initAgg();
+        addAgg(map[key], row);
 
-        const media = normMedia(row.media);
-        if (filter.mediaSet && !filter.mediaSet.has(media)) return;
-
-        const prod = normProduct(row.productType);
-        if (filter.productSet && !filter.productSet.has(prod)) return;
-
-        if (!map[country]) {
-          map[country] = {
-            spent: 0,
-            registration: 0,
-            d0_payers: 0,
-            d7_payers: 0,
-          };
+        if (!meta.has(key)) {
+          meta.set(key, {
+            country: parts.country,
+            media: parts.media,
+            product: parts.product,
+            label: makeLabel(parts, splitFlags),
+          });
         }
-        map[country].spent += safeNum(row.spent);
-        map[country].registration += safeNum(row.registration);
-        map[country].d0_payers += safeNum(row.D0_unique_purchase);
-        map[country].d7_payers += safeNum(row.D7_unique_purchase);
       });
-      out[month] = map;
+      monthAgg[month] = map;
     });
-    return out;
+
+    return { monthAgg, meta };
   }
 
-  function buildAggDailyCountry(months, filter) {
+  function aggDailyByGroup(months, sets, splitFlags) {
     const dateSet = new Set();
-    const byCountry = {}; // country -> date -> agg
+    const byGroup = {};
+    const meta = new Map();
 
     months.forEach((month) => {
       (RAW[month] || []).forEach((row) => {
         if (!row) return;
-        const country = normStr(row.country);
         const date = normStr(row.date);
-        if (!country || !date) return;
+        if (!date) return;
+        if (!rowPasses(row, sets)) return;
 
-        if (filter.countriesSet && !filter.countriesSet.has(country)) return;
-
-        const media = normMedia(row.media);
-        if (filter.mediaSet && !filter.mediaSet.has(media)) return;
-
-        const prod = normProduct(row.productType);
-        if (filter.productSet && !filter.productSet.has(prod)) return;
+        const parts = makeParts(row, splitFlags);
+        const key = makeKey(parts);
 
         dateSet.add(date);
-        if (!byCountry[country]) byCountry[country] = {};
-        if (!byCountry[country][date]) {
-          byCountry[country][date] = { spent: 0, registration: 0, d0_payers: 0, d7_payers: 0 };
+        if (!byGroup[key]) byGroup[key] = {};
+        if (!byGroup[key][date]) byGroup[key][date] = initAgg();
+        addAgg(byGroup[key][date], row);
+
+        if (!meta.has(key)) {
+          meta.set(key, {
+            country: parts.country,
+            media: parts.media,
+            product: parts.product,
+            label: makeLabel(parts, splitFlags),
+          });
         }
-        byCountry[country][date].spent += safeNum(row.spent);
-        byCountry[country][date].registration += safeNum(row.registration);
-        byCountry[country][date].d0_payers += safeNum(row.D0_unique_purchase);
-        byCountry[country][date].d7_payers += safeNum(row.D7_unique_purchase);
       });
     });
 
-    const dates = Array.from(dateSet).sort(); // YYYY-MM-DD 字符串可排序
+    const dates = Array.from(dateSet).sort();
     const index = new Map(dates.map((d, i) => [d, i]));
-    return { dates, index, byCountry };
+    return { dates, index, byGroup, meta };
   }
 
-  // ===========================
-  // 5) 工具：计算指标
-  // ===========================
+  function sortGroupKeys(keys) {
+    const rank = (x) => (x === "ALL" ? "zzzz_ALL" : x);
+    return (keys || []).slice().sort((a, b) => {
+      const [ac, am, ap] = String(a || "").split("||");
+      const [bc, bm, bp] = String(b || "").split("||");
+      if (rank(ac) !== rank(bc)) return rank(ac).localeCompare(rank(bc));
+      if (rank(am) !== rank(bm)) return rank(am).localeCompare(rank(bm));
+      return rank(ap).localeCompare(rank(bp));
+    });
+  }
+
+  // =========================================================
+  // Metric calculators
+  // =========================================================
   function calcCPR(spent, reg) {
     const r = Number(reg);
     const s = Number(spent);
@@ -296,6 +483,7 @@
     if (!Number.isFinite(s) || s < 0) return null;
     return s / r;
   }
+
   function calcRatePct(payers, reg) {
     const r = Number(reg);
     const p = Number(payers);
@@ -304,15 +492,12 @@
     return (p / r) * 100;
   }
 
-  // ===========================
-  // 6) MODULE-01：注册数 & 注册单价（含媒体/产品过滤）
-  // ===========================
-  function updateTablePaidReg(months, countries, metrics, aggMonth) {
+  // =========================================================
+  // Module 01: Paid registrations & CPR
+  // =========================================================
+  function updateTablePaidReg(months, countries, showReg, showCpr, monthAgg) {
     const table = document.getElementById("table-paidreg");
     if (!table) return;
-
-    const showReg = metrics.includes("reg");
-    const showCpr = metrics.includes("cpr");
 
     table.innerHTML = "";
 
@@ -324,15 +509,15 @@
     trh.appendChild(th0);
 
     months.forEach((m) => {
-      const ml = fmtMonthShort(m);
+      const label = m;
       if (showReg) {
         const th = document.createElement("th");
-        th.textContent = `${ml} 注册数`;
+        th.textContent = `${label} 注册数`;
         trh.appendChild(th);
       }
       if (showCpr) {
         const th = document.createElement("th");
-        th.textContent = `${ml} 注册单价`;
+        th.textContent = `${label} 注册单价`;
         trh.appendChild(th);
       }
     });
@@ -341,15 +526,16 @@
     table.appendChild(thead);
 
     const tbody = document.createElement("tbody");
-
     countries.forEach((c) => {
       const tr = document.createElement("tr");
+
       const tdC = document.createElement("td");
       tdC.textContent = c;
       tr.appendChild(tdC);
 
       months.forEach((m) => {
-        const agg = (aggMonth[m] && aggMonth[m][c]) || null;
+        const key = `${c}||ALL||ALL`;
+        const agg = (monthAgg[m] && monthAgg[m][key]) || null;
 
         if (showReg) {
           const td = document.createElement("td");
@@ -357,7 +543,6 @@
           td.textContent = agg ? fmtInt(agg.registration) : "-";
           tr.appendChild(td);
         }
-
         if (showCpr) {
           const td = document.createElement("td");
           td.className = "num";
@@ -376,10 +561,11 @@
   function updateChartPaidReg(chart, st) {
     if (!chart) return;
 
+    // months <= 3, keep ascending for continuity
     let months = selectedOrAll(st.months, ALL_MONTHS).slice(0, 3);
-    months = Array.from(new Set(months)).sort(); // 保证跨月顺序
-    const countries = selectedOrAll(st.countries, ALL_COUNTRIES).slice().sort();
+    months = Array.from(new Set(months)).sort();
 
+    const countries = selectedOrAll(st.countries, ALL_COUNTRIES).slice().sort();
     const medias = selectedOrAll(st.medias, ALL_MEDIA);
     const products = selectedOrAll(st.products, ALL_PRODUCTS);
 
@@ -387,16 +573,19 @@
     const showReg = metrics.includes("reg");
     const showCpr = metrics.includes("cpr");
 
-    const filter = {
-      countriesSet: new Set(countries),
-      mediaSet: new Set(medias),
-      productSet: new Set(products),
+    const sets = {
+      countries: new Set(countries),
+      media: new Set(medias),
+      product: new Set(products),
     };
 
-    const aggMonth = buildAggMonthCountry(months, filter);
-    updateTablePaidReg(months, countries, metrics, aggMonth);
+    // group only by country
+    const splitFlags = { splitCountry: true, splitMedia: false, splitProduct: false };
+    const { monthAgg } = aggMonthByGroup(months, sets, splitFlags);
 
-    // 双轴：注册数（左）+ 注册单价（右）
+    updateTablePaidReg(months, countries, showReg, showCpr, monthAgg);
+
+    // axis
     const yAxis = [];
     if (showReg && showCpr) {
       yAxis.push({
@@ -408,7 +597,7 @@
       yAxis.push({
         type: "value",
         name: "注册单价（USD）",
-        axisLabel: { formatter: (v) => (v == null || !isFiniteNumber(v) ? "" : "$" + Number(v).toFixed(2)) },
+        axisLabel: { formatter: (v) => (isFiniteNumber(v) ? "$" + Number(v).toFixed(2) : "") },
         splitLine: { show: false },
       });
     } else if (showReg) {
@@ -422,21 +611,22 @@
       yAxis.push({
         type: "value",
         name: "注册单价（USD）",
-        axisLabel: { formatter: (v) => (v == null || !isFiniteNumber(v) ? "" : "$" + Number(v).toFixed(2)) },
+        axisLabel: { formatter: (v) => (isFiniteNumber(v) ? "$" + Number(v).toFixed(2) : "") },
         splitLine: { lineStyle: { color: "rgba(148,163,184,0.22)" } },
       });
     }
 
-    // 日级折线：legend=国家（同名合并，取消国家=整条消失）
+    // Line (daily): keep country as legend item; reg+cpr share name => toggle together
     if (st.view === "line") {
-      const { dates, index, byCountry } = buildAggDailyCountry(months, filter);
+      const { dates, index, byGroup } = aggDailyByGroup(months, sets, splitFlags);
 
       const series = [];
-      const meta = []; // seriesIndex -> {metric,country}
+      const meta = []; // seriesIndex -> {metric, country}
 
       countries.forEach((c, idxC) => {
         const color = getColorForCountry(c, idxC);
-        const map = byCountry[c] || {};
+        const gkey = `${c}||ALL||ALL`;
+        const map = byGroup[gkey] || {};
 
         if (showReg) {
           const data = new Array(dates.length).fill(null);
@@ -467,7 +657,7 @@
             data[i] = calcCPR(map[d].spent, map[d].registration);
           });
           series.push({
-            name: c,
+            name: c, // same name
             type: "line",
             yAxisIndex: showReg ? 1 : 0,
             smooth: true,
@@ -528,44 +718,40 @@
       return;
     }
 
-    // 月度柱状：X=国家，legend=月份（同名合并：同一个月的柱+线一起隐藏）
-    const monthLabels = months.map((m) => fmtMonthShort(m));
-    const xCountries = countries;
-
+    // Bar (monthly): x = month, series = country (reg bars + CPR dashed line)
+    const xMonths = months;
     const series = [];
-    const meta = []; // seriesIndex -> {metric, monthLabel}
+    const meta = []; // seriesIndex -> {metric, country}
 
-    // 注册数
-    if (showReg) {
-      months.forEach((m, idxM) => {
-        const ml = fmtMonthShort(m);
-        const color = getColorForMonth(m, idxM);
-        const data = xCountries.map((c) => ((aggMonth[m] && aggMonth[m][c]) ? aggMonth[m][c].registration : null));
+    countries.forEach((c, idxC) => {
+      const color = getColorForCountry(c, idxC);
+
+      if (showReg) {
+        const data = xMonths.map((m) => {
+          const key = `${c}||ALL||ALL`;
+          const agg = (monthAgg[m] && monthAgg[m][key]) || null;
+          return agg ? agg.registration : null;
+        });
         series.push({
-          name: ml,
+          name: c,
           type: "bar",
           yAxisIndex: 0,
           barMaxWidth: 18,
           itemStyle: { color, borderRadius: [6, 6, 0, 0] },
           data,
         });
-        meta.push({ metric: "reg", monthLabel: ml });
-      });
-    }
+        meta.push({ metric: "reg", country: c });
+      }
 
-    // 注册单价
-    if (showCpr) {
-      months.forEach((m, idxM) => {
-        const ml = fmtMonthShort(m);
-        const color = getColorForMonth(m, idxM);
-        const data = xCountries.map((c) => {
-          const a = (aggMonth[m] && aggMonth[m][c]) || null;
-          return a ? calcCPR(a.spent, a.registration) : null;
+      if (showCpr) {
+        const data = xMonths.map((m) => {
+          const key = `${c}||ALL||ALL`;
+          const agg = (monthAgg[m] && monthAgg[m][key]) || null;
+          return agg ? calcCPR(agg.spent, agg.registration) : null;
         });
 
-        // 同显：单价用虚线（右轴）；只看单价：用柱状
         series.push({
-          name: ml,
+          name: c, // same
           type: showReg ? "line" : "bar",
           yAxisIndex: showReg ? 1 : 0,
           smooth: true,
@@ -575,13 +761,13 @@
           itemStyle: { color, borderRadius: showReg ? undefined : [6, 6, 0, 0] },
           data,
         });
-        meta.push({ metric: "cpr", monthLabel: ml });
-      });
-    }
+        meta.push({ metric: "cpr", country: c });
+      }
+    });
 
     chart.setOption(
       {
-        legend: { type: "scroll", data: monthLabels },
+        legend: { type: "scroll", data: countries },
         grid: { left: 48, right: showReg && showCpr ? 60 : 22, top: 40, bottom: 42, containLabel: true },
         tooltip: {
           trigger: "axis",
@@ -592,32 +778,32 @@
           textStyle: { color: "#0f172a", fontSize: 12 },
           formatter: (params) => {
             if (!params || !params.length) return "";
-            const country = params[0].axisValue;
+            const month = params[0].axisValue;
 
-            const byM = new Map(); // monthLabel -> {reg,cpr,marker}
+            const byC = new Map();
             params.forEach((p) => {
               const m = meta[p.seriesIndex] || {};
-              const ml = m.monthLabel || p.seriesName || "-";
-              if (!byM.has(ml)) byM.set(ml, { marker: p.marker, reg: null, cpr: null });
-              const g = byM.get(ml);
+              const c = m.country || p.seriesName || "-";
+              if (!byC.has(c)) byC.set(c, { marker: p.marker, reg: null, cpr: null });
+              const g = byC.get(c);
               if (m.metric === "reg") g.reg = p.value;
               if (m.metric === "cpr") g.cpr = p.value;
             });
 
             const lines = [];
-            lines.push(`<div style="font-weight:700;margin-bottom:4px;">国家：${country}</div>`);
-            monthLabels.forEach((ml) => {
-              const g = byM.get(ml);
+            lines.push(`<div style="font-weight:700;margin-bottom:4px;">月份：${month}</div>`);
+            countries.forEach((c) => {
+              const g = byC.get(c);
               if (!g) return;
               const parts = [];
               if (showReg) parts.push(`注册数 ${fmtInt(g.reg)}`);
               if (showCpr) parts.push(`注册单价 ${fmtUSD(g.cpr)}`);
-              lines.push(`${g.marker || ""} ${ml} · ${parts.join(" / ")}`);
+              lines.push(`${g.marker || ""} ${c} · ${parts.join(" / ")}`);
             });
             return lines.join("<br/>");
           },
         },
-        xAxis: { type: "category", data: xCountries },
+        xAxis: { type: "category", data: xMonths },
         yAxis,
         series,
       },
@@ -630,15 +816,7 @@
     if (!dom || !window.echarts) return;
 
     const chart = echarts.init(dom);
-
-    const st = {
-      view: "bar",
-      months: [],
-      countries: [],
-      medias: [],
-      products: [],
-      metrics: [], // reg | cpr
-    };
+    const st = { view: "bar", months: [], countries: [], medias: [], products: [], metrics: [] };
 
     bindRadio("paidreg-view", st, "view", () => updateChartPaidReg(chart, st));
 
@@ -698,10 +876,10 @@
     window.addEventListener("resize", () => chart.resize());
   }
 
-  // ===========================
-  // 7) MODULE-02：D0/D7 付费率（含媒体/产品过滤）
-  // ===========================
-  function updateTablePayRate(months, countries, metrics, aggMonth) {
+  // =========================================================
+  // Module 02: D0/D7 Pay rate (optimized)
+  // =========================================================
+  function updateTablePayRate(months, metrics, view, splitFlagsForTable, monthAgg, metaMap, groupKeysSorted) {
     const table = document.getElementById("table-payrate");
     if (!table) return;
 
@@ -713,9 +891,19 @@
     const thead = document.createElement("thead");
     const trh = document.createElement("tr");
 
-    const th0 = document.createElement("th");
-    th0.textContent = "国家";
-    trh.appendChild(th0);
+    const thCountry = document.createElement("th");
+    thCountry.textContent = "国家";
+    trh.appendChild(thCountry);
+
+    if (view === "line") {
+      const thMedia = document.createElement("th");
+      thMedia.textContent = "媒体";
+      trh.appendChild(thMedia);
+
+      const thProd = document.createElement("th");
+      thProd.textContent = "产品类型";
+      trh.appendChild(thProd);
+    }
 
     months.forEach((m) => {
       const ml = fmtMonthShort(m);
@@ -736,29 +924,41 @@
 
     const tbody = document.createElement("tbody");
 
-    countries.forEach((c) => {
+    groupKeysSorted.forEach((gkey) => {
+      const meta = metaMap.get(gkey) || { country: "ALL", media: "ALL", product: "ALL" };
+
       const tr = document.createElement("tr");
+
       const tdC = document.createElement("td");
-      tdC.textContent = c;
+      tdC.textContent = meta.country;
       tr.appendChild(tdC);
 
-      months.forEach((m) => {
-        const agg = (aggMonth[m] && aggMonth[m][c]) || null;
+      if (view === "line") {
+        const tdM = document.createElement("td");
+        tdM.textContent = splitFlagsForTable.splitMedia ? meta.media.toUpperCase() : "ALL";
+        tr.appendChild(tdM);
 
+        const tdP = document.createElement("td");
+        tdP.textContent = splitFlagsForTable.splitProduct ? meta.product : "ALL";
+        tr.appendChild(tdP);
+      }
+
+      months.forEach((m) => {
+        const agg = (monthAgg[m] && monthAgg[m][gkey]) || null;
         const reg = agg ? agg.registration : null;
-        const d0 = agg ? calcRatePct(agg.d0_payers, reg) : null;
-        const d7 = agg ? calcRatePct(agg.d7_payers, reg) : null;
+        const v0 = agg ? calcRatePct(agg.d0_payers, reg) : null;
+        const v7 = agg ? calcRatePct(agg.d7_payers, reg) : null;
 
         if (showD0) {
           const td = document.createElement("td");
           td.className = "num";
-          td.textContent = agg ? fmtPct(d0) : "-";
+          td.textContent = agg ? fmtPct(v0) : "-";
           tr.appendChild(td);
         }
         if (showD7) {
           const td = document.createElement("td");
           td.className = "num";
-          td.textContent = agg ? fmtPct(d7) : "-";
+          td.textContent = agg ? fmtPct(v7) : "-";
           tr.appendChild(td);
         }
       });
@@ -775,22 +975,30 @@
     let months = selectedOrAll(st.months, ALL_MONTHS).slice(0, 3);
     months = Array.from(new Set(months)).sort();
 
-    const countries = selectedOrAll(st.countries, ALL_COUNTRIES).slice().sort();
-    const medias = selectedOrAll(st.medias, ALL_MEDIA);
-    const products = selectedOrAll(st.products, ALL_PRODUCTS);
-
     const metrics = selectedOrAll(st.metrics, ["d0"]);
     const showD0 = metrics.includes("d0");
     const showD7 = metrics.includes("d7");
 
-    const filter = {
-      countriesSet: new Set(countries),
-      mediaSet: new Set(medias),
-      productSet: new Set(products),
+    // modes with “全选但不区分”
+    const countryMode = getMode(st.countries, ALL_COUNTRIES);
+    const mediaMode = getMode(st.medias, ALL_MEDIA);
+    const productMode = getMode(st.products, ALL_PRODUCTS);
+
+    const sets = {
+      countries: new Set(countryMode.values),
+      media: new Set(mediaMode.values),
+      product: new Set(productMode.values),
     };
 
-    const aggMonth = buildAggMonthCountry(months, filter);
-    updateTablePayRate(months, countries, metrics, aggMonth);
+    // Table split flags: line follows merge flags; bar only splits country
+    const splitFlagsTable =
+      st.view === "line"
+        ? { splitCountry: !countryMode.merge, splitMedia: !mediaMode.merge, splitProduct: !productMode.merge }
+        : { splitCountry: !countryMode.merge, splitMedia: false, splitProduct: false };
+
+    const { monthAgg, meta: metaMonth } = aggMonthByGroup(months, sets, splitFlagsTable);
+    const groupKeysForTable = sortGroupKeys(Array.from(metaMonth.keys()));
+    updateTablePayRate(months, metrics, st.view, splitFlagsTable, monthAgg, metaMonth, groupKeysForTable);
 
     const yAxis = [
       {
@@ -801,26 +1009,38 @@
       },
     ];
 
-    // 日级折线：legend=国家（同名合并，取消国家=整条消失）
+    // LINE (daily): split by (country/media/product) unless “全选但不区分” is checked
     if (st.view === "line") {
-      const { dates, index, byCountry } = buildAggDailyCountry(months, filter);
+      const splitFlagsLine = {
+        splitCountry: !countryMode.merge,
+        splitMedia: !mediaMode.merge,
+        splitProduct: !productMode.merge,
+      };
+
+      const { dates, index, byGroup, meta } = aggDailyByGroup(months, sets, splitFlagsLine);
+      const groupKeys = sortGroupKeys(Object.keys(byGroup));
+
+      const legendLabels = groupKeys.map((k) => (meta.get(k) ? meta.get(k).label : k));
 
       const series = [];
-      const meta = []; // seriesIndex -> {metric,country}
+      const sMeta = []; // seriesIndex -> {metric, label, key}
 
-      countries.forEach((c, idxC) => {
-        const color = getColorForCountry(c, idxC);
-        const map = byCountry[c] || {};
+      groupKeys.forEach((gkey) => {
+        const info = meta.get(gkey) || { label: gkey };
+        const label = info.label;
+        const color = getColorForGroup(gkey);
 
         if (showD0) {
           const data = new Array(dates.length).fill(null);
+          const map = byGroup[gkey] || {};
           Object.keys(map).forEach((d) => {
             const i = index.get(d);
             if (i == null) return;
             data[i] = calcRatePct(map[d].d0_payers, map[d].registration);
           });
+
           series.push({
-            name: c,
+            name: label,
             type: "line",
             yAxisIndex: 0,
             smooth: true,
@@ -830,18 +1050,20 @@
             itemStyle: { color },
             data,
           });
-          meta.push({ metric: "d0", country: c });
+          sMeta.push({ metric: "d0", label, key: gkey });
         }
 
         if (showD7) {
           const data = new Array(dates.length).fill(null);
+          const map = byGroup[gkey] || {};
           Object.keys(map).forEach((d) => {
             const i = index.get(d);
             if (i == null) return;
             data[i] = calcRatePct(map[d].d7_payers, map[d].registration);
           });
+
           series.push({
-            name: c, // 同名：legend 一键控制 D0+D7
+            name: label, // same name => legend toggles both
             type: "line",
             yAxisIndex: 0,
             smooth: true,
@@ -851,13 +1073,13 @@
             itemStyle: { color },
             data,
           });
-          meta.push({ metric: "d7", country: c });
+          sMeta.push({ metric: "d7", label, key: gkey });
         }
       });
 
       chart.setOption(
         {
-          legend: { type: "scroll", data: countries },
+          legend: { type: "scroll", data: Array.from(new Set(legendLabels)) },
           grid: { left: 52, right: 22, top: 40, bottom: 42, containLabel: true },
           tooltip: {
             trigger: "axis",
@@ -870,25 +1092,27 @@
               if (!params || !params.length) return "";
               const axisValue = params[0].axisValue;
 
-              const byC = new Map();
+              const byLabel = new Map();
               params.forEach((p) => {
-                const m = meta[p.seriesIndex] || {};
-                const c = m.country || p.seriesName || "-";
-                if (!byC.has(c)) byC.set(c, { marker: p.marker, d0: null, d7: null });
-                const g = byC.get(c);
+                const m = sMeta[p.seriesIndex] || {};
+                const label = m.label || p.seriesName || "-";
+                if (!byLabel.has(label)) byLabel.set(label, { marker: p.marker, d0: null, d7: null });
+                const g = byLabel.get(label);
                 if (m.metric === "d0") g.d0 = p.value;
                 if (m.metric === "d7") g.d7 = p.value;
               });
 
               const lines = [];
               lines.push(`<div style="font-weight:700;margin-bottom:4px;">日期：${axisValue}</div>`);
-              countries.forEach((c) => {
-                const g = byC.get(c);
+              groupKeys.forEach((gkey) => {
+                const info = meta.get(gkey);
+                const label = info ? info.label : gkey;
+                const g = byLabel.get(label);
                 if (!g) return;
                 const parts = [];
                 if (showD0) parts.push(`D0 ${fmtPct(g.d0)}`);
                 if (showD7) parts.push(`D7 ${fmtPct(g.d7)}`);
-                lines.push(`${g.marker || ""} ${c} · ${parts.join(" / ")}`);
+                lines.push(`${g.marker || ""} ${label} · ${parts.join(" / ")}`);
               });
               return lines.join("<br/>");
             },
@@ -902,64 +1126,66 @@
       return;
     }
 
-    // 月度柱状：X=国家，legend=月份（同名合并：同一个月的柱+线一起隐藏）
-    const monthLabels = months.map((m) => fmtMonthShort(m));
-    const xCountries = countries;
+    // BAR (monthly): per country, order = 9月D0, 9月D7, 10月D0, 10月D7...
+    const splitFlagsBar = { splitCountry: !countryMode.merge, splitMedia: false, splitProduct: false };
+    const { monthAgg: monthAggBar } = aggMonthByGroup(months, sets, splitFlagsBar);
+
+    const xCountries = countryMode.merge ? ["ALL"] : countryMode.values.slice().sort();
+    const legendData = months.map((m) => fmtMonthShort(m)); // one legend item per month
 
     const series = [];
-    const meta = []; // seriesIndex -> {metric, monthLabel}
+    const sMeta = []; // seriesIndex -> {monthLabel, metric}
 
-    // D0（bar）
-    if (showD0) {
-      months.forEach((m, idxM) => {
-        const ml = fmtMonthShort(m);
-        const color = getColorForMonth(m, idxM);
-        const data = xCountries.map((c) => {
-          const a = (aggMonth[m] && aggMonth[m][c]) || null;
-          return a ? calcRatePct(a.d0_payers, a.registration) : null;
+    months.forEach((m, idxM) => {
+      const monthLabel = fmtMonthShort(m);
+      const color = getColorForMonth(m, idxM);
+
+      const buildData = (metric) =>
+        xCountries.map((c) => {
+          const key = `${c}||ALL||ALL`;
+          const agg = (monthAggBar[m] && monthAggBar[m][key]) || null;
+          if (!agg) return null;
+          const reg = agg.registration;
+          return metric === "d0" ? calcRatePct(agg.d0_payers, reg) : calcRatePct(agg.d7_payers, reg);
         });
 
+      if (showD0) {
         series.push({
-          name: ml,
+          name: monthLabel, // same name => legend toggles both D0/D7
           type: "bar",
           yAxisIndex: 0,
-          barMaxWidth: 18,
+          barMaxWidth: 12,
+          barGap: "20%",
           itemStyle: { color, borderRadius: [6, 6, 0, 0] },
-          data,
+          data: buildData("d0"),
         });
-        meta.push({ metric: "d0", monthLabel: ml });
-      });
-    }
+        sMeta.push({ monthLabel, metric: "d0" });
+      }
 
-    // D7（同显时走虚线；只看D7时走柱状）
-    if (showD7) {
-      months.forEach((m, idxM) => {
-        const ml = fmtMonthShort(m);
-        const color = getColorForMonth(m, idxM);
-        const data = xCountries.map((c) => {
-          const a = (aggMonth[m] && aggMonth[m][c]) || null;
-          return a ? calcRatePct(a.d7_payers, a.registration) : null;
-        });
-
+      if (showD7) {
         series.push({
-          name: ml,
-          type: showD0 ? "line" : "bar",
+          name: monthLabel,
+          type: "bar",
           yAxisIndex: 0,
-          smooth: true,
-          symbol: "circle",
-          symbolSize: 6,
-          lineStyle: showD0 ? { width: 2, type: "dashed", color } : undefined,
-          itemStyle: { color, borderRadius: showD0 ? undefined : [6, 6, 0, 0] },
-          data,
+          barMaxWidth: 12,
+          barGap: "20%",
+          itemStyle: {
+            color,
+            borderRadius: [6, 6, 0, 0],
+            shadowBlur: 10,
+            shadowColor: "rgba(15,23,42,0.20)",
+            shadowOffsetY: 2,
+          },
+          data: buildData("d7"),
         });
-        meta.push({ metric: "d7", monthLabel: ml });
-      });
-    }
+        sMeta.push({ monthLabel, metric: "d7" });
+      }
+    });
 
     chart.setOption(
       {
-        legend: { type: "scroll", data: monthLabels },
-        grid: { left: 48, right: 22, top: 40, bottom: 42, containLabel: true },
+        legend: { type: "scroll", data: legendData },
+        grid: { left: 52, right: 22, top: 40, bottom: 42, containLabel: true },
         tooltip: {
           trigger: "axis",
           axisPointer: { type: "shadow" },
@@ -971,20 +1197,21 @@
             if (!params || !params.length) return "";
             const country = params[0].axisValue;
 
-            const byM = new Map(); // monthLabel -> {d0,d7,marker}
+            const byMonth = new Map(); // monthLabel -> {d0,d7,marker}
             params.forEach((p) => {
-              const m = meta[p.seriesIndex] || {};
+              const m = sMeta[p.seriesIndex] || {};
               const ml = m.monthLabel || p.seriesName || "-";
-              if (!byM.has(ml)) byM.set(ml, { marker: p.marker, d0: null, d7: null });
-              const g = byM.get(ml);
+              if (!byMonth.has(ml)) byMonth.set(ml, { marker: p.marker, d0: null, d7: null });
+              const g = byMonth.get(ml);
               if (m.metric === "d0") g.d0 = p.value;
               if (m.metric === "d7") g.d7 = p.value;
             });
 
             const lines = [];
             lines.push(`<div style="font-weight:700;margin-bottom:4px;">国家：${country}</div>`);
-            monthLabels.forEach((ml) => {
-              const g = byM.get(ml);
+            months.forEach((mm) => {
+              const ml = fmtMonthShort(mm);
+              const g = byMonth.get(ml);
               if (!g) return;
               const parts = [];
               if (showD0) parts.push(`D0 ${fmtPct(g.d0)}`);
@@ -1014,7 +1241,7 @@
       countries: [],
       medias: [],
       products: [],
-      metrics: [], // d0 | d7
+      metrics: [],
     };
 
     bindRadio("payrate-view", st, "view", () => updateChartPayRate(chart, st));
@@ -1030,33 +1257,42 @@
       onChange: () => updateChartPayRate(chart, st),
     });
 
+    // 国家：默认全选且区分（不勾 merge）
     createMultiSelectChips({
       containerId: "payrate-countries",
-      values: ALL_COUNTRIES,
+      values: [MERGE_VALUE, ...ALL_COUNTRIES],
       getLabel: (c) => c,
       stateArray: st.countries,
       min: 1,
-      preselect: "all",
+      preselectValues: ALL_COUNTRIES.slice(),
+      mergeValue: MERGE_VALUE,
+      mergeLabel: MERGE_LABEL,
       onChange: () => updateChartPayRate(chart, st),
     });
 
+    // 媒体：默认勾 merge（全选但不区分）
     createMultiSelectChips({
       containerId: "payrate-media",
-      values: ALL_MEDIA,
+      values: [MERGE_VALUE, ...ALL_MEDIA],
       getLabel: (m) => (m === "unknown" ? "UNKNOWN" : m.toUpperCase()),
       stateArray: st.medias,
       min: 1,
-      preselect: "all",
+      preselectValues: [MERGE_VALUE],
+      mergeValue: MERGE_VALUE,
+      mergeLabel: MERGE_LABEL,
       onChange: () => updateChartPayRate(chart, st),
     });
 
+    // 产品：默认勾 merge（全选但不区分）
     createMultiSelectChips({
       containerId: "payrate-products",
-      values: ALL_PRODUCTS,
+      values: [MERGE_VALUE, ...ALL_PRODUCTS],
       getLabel: (p) => (p === "unknown" ? "UNKNOWN" : p),
       stateArray: st.products,
       min: 1,
-      preselect: "all",
+      preselectValues: [MERGE_VALUE],
+      mergeValue: MERGE_VALUE,
+      mergeLabel: MERGE_LABEL,
       onChange: () => updateChartPayRate(chart, st),
     });
 
@@ -1067,7 +1303,7 @@
       stateArray: st.metrics,
       max: 2,
       min: 1,
-      preselect: 2, // 默认 D0+D7 同显
+      preselectValues: ["d0", "d7"],
       onChange: () => updateChartPayRate(chart, st),
     });
 
@@ -1075,11 +1311,10 @@
     window.addEventListener("resize", () => chart.resize());
   }
 
-  // ===========================
-  // 8) Boot
-  // ===========================
+  // =========================================================
+  // Boot
+  // =========================================================
   document.addEventListener("DOMContentLoaded", () => {
-    // 模块1 + 模块2：HTML 不在就自动跳过，不影响其它模块
     if (!ALL_MONTHS.length) return;
 
     initModule01();
