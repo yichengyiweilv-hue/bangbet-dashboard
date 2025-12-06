@@ -333,3 +333,10 @@ const RAW_ORGANIC_BY_MONTH = {
 };
 
 window.RAW_ORGANIC_BY_MONTH = RAW_ORGANIC_BY_MONTH;
+
+window.organicMonthlyData = Object.keys(RAW_ORGANIC_BY_MONTH).sort().reduce((acc, m) => {
+  const rows = RAW_ORGANIC_BY_MONTH[m];
+  if (Array.isArray(rows)) Array.prototype.push.apply(acc, rows);
+  return acc;
+}, []);
+
