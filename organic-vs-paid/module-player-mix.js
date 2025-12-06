@@ -1,3 +1,4 @@
+// 使用：
 (function () {
   window.OVP = window.OVP || {};
   OVP.registerModule = OVP.registerModule || function (m) { (OVP.modules || (OVP.modules = [])).push(m); };
