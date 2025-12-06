@@ -1,3 +1,7 @@
+/**
+ * ----占位------
+ */
+
 (function () {
   function init() {
     const dom = document.getElementById("chart-paid-registrations");
