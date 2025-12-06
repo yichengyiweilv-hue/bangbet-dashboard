@@ -13,244 +13,260 @@
       rel="stylesheet"
     />
 
+    <!-- ============ 样式：直接沿用 organic-monthly/index.html 的风格 ============ -->
     <style>
       :root {
-        --bg-top: #0b1220;
-        --bg-mid: #0f172a;
-        --bg-bottom: #020617;
-        --card: rgba(255, 255, 255, 0.92);
-        --card-strong: rgba(255, 255, 255, 0.97);
+        --bg: #f5f7fb;
+        --card: rgba(255, 255, 255, 0.98);
         --text-main: #0f172a;
-        --text-sub: rgba(71, 85, 105, 0.9);
-        --text-mute: rgba(100, 116, 139, 0.9);
-        --accent: #2563eb;
-        --accent-strong: #1d4ed8;
-        --accent-soft: rgba(37, 99, 235, 0.15);
-        --ok: #16a34a;
+        --text-sub: #475569;
+        --accent-strong: #2563eb;
+        --accent-soft: rgba(37, 99, 235, 0.12);
+        --good: #16a34a;
+        --bad: #ef4444;
         --warn: #f97316;
-        --bad: #e11d48;
-        --border: rgba(148, 163, 184, 0.6);
-        --radius-lg: 18px;
-        --radius-md: 14px;
-        --radius-sm: 12px;
-        --shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-        --glass: rgba(255, 255, 255, 0.08);
+        --radius-lg: 16px;
+        --radius-md: 12px;
+        --radius-sm: 10px;
+        --radius-pill: 999px;
       }
 
       * {
         box-sizing: border-box;
       }
 
-      html,
-      body {
-        height: 100%;
-      }
-
       body {
         margin: 0;
-        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto,
-          "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Hiragino Sans GB",
-          "Microsoft YaHei", sans-serif;
-        color: rgba(226, 232, 240, 0.92);
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+          Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--text-main);
         background: radial-gradient(
-            circle at 16% 0%,
-            rgba(37, 99, 235, 0.35),
+            at 10% 10%,
+            rgba(37, 99, 235, 0.13),
+            transparent 40%
+          ),
+          radial-gradient(
+            at 90% 20%,
+            rgba(124, 58, 237, 0.12),
+            transparent 45%
+          ),
+          radial-gradient(
+            at 20% 85%,
+            rgba(249, 115, 22, 0.09),
             transparent 38%
           ),
           radial-gradient(
-            circle at 80% 12%,
-            rgba(249, 115, 22, 0.25),
-            transparent 44%
+            at 85% 90%,
+            rgba(22, 163, 74, 0.1),
+            transparent 42%
           ),
-          linear-gradient(160deg, var(--bg-top), var(--bg-mid) 55%, var(--bg-bottom));
-        padding: 22px 18px 30px;
+          var(--bg);
       }
 
       a {
-        color: rgba(226, 232, 240, 0.92);
+        color: var(--accent-strong);
         text-decoration: none;
       }
-
       a:hover {
-        color: #fff;
+        text-decoration: underline;
       }
 
       .page {
-        width: min(1440px, 100%);
-        margin: 0 auto;
+        min-height: 100vh;
         display: flex;
         flex-direction: column;
-        gap: 18px;
       }
 
       .top-bar {
+        padding: 12px 24px;
         display: flex;
+        align-items: center;
         justify-content: space-between;
-        gap: 10px;
+        gap: 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(10px);
       }
 
       .top-left {
         display: flex;
         align-items: center;
         gap: 12px;
+        min-width: 260px;
       }
 
       .brand-mark {
-        width: 34px;
-        height: 34px;
-        border-radius: 14px;
-        background: conic-gradient(
-          from 160deg,
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        background: linear-gradient(
+          145deg,
           rgba(37, 99, 235, 0.95),
-          rgba(124, 58, 237, 0.9),
-          rgba(249, 115, 22, 0.88),
-          rgba(37, 99, 235, 0.95)
+          rgba(124, 58, 237, 0.85)
         );
-        box-shadow: 0 10px 18px rgba(37, 99, 235, 0.22);
-        padding: 6px;
-        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        box-shadow: 0 10px 24px rgba(37, 99, 235, 0.25);
       }
-
       .brand-mark-inner {
-        width: 100%;
-        height: 100%;
-        border-radius: 10px;
-        background: rgba(2, 6, 23, 0.7);
-        border: 1px solid rgba(148, 163, 184, 0.35);
+        width: 18px;
+        height: 18px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.86);
       }
 
       .brand-text-main {
         font-weight: 700;
-        letter-spacing: 0.3px;
+        letter-spacing: 0.2px;
         font-size: 14px;
+        line-height: 1.2;
       }
-
       .brand-text-sub {
+        font-weight: 500;
         font-size: 12px;
-        color: rgba(203, 213, 225, 0.85);
-        margin-top: 2px;
+        color: var(--text-sub);
+        line-height: 1.3;
       }
-
       .breadcrumb {
         font-size: 11px;
-        margin-top: 4px;
-        color: rgba(148, 163, 184, 0.95);
-      }
-
-      .breadcrumb a {
-        color: rgba(203, 213, 225, 0.95);
+        color: var(--text-sub);
+        margin-top: 2px;
       }
 
       .top-right {
         display: flex;
         flex-direction: column;
-        align-items: flex-end;
         gap: 6px;
+        align-items: flex-end;
         font-size: 11px;
-        color: rgba(203, 213, 225, 0.85);
+        color: var(--text-sub);
       }
 
       .badge-env {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 6px 10px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(148, 163, 184, 0.25);
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: var(--radius-pill);
+        border: 1px solid rgba(148, 163, 184, 0.55);
+        background: rgba(255, 255, 255, 0.7);
       }
 
       .badge-dot {
         width: 8px;
         height: 8px;
-        border-radius: 99px;
-        background: rgba(34, 197, 94, 0.9);
-        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+        border-radius: 50%;
+        background: var(--accent-strong);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
       }
 
       .hero {
-        display: flex;
-        justify-content: space-between;
-        gap: 22px;
-        padding: 18px 18px 16px;
-        border-radius: var(--radius-lg);
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(148, 163, 184, 0.25);
-        box-shadow: 0 22px 45px rgba(2, 6, 23, 0.55);
+        padding: 16px 24px 10px;
+        max-width: 1400px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 420px;
+        gap: 18px;
+        align-items: start;
       }
 
       .hero-main {
-        min-width: 0;
+        padding: 16px 18px;
+        background: rgba(255, 255, 255, 0.78);
+        border-radius: var(--radius-lg);
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
       }
 
       .hero-title {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
         font-weight: 700;
-        color: rgba(241, 245, 249, 0.95);
-        letter-spacing: 0.25px;
+        font-size: 16px;
       }
-
-      .bar {
-        width: 10px;
-        height: 26px;
-        border-radius: 8px;
-        background: linear-gradient(180deg, rgba(37, 99, 235, 0.95), rgba(249, 115, 22, 0.85));
-        box-shadow: 0 10px 18px rgba(37, 99, 235, 0.25);
+      .hero-title .bar {
+        width: 6px;
+        height: 18px;
+        border-radius: 6px;
+        background: var(--accent-strong);
+        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.35);
       }
 
       .hero-sub {
         margin-top: 10px;
-        line-height: 1.5;
-        color: rgba(226, 232, 240, 0.9);
         font-size: 12px;
-        max-width: 820px;
+        color: var(--text-sub);
+        line-height: 1.6;
       }
 
       .hero-tags {
-        margin-top: 12px;
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 6px;
+        margin-top: 10px;
       }
 
       .hero-tag {
         font-size: 11px;
-        padding: 6px 10px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(148, 163, 184, 0.25);
-        color: rgba(226, 232, 240, 0.85);
+        padding: 4px 10px;
+        border-radius: var(--radius-pill);
+        border: 1px solid rgba(148, 163, 184, 0.55);
+        background: rgba(255, 255, 255, 0.75);
+        color: var(--text-sub);
       }
 
       .hero-side {
-        width: 360px;
-        flex: 0 0 auto;
+        padding: 16px 18px;
+        background: rgba(255, 255, 255, 0.78);
+        border-radius: var(--radius-lg);
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+        font-size: 12px;
+        color: var(--text-sub);
         display: flex;
         flex-direction: column;
-        gap: 8px;
-        font-size: 11px;
-        color: rgba(226, 232, 240, 0.8);
+        gap: 10px;
       }
 
       .hero-pill {
         margin-top: 2px;
         padding: 10px 12px;
-        border-radius: 14px;
-        background: rgba(37, 99, 235, 0.15);
-        border: 1px solid rgba(37, 99, 235, 0.22);
-        color: rgba(226, 232, 240, 0.92);
-        line-height: 1.45;
+        border-radius: 12px;
+        border: 1px dashed rgba(37, 99, 235, 0.55);
+        background: rgba(37, 99, 235, 0.06);
+        color: rgba(15, 23, 42, 0.86);
+        font-size: 11px;
+        line-height: 1.55;
+      }
+
+      .hero-filter-title {
+        font-weight: 600;
+        color: var(--text-main);
+        margin-top: 6px;
+      }
+
+      .hero-filter-row {
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr);
+        gap: 8px;
+        align-items: start;
+      }
+
+      .hero-filter-row .label {
+        font-size: 11px;
+        color: var(--text-sub);
+        padding-top: 4px;
       }
 
       .content {
-        width: min(1400px, 100%);
+        flex: 1;
+        padding: 0 24px 22px;
+        max-width: 1400px;
         margin: 0 auto;
         display: grid;
         grid-template-columns: minmax(0, 1fr);
         gap: 22px;
-        align-items: flex-start;
       }
 
       .chart-card {
@@ -258,61 +274,107 @@
         background: rgba(255, 255, 255, 0.97);
         border: 1px solid rgba(148, 163, 184, 0.6);
         box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-        padding: 18px 18px 14px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        color: var(--text-main);
+        overflow: hidden;
       }
 
       .chart-card-header {
+        padding: 14px 16px 10px;
         display: flex;
         justify-content: space-between;
-        gap: 18px;
-        align-items: flex-start;
+        gap: 12px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+        background: linear-gradient(
+          to right,
+          rgba(37, 99, 235, 0.06),
+          rgba(255, 255, 255, 0.8)
+        );
       }
 
       .chart-title-block {
-        flex: 1;
-        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 280px;
       }
 
       .chart-kicker {
-        font-size: 11px;
-        letter-spacing: 0.25px;
-        color: rgba(71, 85, 105, 0.9);
+        font-size: 10px;
+        color: var(--text-sub);
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
       }
 
       .chart-title {
-        margin-top: 4px;
+        font-size: 14px;
         font-weight: 700;
-        letter-spacing: 0.2px;
-        font-size: 15px;
+        color: var(--text-main);
       }
 
       .chart-sub {
-        margin-top: 6px;
-        line-height: 1.5;
         font-size: 11px;
-        color: rgba(71, 85, 105, 0.88);
+        color: var(--text-sub);
+        line-height: 1.55;
         max-width: 760px;
       }
 
       .chart-controls {
         display: flex;
         flex-direction: column;
+        gap: 8px;
         align-items: flex-end;
-        gap: 6px;
-        min-width: 260px;
+        font-size: 11px;
+        color: var(--text-sub);
       }
 
       .chart-badge {
+        padding: 3px 10px;
+        border-radius: var(--radius-pill);
+        border: 1px solid rgba(148, 163, 184, 0.55);
+        background: rgba(255, 255, 255, 0.75);
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .chart-mini-filter {
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-end;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .chart-mini-label {
         font-size: 11px;
-        padding: 6px 10px;
-        border-radius: 999px;
-        background: rgba(239, 246, 255, 0.9);
-        border: 1px solid rgba(191, 219, 254, 0.9);
-        color: var(--accent-strong);
+        color: var(--text-sub);
+      }
+
+      .chart-mini-chips {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 4px;
+      }
+
+      .chart-mini-radio {
+        font-size: 11px;
+        color: var(--text-sub);
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: flex-end;
+      }
+
+      .chart-mini-radio label {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        cursor: pointer;
+      }
+
+      .chart-mini-radio input {
+        accent-color: var(--accent-strong);
+        cursor: pointer;
       }
 
       .chart {
@@ -323,166 +385,146 @@
       .chart-summary {
         font-size: 11px;
         color: var(--text-sub);
-        padding-top: 4px;
+        padding: 10px 16px 14px;
         border-top: 1px dashed rgba(148, 163, 184, 0.5);
       }
 
-      .chart-summary strong {
-        color: var(--text-main);
+      /* 图表下方：按月份切换的数据分析块 */
+      .chart-analysis-box {
+        margin-top: 4px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(209, 213, 219, 0.9);
+        background: rgba(249, 250, 251, 0.96);
+        display: flex;
+        align-items: stretch;
+        overflow: hidden;
       }
 
-      .chart-table-wrapper {
-        overflow-x: auto;
-        border-radius: 14px;
-        border: 1px solid rgba(226, 232, 240, 0.9);
-        background: rgba(248, 250, 252, 0.96);
+      .chart-analysis-months {
+        flex: 0 0 70px;
+        border-right: 1px solid rgba(209, 213, 219, 0.9);
+        padding: 8px 6px;
+        background: rgba(243, 244, 246, 0.95);
       }
 
-      .chart-table {
-        width: 100%;
-        border-collapse: collapse;
+      .chart-analysis-months-title {
         font-size: 11px;
+        color: var(--text-sub);
+        margin-bottom: 2px;
       }
 
-      .chart-table th,
-      .chart-table td {
-        padding: 9px 10px;
-        border-bottom: 1px solid rgba(226, 232, 240, 0.9);
-        text-align: right;
+      .chart-analysis-month-btn {
+        width: 100%;
+        font-size: 11px;
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(148, 163, 184, 0.55);
+        background: rgba(255, 255, 255, 0.85);
+        color: var(--text-sub);
+        padding: 4px 6px;
+        margin-top: 6px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .chart-analysis-month-btn.active {
+        border-color: rgba(37, 99, 235, 0.9);
+        background: rgba(37, 99, 235, 0.1);
+        color: rgba(37, 99, 235, 0.95);
+        font-weight: 600;
+      }
+
+      .chart-analysis-body {
+        flex: 1;
+        padding: 8px 10px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .chart-analysis-title {
+        font-size: 11px;
+        color: var(--text-sub);
+        font-weight: 600;
+      }
+
+      /* 关键：分析文案文本框（自动撑高） */
+      .chart-analysis-textarea {
+        width: 100%;
+        min-height: 54px;
+        border: none;
+        outline: none;
+        resize: none;
+        font-size: 11px;
+        font-family: inherit;
+        line-height: 1.65;
+        color: var(--text-main);
+        background: transparent;
+        white-space: pre-wrap;
+        overflow: hidden;
+      }
+
+      .filter-chip {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: var(--radius-pill);
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        background: rgba(249, 250, 251, 0.9);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        user-select: none;
         white-space: nowrap;
       }
 
-      .chart-table th:first-child,
-      .chart-table td:first-child {
-        text-align: left;
-        font-weight: 600;
-        color: rgba(15, 23, 42, 0.9);
-      }
-
-      .chart-comment {
-        margin-top: 4px;
-        border-top: 1px dashed rgba(148, 163, 184, 0.55);
-        padding-top: 10px;
-      }
-
-      .chart-comment-label {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-      }
-
-      .chart-comment-label span {
-        font-size: 11px;
-        color: rgba(71, 85, 105, 0.92);
-        font-weight: 600;
-      }
-
-      .chart-comment textarea {
-        width: 100%;
-        min-height: 84px;
-        resize: vertical;
-        border-radius: 12px;
-        border: 1px solid rgba(148, 163, 184, 0.55);
-        padding: 10px 12px;
-        font-size: 12px;
-        line-height: 1.5;
-        outline: none;
-        background: rgba(255, 255, 255, 0.95);
-      }
-
-      .comment-actions {
-        margin-top: 10px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        justify-content: space-between;
-      }
-
-      .btn-save {
-        border: 0;
-        padding: 8px 12px;
-        border-radius: 12px;
-        background: rgba(37, 99, 235, 0.95);
-        color: #fff;
-        font-size: 12px;
-        font-weight: 600;
+      .filter-chip input {
+        accent-color: var(--accent-strong);
         cursor: pointer;
-        box-shadow: 0 10px 18px rgba(37, 99, 235, 0.22);
       }
 
-      .btn-save:hover {
-        background: rgba(29, 78, 216, 0.98);
+      .filter-chip-active {
+        border-color: rgba(37, 99, 235, 0.9);
+        background: var(--accent-soft);
+        color: var(--accent-strong);
       }
 
-      .comment-status {
+      .btn {
         font-size: 11px;
-        color: rgba(71, 85, 105, 0.82);
-        line-height: 1.4;
-        max-width: 720px;
+        padding: 6px 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.65);
+        background: rgba(255, 255, 255, 0.85);
+        color: var(--text-sub);
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .btn:hover {
+        border-color: rgba(37, 99, 235, 0.65);
+        transform: translateY(-1px);
+        box-shadow: 0 8px 16px rgba(37, 99, 235, 0.12);
       }
 
       .footer {
+        padding: 8px 24px 14px;
+        font-size: 10px;
+        color: var(--text-sub);
         display: flex;
         justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        font-size: 11px;
-        color: rgba(226, 232, 240, 0.82);
-        padding: 8px 4px 0;
-      }
-
-      .footer strong {
-        color: rgba(248, 250, 252, 0.98);
-      }
-
-      @media (max-width: 980px) {
-        .top-bar {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 10px;
-        }
-        .top-right {
-          align-items: flex-start;
-        }
-        .hero {
-          flex-direction: column;
-        }
-        .hero-side {
-          width: 100%;
-        }
-        .chart-card-header {
-          flex-direction: column;
-          align-items: flex-start;
-        }
-        .chart-controls {
-          align-items: flex-start;
-          min-width: auto;
-        }
-        .comment-actions {
-          flex-direction: column;
-          align-items: flex-start;
-        }
-      }
-
-      /* 占位态：还没接入图表逻辑时，给一个明确的视觉提示 */
-      .chart-empty {
-        height: 100%;
-        border-radius: 14px;
-        border: 1px dashed rgba(148, 163, 184, 0.8);
-        background: rgba(248, 250, 252, 0.92);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--text-sub);
-        font-size: 12px;
-        letter-spacing: 0.2px;
+        gap: 10px;
+        border-top: 1px solid rgba(148, 163, 184, 0.35);
+        background: linear-gradient(
+          to right,
+          rgba(255, 255, 255, 0.75),
+          rgba(37, 99, 235, 0.04)
+        );
       }
     </style>
   </head>
 
   <body>
     <div class="page">
+      <!-- 顶部栏（样式/结构同 organic，看板文案换成买量版） -->
       <header class="top-bar">
         <div class="top-left">
           <div class="brand-mark">
@@ -501,443 +543,811 @@
             <span class="badge-dot"></span>
             <span>Prod · Light · 买量渠道</span>
           </div>
-          <div>单位：人数 / % / USD 等值 · 周期：按月 + 按日</div>
+          <div>单位：人数 / % / USD 等值 · 周期：按月（UTC+0 日切）</div>
         </div>
       </header>
 
+      <!-- Hero -->
       <section class="hero">
         <div class="hero-main">
           <div class="hero-title">
             <span class="bar"></span>
-            <span>买量月度数据对比 · 看板（框架版）</span>
+            <span>买量月度数据对比 · 看板</span>
           </div>
           <div class="hero-sub">
-            对齐自然量看板的页面风格与交互组件；本页先把 6 个数据模块的卡片位留出来，
-            后续逐模块接入计算口径与图表逻辑。
+            汇总买量投放在不同月份的注册规模、注册单价、D0/D7 付费率与 ARPPU、充值 ROI、人均流水（总/体育/游戏）以及次留/七留表现。
+            数据来源：window.RAW_PAID_BY_MONTH；金额口径：USD 等值；日切建议统一为 UTC+0。
           </div>
           <div class="hero-tags">
-            <span class="hero-tag">范围：GH / KE / NG / TZ / UG</span>
-            <span class="hero-tag">维度：月份 · 国家 · 媒体 · 产品形态（app/web）</span>
-            <span class="hero-tag">来源：买量渠道（RAW_PAID_BY_MONTH）</span>
+            <span class="hero-tag">维度：country / media / productType</span>
+            <span class="hero-tag">指标：Spend / Registration / PayRate / ARPPU / ROI / BetFlow / Retention</span>
+            <span class="hero-tag" id="hero-data-range">数据范围：以 paid-data.js 为准</span>
           </div>
         </div>
 
         <div class="hero-side">
-          <div>当前版本：v0.1 · 指标将统一从 RAW_PAID_BY_MONTH 聚合。</div>
-          <div>每月新增数据：只需在 paid-data.js 里追加一个月份数组，无需改图表逻辑。</div>
+          <div>当前版本：v1.0 · 所有指标统一从 RAW_PAID_BY_MONTH 聚合。</div>
+          <div>每月新增数据：只需在 RAW_PAID_BY_MONTH 中新增一个月份数组，无需改图表逻辑。</div>
+
           <div class="hero-pill">
-            提示：保存备注后复制浏览器地址，发给同事即可共享同一版备注。
+            提示：全局筛选只影响本页所有模块；你想做“每张图独立筛选”的话，后面再拆 state 即可。
+          </div>
+
+          <div class="hero-filter-title">全局筛选</div>
+
+          <div class="hero-filter-row">
+            <div class="label">国家</div>
+            <div class="chart-mini-chips" id="filter-countries"></div>
+          </div>
+
+          <div class="hero-filter-row">
+            <div class="label">媒体</div>
+            <div class="chart-mini-chips" id="filter-medias"></div>
+          </div>
+
+          <div class="hero-filter-row">
+            <div class="label">形态</div>
+            <div class="chart-mini-chips" id="filter-productTypes"></div>
+          </div>
+
+          <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px;">
+            <button class="btn" type="button" id="btn-reset-filters">全选 / 重置</button>
           </div>
         </div>
       </section>
 
       <main class="content">
-        <!-- MODULE-01: PAID REG & CPR (keep IDs) -->
-<section class="chart-card" id="card-paidreg">
-  <header class="chart-card-header">
-    <div class="chart-title-block">
-      <div class="chart-kicker">Acquisition</div>
-      <div class="chart-title">买量注册数、注册单价</div>
-      <div class="chart-sub">
-        注册单价 = Spend / Registration（USD/人）。月度柱状图：按国家对比所选月份；日级折线：跨月连续（同一国家一条线）。
-      </div>
-    </div>
-
-    <div class="chart-controls">
-      <span class="chart-badge">单位：人（注册） / USD（注册单价）</span>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">视图：</span>
-        <div class="chart-mini-radio">
-          <label><input type="radio" name="paidreg-view" value="bar" checked />柱状（月度）</label>
-          <label><input type="radio" name="paidreg-view" value="line" />折线（日度）</label>
-        </div>
-      </div>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">月份（≤3）：</span>
-        <div class="chart-mini-chips" id="paidreg-months"></div>
-      </div>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">国家：</span>
-        <div class="chart-mini-chips" id="paidreg-countries"></div>
-      </div>
-      <div class="chart-mini-filter">
-  <span class="chart-mini-label">媒体：</span>
-  <div class="chart-mini-chips" id="paidreg-media"></div>
-</div>
-
-<div class="chart-mini-filter">
-  <span class="chart-mini-label">产品类型：</span>
-  <div class="chart-mini-chips" id="paidreg-products"></div>
-</div>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">指标：</span>
-        <div class="chart-mini-chips" id="paidreg-metrics"></div>
-      </div>
-    </div>
-  </header>
-
-  <div class="chart" id="chart-paidreg"></div>
-
-  <div class="chart-table-section">
-    <div class="chart-table-title">当前筛选 · 买量注册数 & 注册单价（月度汇总）</div>
-    <div class="chart-table-wrapper">
-      <table class="chart-table" id="table-paidreg"></table>
-    </div>
-  </div>
-</section>
-
-
-        <!-- MODULE-02: D0/D7 PAY RATE (keep IDs) -->
-<section class="chart-card" id="card-payrate">
-  <header class="chart-card-header">
-    <div class="chart-title-block">
-      <div class="chart-kicker">Monetization</div>
-      <div class="chart-title">D0 / D7 付费率</div>
-      <div class="chart-sub">
-        口径：D0付费率 = ΣD0_unique_purchase / Σregistration（%），D7同理（%）。日级折线支持跨月连续（同一国家一条线）。
-      </div>
-    </div>
-
-    <div class="chart-controls">
-      <span class="chart-badge">单位：%</span>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">视图：</span>
-        <div class="chart-mini-radio">
-          <label><input type="radio" name="payrate-view" value="bar" checked />柱状（月度）</label>
-          <label><input type="radio" name="payrate-view" value="line" />折线（日度）</label>
-        </div>
-      </div>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">月份（≤3）：</span>
-        <div class="chart-mini-chips" id="payrate-months"></div>
-      </div>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">国家：</span>
-        <div class="chart-mini-chips" id="payrate-countries"></div>
-      </div>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">媒体：</span>
-        <div class="chart-mini-chips" id="payrate-media"></div>
-      </div>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">产品类型：</span>
-        <div class="chart-mini-chips" id="payrate-products"></div>
-      </div>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">指标：</span>
-        <div class="chart-mini-chips" id="payrate-metrics"></div>
-      </div>
-    </div>
-  </header>
-
-  <div class="chart" id="chart-payrate"></div>
-
-  <div class="chart-table-section">
-    <div class="chart-table-title">当前筛选 · D0 / D7 付费率（月度汇总）</div>
-    <div class="chart-table-wrapper">
-      <table class="chart-table" id="table-payrate"></table>
-    </div>
-  </div>
-</section>
-
-        <!-- MODULE-03: D0/D7 ARPPU (keep IDs) -->
-<section class="chart-card" id="card-arppu">
-  <header class="chart-card-header">
-    <div class="chart-title-block">
-      <div class="chart-kicker">Monetization</div>
-      <div class="chart-title">D0 / D7 ARPPU</div>
-      <div class="chart-sub">
-        口径：D0 ARPPU = ΣD0_PURCHASE_VALUE / ΣD0_unique_purchase（USD/人），D7同理。折线支持媒体/产品拆线与“全选但不区分”聚合。
-      </div>
-    </div>
-
-    <div class="chart-controls">
-      <span class="chart-badge">单位：USD/人</span>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">视图：</span>
-        <div class="chart-mini-radio">
-          <label><input type="radio" name="arppu-view" value="bar" checked />柱状（月度）</label>
-          <label><input type="radio" name="arppu-view" value="line" />折线（日度）</label>
-        </div>
-      </div>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">月份（≤3）：</span>
-        <div class="chart-mini-chips" id="arppu-months"></div>
-      </div>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">国家：</span>
-        <div class="chart-mini-chips" id="arppu-countries"></div>
-      </div>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">媒体：</span>
-        <div class="chart-mini-chips" id="arppu-media"></div>
-      </div>
-
-      <div class="chart-mini-filter">
-        <span class="chart-mini-label">产品类型：</span>
-        <div class="chart-mini-chips" id="arppu-products"></div>
-      </div>
-    </div>
-  </header>
-
-  <div class="chart" id="chart-arppu"></div>
-
-  <div class="chart-table-section">
-    <div class="chart-table-title">当前筛选 · D0 / D7 ARPPU（月度汇总）</div>
-    <div class="chart-table-wrapper">
-      <table class="chart-table" id="table-arppu"></table>
-    </div>
-  </div>
-</section>
-
-
-        <!-- 4. D0 / D7 人均流水（体育 / 游戏 / 总） -->
-        <section class="chart-card" id="card-bet-flow-per-user">
+        <!-- 1) 买量注册数 -->
+        <section class="chart-card" id="card-paid-registrations">
           <header class="chart-card-header">
             <div class="chart-title-block">
-              <div class="chart-kicker">Engagement</div>
-              <div class="chart-title">D0 / D7 人均流水（体育 / 游戏 / 总）</div>
-              <div class="chart-sub">
-                占位：TOTAL/Sports/Games 人均流水 = Bet Flow / Bet Placed User（D0/D7）。
-              </div>
+              <div class="chart-kicker">Scale</div>
+              <div class="chart-title">买量注册数 · 月度趋势</div>
+              <div class="chart-sub">口径：registration（人）；按月汇总（UTC+0 日切）。</div>
             </div>
             <div class="chart-controls">
-              <span class="chart-badge">单位：USD/人</span>
+              <span class="chart-badge">单位：人</span>
             </div>
           </header>
-
-          <div
-            class="chart"
-            id="chart-bet-flow-per-user"
-            data-placeholder="D0 / D7 人均流水（体育/游戏/总）"
-          ></div>
-
-          <div class="chart-summary">
-            口径提示：D0_TOTAL_BET_FLOW/D0_TOTAL_BET_PLACED_USER；D0_SPORTS_BET_FLOW/D0_SPORTS_BET_PLACED_USER；
-            D0_GAMES_BET_FLOW/D0_GAMES_BET_PLACED_USER（D7 同理）。
-          </div>
-
-          <div class="chart-table-wrapper">
-            <table id="table-bet-flow-per-user" class="chart-table"></table>
-          </div>
-
-          <div class="chart-comment" data-comment-key="bet-flow-per-user">
-            <div class="chart-comment-label"><span>我的备注（人均流水）</span></div>
-            <textarea placeholder="例如：赛事密度、玩法导流、推荐位/入口改动、游戏 RTP 波动、国家结构等"></textarea>
-            <div class="comment-actions">
-              <button type="button" class="btn-save">保存备注</button>
-              <span class="comment-status">备注保存在浏览器本地，并写入当前链接；保存后复制地址栏即可分享。</span>
-            </div>
-          </div>
+          <div class="chart" id="chart-paid-registrations"></div>
+          <div class="chart-summary" data-analysis-key="reg"></div>
         </section>
 
-        <!-- 5. 体育 vs 游戏玩家比例 -->
-        <section class="chart-card" id="card-sport-vs-game-ratio">
+        <!-- 2) 注册单价 -->
+        <section class="chart-card" id="card-paid-reg-cpa">
           <header class="chart-card-header">
             <div class="chart-title-block">
-              <div class="chart-kicker">Mix</div>
-              <div class="chart-title">体育 vs 游戏玩家比例</div>
-              <div class="chart-sub">
-                占位：体育/游戏用户比例 = SPORTS_BET_PLACED_USER / GAMES_BET_PLACED_USER（D0/D7）。
-              </div>
+              <div class="chart-kicker">Efficiency</div>
+              <div class="chart-title">注册单价（CPA）· 月度趋势</div>
+              <div class="chart-sub">公式：spent / registration；币种：USD 等值。</div>
             </div>
             <div class="chart-controls">
-              <span class="chart-badge">单位：比例</span>
+              <span class="chart-badge">单位：USD</span>
             </div>
           </header>
-
-          <div class="chart" id="chart-sport-vs-game-ratio" data-placeholder="体育 vs 游戏玩家比例"></div>
-
-          <div class="chart-table-wrapper">
-            <table id="table-sport-vs-game-ratio" class="chart-table"></table>
-          </div>
-
-          <div class="chart-comment" data-comment-key="sport-vs-game-ratio">
-            <div class="chart-comment-label"><span>我的备注（玩法结构）</span></div>
-            <textarea placeholder="例如：投放素材偏好、落地页引导、主推赛事/主推游戏、活动倾斜等"></textarea>
-            <div class="comment-actions">
-              <button type="button" class="btn-save">保存备注</button>
-              <span class="comment-status">备注保存在浏览器本地，并写入当前链接；保存后复制地址栏即可分享。</span>
-            </div>
-          </div>
+          <div class="chart" id="chart-paid-reg-cpa"></div>
+          <div class="chart-summary" data-analysis-key="reg_cpa"></div>
         </section>
 
-        <!-- 6. 次日 / 7 日留存率 -->
-        <section class="chart-card" id="card-retention">
+        <!-- 3) D0/D7 付费率 -->
+        <section class="chart-card" id="card-paid-pay-rate">
           <header class="chart-card-header">
             <div class="chart-title-block">
-              <div class="chart-kicker">Retention</div>
-              <div class="chart-title">次日 / 7 日留存率</div>
-              <div class="chart-sub">
-                占位：次留 = D1_retained_users/registration；七留 = D7_retained_users/registration。
-              </div>
+              <div class="chart-kicker">Conversion</div>
+              <div class="chart-title">D0 / D7 付费率 · 月度趋势</div>
+              <div class="chart-sub">公式：D0_unique_purchase/registration；D7_unique_purchase/registration。</div>
             </div>
             <div class="chart-controls">
               <span class="chart-badge">单位：%</span>
             </div>
           </header>
+          <div class="chart" id="chart-paid-pay-rate"></div>
+          <div class="chart-summary" data-analysis-key="pay_rate"></div>
+        </section>
 
-          <div class="chart" id="chart-retention" data-placeholder="次日 / 7 日留存率"></div>
-
-          <div class="chart-table-wrapper">
-            <table id="table-retention" class="chart-table"></table>
-          </div>
-
-          <div class="chart-comment" data-comment-key="retention">
-            <div class="chart-comment-label"><span>我的备注（留存）</span></div>
-            <textarea placeholder="例如：新手引导、Push/短信触达、活动节奏、支付体验、赛事周期、产品 Bug 等"></textarea>
-            <div class="comment-actions">
-              <button type="button" class="btn-save">保存备注</button>
-              <span class="comment-status">备注保存在浏览器本地，并写入当前链接；保存后复制地址栏即可分享。</span>
+        <!-- 4) D0/D7 ARPPU -->
+        <section class="chart-card" id="card-paid-arppu">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Monetization</div>
+              <div class="chart-title">D0 / D7 ARPPU · 月度趋势</div>
+              <div class="chart-sub">公式：D0_PURCHASE_VALUE/D0_unique_purchase；D7_PURCHASE_VALUE/D7_unique_purchase。</div>
             </div>
-          </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：USD</span>
+            </div>
+          </header>
+          <div class="chart" id="chart-paid-arppu"></div>
+          <div class="chart-summary" data-analysis-key="arppu"></div>
+        </section>
+
+        <!-- 5) 充值单价（付费单价/CPP） -->
+        <section class="chart-card" id="card-paid-cpp">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Cost</div>
+              <div class="chart-title">充值单价（CPP）· 月度趋势</div>
+              <div class="chart-sub">公式：spent/D0_unique_purchase；spent/D7_unique_purchase。</div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：USD</span>
+            </div>
+          </header>
+          <div class="chart" id="chart-paid-cpp"></div>
+          <div class="chart-summary" data-analysis-key="cpp"></div>
+        </section>
+
+        <!-- 6) D0/D7 充值 ROI -->
+        <section class="chart-card" id="card-paid-roi">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">ROI</div>
+              <div class="chart-title">D0 / D7 充值 ROI · 月度趋势</div>
+              <div class="chart-sub">公式：D0_PURCHASE_VALUE/spent；D7_PURCHASE_VALUE/spent。</div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：x</span>
+            </div>
+          </header>
+          <div class="chart" id="chart-paid-roi"></div>
+          <div class="chart-summary" data-analysis-key="roi"></div>
+        </section>
+
+        <!-- 7) D0/D7 人均流水（总/体育/游戏） -->
+        <section class="chart-card" id="card-paid-betflow">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Engagement</div>
+              <div class="chart-title">人均流水（总/体育/游戏）· 月度趋势</div>
+              <div class="chart-sub">公式：BET_FLOW / BET_PLACED_USER；可切 D0 / D7。</div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：USD</span>
+              <div class="chart-mini-filter">
+                <span class="chart-mini-label">口径：</span>
+                <div class="chart-mini-radio" id="flow-daytype">
+                  <label><input type="radio" name="flowDayType" value="D0" checked />D0</label>
+                  <label><input type="radio" name="flowDayType" value="D7" />D7</label>
+                </div>
+              </div>
+            </div>
+          </header>
+          <div class="chart" id="chart-paid-betflow"></div>
+          <div class="chart-summary" data-analysis-key="flow"></div>
+        </section>
+
+        <!-- 8) 留存（次留/七留） -->
+        <section class="chart-card" id="card-paid-retention">
+          <header class="chart-card-header">
+            <div class="chart-title-block">
+              <div class="chart-kicker">Retention</div>
+              <div class="chart-title">次留 / 七留 · 月度趋势</div>
+              <div class="chart-sub">公式：D1_retained_users/registration；D7_retained_users/registration。</div>
+            </div>
+            <div class="chart-controls">
+              <span class="chart-badge">单位：%</span>
+            </div>
+          </header>
+          <div class="chart" id="chart-paid-retention"></div>
+          <div class="chart-summary" data-analysis-key="retention"></div>
         </section>
       </main>
 
+      <!-- 页脚（你如果要求与 organic 完全一致，也可以把下面两行文案改回去） -->
       <footer class="footer">
         <span
-          >Owner：<strong>用户增长部-Jerry Lyu</strong> · 买量看板 v0.1（从
-          RAW_PAID_BY_MONTH 聚合）</span
+          >Owner：<strong>用户增长部-Jerry Lyu</strong> · 自然量看板 v3.1（从
+          RAW_ORGANIC_BY_MONTH 聚合）</span
         >
-        <span>数据来源：内部买量报表 · 时间口径建议统一为 UTC+0 日切。</span>
+        <span>数据来源：内部自然量报表 · 时间口径建议统一为 UTC+0 日切。</span>
       </footer>
     </div>
 
-    <!-- ECharts -->
+    <!-- 依赖：ECharts + 数据 + 分析文案 -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-
-    <!-- Source data -->
     <script src="paid-data.js"></script>
-<script src="./paid-dashboard.js"></script>
+    <script src="paid-analytics.js"></script>
+
+    <!-- ============ Core：全局聚合/格式化/筛选/分析块渲染 ============ -->
     <script>
-      // ===========================
-      // 0. 占位态（还没接入图表逻辑时先把卡片撑起来）
-      // ===========================
-      function initPlaceholders() {
-        const chartEls = document.querySelectorAll(".chart[data-placeholder]");
-        chartEls.forEach((el) => {
-          const label = el.getAttribute("data-placeholder") || "图表";
-          el.innerHTML = '<div class="chart-empty">待接入：' + label + "</div>";
-        });
+      (function () {
+        const RAW = window.RAW_PAID_BY_MONTH || {};
+        const ANALYSIS_TEXT =
+          window.PAID_ANALYSIS_TEXT || window.ANALYSIS_TEXT || {};
 
-        const tableEls = document.querySelectorAll("table.chart-table");
-        tableEls.forEach((tb) => {
-          tb.innerHTML =
-            '<tr><th style="text-align:left;">提示</th></tr>' +
-            '<tr><td style="color:rgba(71,85,105,0.9);">这张表后续会输出月度汇总（国家/媒体/产品形态可切）。</td></tr>';
-        });
-      }
+        const ALL_MONTHS = Object.keys(RAW).sort();
 
-      // ===========================
-      // 1. 备注保存：本地 + 链接共享（复用自然量看板逻辑）
-      // ===========================
-      function initCommentBlocks() {
-        const STORAGE_KEY = "paid_monthly_comments_v1";
+        const DEFAULT_COLOR_PALETTE = [
+          "#2563eb",
+          "#16a34a",
+          "#f97316",
+          "#7c3aed",
+          "#ef4444",
+          "#0f766e",
+        ];
 
-        function loadFromUrl() {
-          const hash = window.location.hash || "";
-          const prefix = "#comments=";
-          if (!hash.startsWith(prefix)) return null;
-          const encoded = hash.slice(prefix.length);
-          if (!encoded) return null;
-          try {
-            const json = decodeURIComponent(encoded);
-            const obj = JSON.parse(json);
-            if (obj && typeof obj === "object") return obj;
-          } catch (e) {
-            console.warn("解析 URL 备注失败", e);
-          }
-          return null;
+        const SUM_FIELDS = [
+          "spent",
+          "registration",
+          "D0_unique_purchase",
+          "D7_unique_purchase",
+          "D0_PURCHASE_VALUE",
+          "D7_PURCHASE_VALUE",
+          "D0_TOTAL_BET_PLACED_USER",
+          "D7_TOTAL_BET_PLACED_USER",
+          "D0_SPORTS_BET_PLACED_USER",
+          "D0_GAMES_BET_PLACED_USER",
+          "D7_SPORTS_BET_PLACED_USER",
+          "D7_GAMES_BET_PLACED_USER",
+          "D0_SPORTS_BET_FLOW",
+          "D0_GAMES_BET_FLOW",
+          "D0_TOTAL_BET_FLOW",
+          "D7_SPORTS_BET_FLOW",
+          "D7_GAMES_BET_FLOW",
+          "D7_TOTAL_BET_FLOW",
+          "D1_retained_users",
+          "D7_retained_users",
+        ];
+
+        const modules = [];
+        const charts = [];
+        const filterState = {
+          countries: [],
+          medias: [],
+          productTypes: [],
+        };
+        const filterOptions = {
+          countries: [],
+          medias: [],
+          productTypes: [],
+        };
+
+        const listeners = new Set();
+
+        let aggCache = null;
+        let aggCacheKey = "";
+
+        function safeDiv(a, b) {
+          const na = Number(a);
+          const nb = Number(b);
+          if (!isFinite(na) || !isFinite(nb) || nb === 0) return null;
+          return na / nb;
         }
 
-        function saveToUrl(comments) {
-          try {
-            const json = JSON.stringify(comments || {});
-            const encoded = encodeURIComponent(json);
-            const base = window.location.href.split("#")[0];
-            const newUrl = base + "#comments=" + encoded;
-            window.history.replaceState(null, "", newUrl);
-          } catch (e) {
-            console.warn("写入 URL 备注失败", e);
-          }
+        function formatMonthLabel(monthKey) {
+          if (!monthKey || typeof monthKey !== "string") return "";
+          const parts = monthKey.split("-");
+          const mm = parts[1] || monthKey;
+          const mNum = parseInt(mm, 10) || 0;
+          return (mNum > 0 ? mNum : mm) + "月";
         }
 
-        function loadFromStorage() {
-          try {
-            const raw = window.localStorage.getItem(STORAGE_KEY);
-            if (!raw) return null;
-            const obj = JSON.parse(raw);
-            if (obj && typeof obj === "object") return obj;
-          } catch (e) {
-            console.warn("读取本地备注失败", e);
-          }
-          return null;
+        function formatInteger(v) {
+          if (v == null || !isFinite(v)) return "-";
+          return Math.round(v).toLocaleString();
         }
 
-        function saveToStorage(comments) {
-          try {
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(comments || {}));
-          } catch (e) {
-            console.warn("写入本地备注失败", e);
-          }
+        function formatUSD(v, digits) {
+          const d = typeof digits === "number" ? digits : 2;
+          if (v == null || !isFinite(v)) return "-";
+          return Number(v).toLocaleString(undefined, {
+            minimumFractionDigits: d,
+            maximumFractionDigits: d,
+          });
         }
 
-        const comments = loadFromUrl() || loadFromStorage() || {};
-        const blocks = document.querySelectorAll(".chart-comment");
+        function formatPct01(v, digits) {
+          const d = typeof digits === "number" ? digits : 1;
+          if (v == null || !isFinite(v)) return "-";
+          return (Number(v) * 100).toFixed(d) + "%";
+        }
 
-        blocks.forEach((block) => {
-          const key = block.getAttribute("data-comment-key");
-          if (!key) return;
-          const textarea = block.querySelector("textarea");
-          const btn = block.querySelector(".btn-save");
-          const status = block.querySelector(".comment-status");
-          if (!textarea || !btn) return;
+        function formatRatio(v, digits) {
+          const d = typeof digits === "number" ? digits : 2;
+          if (v == null || !isFinite(v)) return "-";
+          return Number(v).toFixed(d) + "x";
+        }
 
-          if (typeof comments[key] === "string") {
-            textarea.value = comments[key];
+        function buildFilterOptions() {
+          const cSet = new Set();
+          const mSet = new Set();
+          const pSet = new Set();
+
+          ALL_MONTHS.forEach((month) => {
+            const rows = RAW[month] || [];
+            rows.forEach((r) => {
+              if (r && r.country) cSet.add(r.country);
+              if (r && r.media) mSet.add(r.media);
+              if (r && r.productType) pSet.add(r.productType);
+            });
+          });
+
+          filterOptions.countries = Array.from(cSet).sort();
+          filterOptions.medias = Array.from(mSet).sort();
+          filterOptions.productTypes = Array.from(pSet).sort();
+        }
+
+        function setArrayToAll(targetArray, values) {
+          targetArray.length = 0;
+          values.forEach((v) => targetArray.push(v));
+        }
+
+        function currentFilterKey() {
+          const c = filterState.countries.slice().sort().join("|");
+          const m = filterState.medias.slice().sort().join("|");
+          const p = filterState.productTypes.slice().sort().join("|");
+          return c + "~~" + m + "~~" + p;
+        }
+
+        function computeAggForMonth(month) {
+          const rows = RAW[month] || [];
+          const cSel = new Set(filterState.countries);
+          const mSel = new Set(filterState.medias);
+          const pSel = new Set(filterState.productTypes);
+
+          const out = {};
+          SUM_FIELDS.forEach((k) => (out[k] = 0));
+
+          rows.forEach((r) => {
+            if (!r) return;
+            if (cSel.size && !cSel.has(r.country)) return;
+            if (mSel.size && !mSel.has(r.media)) return;
+            if (pSel.size && !pSel.has(r.productType)) return;
+
+            SUM_FIELDS.forEach((k) => {
+              const v = Number(r[k]);
+              if (isFinite(v)) out[k] += v;
+            });
+          });
+
+          return out;
+        }
+
+        function getAggByMonth() {
+          const key = currentFilterKey();
+          if (aggCache && aggCacheKey === key) return aggCache;
+
+          const res = {};
+          ALL_MONTHS.forEach((m) => (res[m] = computeAggForMonth(m)));
+
+          aggCache = res;
+          aggCacheKey = key;
+          return res;
+        }
+
+        function getSeries(calcFn) {
+          const agg = getAggByMonth();
+          return ALL_MONTHS.map((m) => calcFn(agg[m] || {}));
+        }
+
+        function renderFilterChips(container, values, stateArray, options) {
+          if (!container) return;
+          const max = options && options.max ? options.max : null;
+          const onChange = options && options.onChange ? options.onChange : null;
+          const getLabel = options && options.getLabel ? options.getLabel : null;
+
+          container.innerHTML = "";
+
+          if (Array.isArray(stateArray) && stateArray.length === 0) {
+            values.forEach((v) => stateArray.push(v));
           }
 
-          btn.addEventListener("click", () => {
-            const allComments = {};
-            document.querySelectorAll(".chart-comment").forEach((b2) => {
-              const k2 = b2.getAttribute("data-comment-key");
-              const t2 = b2.querySelector("textarea");
-              if (!k2 || !t2) return;
-              const val = t2.value.trim();
-              if (val) allComments[k2] = val;
+          values.forEach((value, idx) => {
+            const labelEl = document.createElement("label");
+            labelEl.className = "filter-chip";
+
+            const input = document.createElement("input");
+            input.type = "checkbox";
+            input.value = value;
+
+            const selected = stateArray.indexOf(value) !== -1;
+            input.checked = selected;
+            if (selected) labelEl.classList.add("filter-chip-active");
+
+            labelEl.appendChild(input);
+            labelEl.appendChild(
+              document.createTextNode(
+                typeof getLabel === "function" ? getLabel(value, idx) : value
+              )
+            );
+
+            input.addEventListener("change", () => {
+              const existsIndex = stateArray.indexOf(value);
+
+              if (input.checked) {
+                if (max && stateArray.length >= max && existsIndex === -1) {
+                  input.checked = false;
+                  return;
+                }
+                if (existsIndex === -1) stateArray.push(value);
+              } else {
+                if (existsIndex !== -1) stateArray.splice(existsIndex, 1);
+              }
+
+              labelEl.classList.toggle("filter-chip-active", input.checked);
+              if (typeof onChange === "function") onChange();
             });
 
-            saveToStorage(allComments);
-            saveToUrl(allComments);
+            container.appendChild(labelEl);
+          });
 
-            const now = new Date();
-            const hh = String(now.getHours()).padStart(2, "0");
-            const mm = String(now.getMinutes()).padStart(2, "0");
-            if (status) {
-              status.textContent = "已保存 " + hh + ":" + mm + " · 当前浏览器 + 链接可见";
+          if (typeof onChange === "function") onChange();
+        }
+
+        function updateHeroDataRange() {
+          const el = document.getElementById("hero-data-range");
+          if (!el) return;
+          if (!ALL_MONTHS.length) {
+            el.textContent = "数据范围：暂无月份（请先填 RAW_PAID_BY_MONTH）";
+            return;
+          }
+          const first = ALL_MONTHS[0];
+          const last = ALL_MONTHS[ALL_MONTHS.length - 1];
+          el.textContent = `数据范围：${first} ～ ${last}`;
+        }
+
+        const analysisTextareas = [];
+
+        function getDefaultAnalysisMonth() {
+          const url = new URL(location.href);
+          const m = url.searchParams.get("analysisMonth");
+          return m && ALL_MONTHS.indexOf(m) !== -1 ? m : null;
+        }
+
+        function initAnalysisBlocks() {
+          const defaultMonth = getDefaultAnalysisMonth();
+          const summaries = document.querySelectorAll(
+            ".chart-summary[data-analysis-key]"
+          );
+
+          summaries.forEach((summaryEl) => {
+            const key = summaryEl.getAttribute("data-analysis-key");
+            if (!key) return;
+
+            summaryEl.innerHTML = "";
+
+            const box = document.createElement("div");
+            box.className = "chart-analysis-box";
+
+            const monthsCol = document.createElement("div");
+            monthsCol.className = "chart-analysis-months";
+
+            const bodyCol = document.createElement("div");
+            bodyCol.className = "chart-analysis-body";
+
+            const title = document.createElement("div");
+            title.className = "chart-analysis-title";
+            title.textContent = "数据分析";
+
+            const textarea = document.createElement("textarea");
+            textarea.className = "chart-analysis-textarea";
+            textarea.readOnly = true;
+            textarea.placeholder = "暂未填写该月份的数据分析文案。";
+
+            function autosize() {
+              textarea.style.height = "auto";
+              textarea.style.height = textarea.scrollHeight + "px";
+            }
+
+            analysisTextareas.push({ el: textarea, autosize });
+
+            bodyCol.appendChild(title);
+            bodyCol.appendChild(textarea);
+            box.appendChild(monthsCol);
+            box.appendChild(bodyCol);
+            summaryEl.appendChild(box);
+
+            const btns = [];
+
+            ALL_MONTHS.forEach((monthKey) => {
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "chart-analysis-month-btn";
+              btn.dataset.month = monthKey;
+              btn.textContent = formatMonthLabel(monthKey);
+              btn.title = monthKey;
+
+              btn.addEventListener("click", () => {
+                btns.forEach((b) => b.classList.remove("active"));
+                btn.classList.add("active");
+
+                const content =
+                  ANALYSIS_TEXT[key] &&
+                  typeof ANALYSIS_TEXT[key][monthKey] === "string" &&
+                  ANALYSIS_TEXT[key][monthKey].trim()
+                    ? ANALYSIS_TEXT[key][monthKey]
+                    : "暂未填写该月份的数据分析文案。";
+
+                textarea.value = content;
+                autosize();
+              });
+
+              monthsCol.appendChild(btn);
+              btns.push(btn);
+            });
+
+            if (!btns.length) {
+              textarea.value =
+                "当前没有可用月份；请确认 RAW_PAID_BY_MONTH 是否已填入数据。";
+              autosize();
+              return;
+            }
+
+            const initialMonth =
+              (defaultMonth && ALL_MONTHS.indexOf(defaultMonth) !== -1
+                ? defaultMonth
+                : null) || ALL_MONTHS[ALL_MONTHS.length - 1];
+
+            const initialBtn =
+              btns.find((b) => b.dataset.month === initialMonth) ||
+              btns[btns.length - 1];
+
+            initialBtn.click();
+          });
+        }
+
+        function makeBaseOption(months) {
+          return {
+            grid: { left: 54, right: 22, top: 18, bottom: 40 },
+            tooltip: {
+              trigger: "axis",
+              backgroundColor: "rgba(15, 23, 42, 0.92)",
+              borderWidth: 0,
+              textStyle: { fontSize: 11 },
+              axisPointer: { type: "line" },
+            },
+            xAxis: {
+              type: "category",
+              data: months.map(formatMonthLabel),
+              axisTick: { show: false },
+              axisLine: { lineStyle: { color: "rgba(148,163,184,0.6)" } },
+              axisLabel: { color: "#334155", fontSize: 11 },
+            },
+            yAxis: {
+              type: "value",
+              axisLine: { show: false },
+              axisTick: { show: false },
+              splitLine: { lineStyle: { color: "rgba(148,163,184,0.22)" } },
+              axisLabel: { color: "#64748b", fontSize: 11 },
+            },
+          };
+        }
+
+        function renderLineChart(chart, cfg) {
+          const months = cfg.months || [];
+          const series = cfg.series || [];
+          const yFormatter = cfg.yFormatter || ((v) => v);
+          const tooltipValue = cfg.tooltipValue || ((v) => String(v));
+
+          const option = makeBaseOption(months);
+
+          option.legend = cfg.legend
+            ? {
+                data: series.map((s) => s.name),
+                right: 16,
+                top: 8,
+                textStyle: { fontSize: 11, color: "#475569" },
+              }
+            : { show: false };
+
+          option.yAxis.axisLabel.formatter = (v) => yFormatter(v);
+
+          option.tooltip.formatter = (params) => {
+            if (!params || !params.length) return "";
+            const idx = params[0].dataIndex;
+            const monthRaw = months[idx] || "";
+            const lines = [`${monthRaw}`];
+            params.forEach((p) => {
+              lines.push(`${p.marker}${p.seriesName}：${tooltipValue(p.value)}`);
+            });
+            return lines.join("<br/>");
+          };
+
+          option.series = series.map((s, i) => ({
+            name: s.name,
+            type: "line",
+            data: s.data,
+            smooth: true,
+            showSymbol: false,
+            lineStyle: { width: 2, color: s.color || DEFAULT_COLOR_PALETTE[i] },
+            itemStyle: { color: s.color || DEFAULT_COLOR_PALETTE[i] },
+          }));
+
+          chart.setOption(option, true);
+        }
+
+        function renderBarChart(chart, cfg) {
+          const months = cfg.months || [];
+          const name = cfg.name || "";
+          const data = cfg.data || [];
+          const color = cfg.color || DEFAULT_COLOR_PALETTE[0];
+          const yFormatter = cfg.yFormatter || ((v) => v);
+          const tooltipValue = cfg.tooltipValue || ((v) => String(v));
+
+          const option = makeBaseOption(months);
+
+          option.tooltip.axisPointer = { type: "shadow" };
+          option.yAxis.axisLabel.formatter = (v) => yFormatter(v);
+
+          option.tooltip.formatter = (params) => {
+            const p = Array.isArray(params) ? params[0] : params;
+            if (!p) return "";
+            const idx = p.dataIndex;
+            const monthRaw = months[idx] || "";
+            return `${monthRaw}<br/>${p.marker}${name}：${tooltipValue(p.value)}`;
+          };
+
+          option.series = [
+            {
+              name,
+              type: "bar",
+              data,
+              barMaxWidth: 28,
+              itemStyle: { color, borderRadius: [6, 6, 0, 0] },
+            },
+          ];
+
+          chart.setOption(option, true);
+        }
+
+        function emitFiltersChanged() {
+          aggCache = null;
+          listeners.forEach((fn) => {
+            try {
+              fn();
+            } catch (e) {}
+          });
+        }
+
+        function initGlobalFilters() {
+          buildFilterOptions();
+
+          // 默认全选
+          setArrayToAll(filterState.countries, filterOptions.countries);
+          setArrayToAll(filterState.medias, filterOptions.medias);
+          setArrayToAll(filterState.productTypes, filterOptions.productTypes);
+
+          const cEl = document.getElementById("filter-countries");
+          const mEl = document.getElementById("filter-medias");
+          const pEl = document.getElementById("filter-productTypes");
+
+          const onChange = () => emitFiltersChanged();
+
+          renderFilterChips(cEl, filterOptions.countries, filterState.countries, {
+            onChange,
+          });
+          renderFilterChips(mEl, filterOptions.medias, filterState.medias, {
+            onChange,
+          });
+          renderFilterChips(
+            pEl,
+            filterOptions.productTypes,
+            filterState.productTypes,
+            { onChange }
+          );
+
+          const resetBtn = document.getElementById("btn-reset-filters");
+          if (resetBtn) {
+            resetBtn.addEventListener("click", () => {
+              setArrayToAll(filterState.countries, filterOptions.countries);
+              setArrayToAll(filterState.medias, filterOptions.medias);
+              setArrayToAll(
+                filterState.productTypes,
+                filterOptions.productTypes
+              );
+              renderFilterChips(
+                cEl,
+                filterOptions.countries,
+                filterState.countries,
+                { onChange }
+              );
+              renderFilterChips(mEl, filterOptions.medias, filterState.medias, {
+                onChange,
+              });
+              renderFilterChips(
+                pEl,
+                filterOptions.productTypes,
+                filterState.productTypes,
+                { onChange }
+              );
+            });
+          }
+        }
+
+        function init() {
+          updateHeroDataRange();
+
+          if (!ALL_MONTHS.length) {
+            const el = document.getElementById("hero-data-range");
+            if (el) el.textContent = "数据范围：暂无数据（请先填 RAW_PAID_BY_MONTH）";
+            return;
+          }
+
+          initGlobalFilters();
+          initAnalysisBlocks();
+
+          modules.forEach((m) => {
+            try {
+              m.initFn();
+            } catch (e) {
+              console.error(e);
             }
           });
-        });
-      }
 
-      document.addEventListener("DOMContentLoaded", () => {
-        initPlaceholders();
-        initCommentBlocks();
-      });
+          window.addEventListener("resize", () => {
+            charts.forEach((c) => {
+              try {
+                c.resize();
+              } catch (e) {}
+            });
+            analysisTextareas.forEach((t) => {
+              try {
+                t.autosize();
+              } catch (e) {}
+            });
+          });
+        }
+
+        window.PaidDashboard = {
+          COLORS: DEFAULT_COLOR_PALETTE,
+          registerModule: function (name, initFn) {
+            modules.push({ name, initFn });
+          },
+          registerChart: function (chart) {
+            charts.push(chart);
+          },
+          onFiltersChange: function (fn) {
+            listeners.add(fn);
+            return function () {
+              listeners.delete(fn);
+            };
+          },
+          getMonths: function () {
+            return ALL_MONTHS.slice();
+          },
+          getAggByMonth,
+          getSeries,
+          safeDiv,
+          formatMonthLabel,
+          formatInteger,
+          formatUSD,
+          formatPct01,
+          formatRatio,
+          renderLineChart,
+          renderBarChart,
+          init,
+        };
+
+        function boot() {
+          // 如果你项目里 auth.js 提供了 guard，就用它；没有也不影响页面运行
+          if (window.Auth && typeof window.Auth.guard === "function") {
+            window.Auth.guard(function () {
+              window.PaidDashboard.init();
+            });
+            return;
+          }
+          window.PaidDashboard.init();
+        }
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", boot);
+        } else {
+          boot();
+        }
+      })();
     </script>
+
+    <!-- 模块脚本（8个） -->
+    <script src="paid-module-registrations.js"></script>
+    <script src="paid-module-reg-cpa.js"></script>
+    <script src="paid-module-pay-rate.js"></script>
+    <script src="paid-module-arppu.js"></script>
+    <script src="paid-module-cpp.js"></script>
+    <script src="paid-module-roi.js"></script>
+    <script src="paid-module-betflow.js"></script>
+    <script src="paid-module-retention.js"></script>
+
+    <!-- 可选：沿用你项目里的鉴权 -->
+    <script src="../auth.js"></script>
   </body>
 </html>
