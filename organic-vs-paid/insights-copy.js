@@ -243,9 +243,6 @@
   }
 },
 
-        }
-      }
-    }
   };
 
   function emptyInsight(moduleId) {
