@@ -34,4 +34,3 @@
 
   PaidDashboard.registerModule("arppu", init);
 })();
- // 结尾
