@@ -716,7 +716,64 @@
           <div class="chart-summary" data-analysis-key="flow"></div>
         </section>
 
-        <!-- 8) 留存（次留/七留） -->
+        <!-- 8) 体育玩家 / 游戏玩家占比 -->
+<section class="chart-card" id="card-paid-sg-share">
+  <header class="chart-card-header">
+    <div class="chart-title-block">
+      <div class="chart-kicker">Engagement</div>
+      <div class="chart-title">体育玩家 / 游戏玩家占比</div>
+      <div class="chart-sub">
+        口径：双投=体育+游戏-总投注；仅体育=体育-双投；仅游戏=游戏-双投。D7 用斜线填充区分。
+      </div>
+    </div>
+
+    <div class="chart-controls">
+      <span class="chart-badge">单位：人（表内含占比%）</span>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">视图：</span>
+        <div class="chart-mini-radio" id="sg-share-view"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">月份：</span>
+        <div class="chart-mini-chips" id="sg-share-months"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">D 窗口：</span>
+        <div class="chart-mini-chips" id="sg-share-windows"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">国家：</span>
+        <div class="chart-mini-chips" id="sg-share-countries"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">媒体：</span>
+        <div class="chart-mini-chips" id="sg-share-medias"></div>
+      </div>
+
+      <div class="chart-mini-filter">
+        <span class="chart-mini-label">形态：</span>
+        <div class="chart-mini-chips" id="sg-share-productTypes"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="chart" id="chart-paid-sg-share"></div>
+  <div class="chart-summary" data-analysis-key="sg_share"></div>
+
+  <div class="chart-table-section">
+    <div class="chart-table-title" id="table-title-sg-share"></div>
+    <div class="chart-table-wrapper">
+      <table id="table-sg-share" class="chart-table"></table>
+    </div>
+  </div>
+</section>
+
+        <!-- 9) 留存（次留/七留） -->
         <section class="chart-card" id="card-paid-retention">
           <header class="chart-card-header">
             <div class="chart-title-block">
@@ -1345,6 +1402,7 @@
     <script src="paid-module-cpp.js"></script>
     <script src="paid-module-roi.js"></script>
     <script src="paid-module-betflow.js"></script>
+    <script src="paid-module-sg-share.js"></script>
     <script src="paid-module-retention.js"></script>
 
     <!-- 可选：沿用你项目里的鉴权 -->
