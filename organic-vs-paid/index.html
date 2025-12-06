@@ -256,7 +256,17 @@
     })();
   </script>
 
+   <!-- Chart library (ECharts) : load BEFORE modules render -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
+  <script>
+    // fallback if cdnjs is blocked/unavailable
+    if (!window.echarts) {
+      document.write('<script src="https://unpkg.com/echarts@5.5.0/dist/echarts.min.js"><\/script>');
+    }
+  </script>
+
   <!-- Data sources (you already prepared) -->
+  
   <script src="./organic-data.js"></script>
   <script src="./paid-data.js"></script>
 
