@@ -7,7 +7,7 @@
     };
 
   const MODULE_ID = "m4-betflow-percapita";
-  const COUNTRIES = ["GH", "KE", "NG", "TZ"]; // 本模块固定 4 国
+  const COUNTRIES = ["GH", "KE", "NG", "TZ", "UG"]; // 本模块固定 4 国
   const WINDOWS = ["D0", "D7"];
 
   const ECHARTS_SRC =
