@@ -15,7 +15,7 @@
   const CHART_ID = "chart-paid-registrations";
 
   // 国家显示固定顺序（缺国家也保留占位）
-  const COUNTRY_ORDER = ["GH", "KE", "NG", "TZ", "UG"];
+  const COUNTRY_ORDER = ["GH", "KE", "NG", "TZ"];
   const NO_SPLIT_TOKEN = "__ALL_NO_SPLIT__";
 
   function getRaw() {
