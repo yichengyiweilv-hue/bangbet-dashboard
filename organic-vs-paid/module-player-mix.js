@@ -4,7 +4,7 @@
   const register = OVP.registerModule || function (m) { (OVP.modules || (OVP.modules = [])).push(m); };
 
   const MODULE_ID = 'm5-player-mix';
-  const COUNTRIES = ['GH', 'KE', 'NG', 'TZ']; // 本模块按需求：不含 UG
+  const COUNTRIES = ['GH', 'KE', 'NG', 'TZ', 'UG']; 
 
   const SOURCES = [
     { key: 'organic', label: '自然量' },
