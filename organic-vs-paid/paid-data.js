@@ -778,4 +778,13 @@ const RAW_PAID_BY_MONTH = {
   ],
 };
 
+// 现有
 window.RAW_PAID_BY_MONTH = RAW_PAID_BY_MONTH;
+
+// 新增：给 index.html 的 resolveData() 识别用（推荐口径：扁平日维度数组）
+window.paidMonthlyData = Object.keys(RAW_PAID_BY_MONTH).sort().reduce((acc, m) => {
+  const rows = RAW_PAID_BY_MONTH[m];
+  if (Array.isArray(rows)) Array.prototype.push.apply(acc, rows);
+  return acc;
+}, []);
+
