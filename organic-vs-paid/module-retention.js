@@ -5,7 +5,7 @@
   const register = OVP.registerModule || function (m) { (OVP.modules || (OVP.modules = [])).push(m); };
 
   const MODULE_ID = 'm6-retention';
-  const COUNTRIES = ['GH', 'KE', 'NG', 'TZ']; // 固定顺序
+  const COUNTRIES = ['GH', 'KE', 'NG', 'TZ', 'UG']; // 固定顺序
 
   // 图表库：ECharts 5（与模块1保持一致）
   const ECHARTS_SRC = 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js';
