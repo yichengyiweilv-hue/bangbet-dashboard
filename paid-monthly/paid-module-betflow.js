@@ -59,4 +59,3 @@
 
   PaidDashboard.registerModule("flow", init);
 })();
-//结尾
