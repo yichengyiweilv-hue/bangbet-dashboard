@@ -1522,6 +1522,88 @@
     <script src="paid-module-betflow.js"></script>
     <script src="paid-module-sg-share.js"></script>
     <script src="paid-module-retention.js"></script>
+    <!-- 右侧悬浮：模块导航（点击滚动到模块居中） -->
+    <script>
+      (function () {
+        function clamp(n, min, max) {
+          return Math.max(min, Math.min(max, n));
+        }
+
+        function scrollToCardCenter(card) {
+          if (!card) return;
+          const rect = card.getBoundingClientRect();
+          const cardCenterY = window.pageYOffset + rect.top + rect.height / 2;
+          const target = cardCenterY - window.innerHeight / 2;
+
+          const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+          window.scrollTo({
+            top: clamp(target, 0, maxY),
+            behavior: "smooth",
+          });
+        }
+
+        function pickNavTitle(card) {
+          // 1) 允许你手工指定：<section ... data-nav-title="买量注册数">
+          const forced = card.getAttribute("data-nav-title");
+          if (forced && forced.trim()) return forced.trim();
+
+          // 2) 默认从 .chart-title 取（并截断到 “·” 前）
+          const t = card.querySelector(".chart-title");
+          const raw = (t ? t.textContent : card.id).trim();
+          return raw.split("·")[0].trim();
+        }
+
+        function initModuleNav() {
+          const nav = document.getElementById("module-nav");
+          const handle = document.getElementById("module-nav-handle");
+          const list = document.getElementById("module-nav-list");
+          if (!nav || !handle || !list) return;
+
+          // 点击按钮：固定展开/收起（移动端也能用）
+          handle.addEventListener("click", function (e) {
+            e.stopPropagation();
+            nav.classList.toggle("is-open");
+          });
+
+          // 点空白处收起
+          document.addEventListener("click", function (e) {
+            if (!nav.contains(e.target)) nav.classList.remove("is-open");
+          });
+
+          // ESC 收起
+          document.addEventListener("keydown", function (e) {
+            if (e.key === "Escape") nav.classList.remove("is-open");
+          });
+
+          // 自动抓取所有模块卡片（你新增模块只要也叫 card-paid-xxx，就会自动进来）
+          const cards = Array.from(
+            document.querySelectorAll('section.chart-card[id^="card-paid-"]')
+          );
+
+          list.innerHTML = "";
+          cards.forEach(function (card) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "module-nav-item";
+            btn.textContent = pickNavTitle(card);
+
+            btn.addEventListener("click", function (e) {
+              e.stopPropagation();
+              nav.classList.remove("is-open");
+              scrollToCardCenter(card);
+            });
+
+            list.appendChild(btn);
+          });
+        }
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", initModuleNav);
+        } else {
+          initModuleNav();
+        }
+      })();
+    </script>
 
     <!-- 可选：沿用你项目里的鉴权 -->
     <script src="../auth.js"></script>
