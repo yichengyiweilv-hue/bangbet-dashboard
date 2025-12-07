@@ -330,7 +330,7 @@
     var left = document.createElement('div');
     left.textContent = (opts.title || '数据分析');
     var right = document.createElement('div');
-    right.textContent = (mKey || (latestMonth(STORE) || '—')) + ' · 文案更新时间 ' + (STORE.updatedAt || '—');
+    right.textContent = (mKey || (latestMonth(STORE) || '—')) ;
     meta.appendChild(left);
     meta.appendChild(right);
 
