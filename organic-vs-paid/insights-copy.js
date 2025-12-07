@@ -186,7 +186,12 @@
           自然侧 TZ/UG 仍是短板：次留偏弱会拉低 7 日留存的上限。
           结论：买量质量在修复期，先守住七留，再谈放量。
           `) }
-      }
+      },
+
+
+      
+  //在上方新增月份分析'2025-11': {'m1-registration': { text: dedent(`....`) },....},
+      
     }
   };
 
@@ -279,7 +284,7 @@
     style.textContent = [
       ".ovp-analysis{margin-top:12px;padding:12px;border:1px solid var(--border, rgba(255,255,255,.12));border-radius:12px;background:rgba(255,255,255,.04)}",
       ".ovp-analysis .meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted, rgba(255,255,255,.62));margin-bottom:8px}",
-      ".ovp-analysis .textbox{white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;font-size:12px;line-height:1.65;color:var(--text, rgba(255,255,255,.92));padding:10px 12px;border-radius:10px;border:1px solid var(--border, rgba(255,255,255,.12));background:rgba(15,23,42,.22)}"
+      ".ovp-analysis .textbox{white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;font-size:12px;line-height:1.65;color:var(--text, rgba(255,255,255,.92));padding:10px 12px;border-radius:10px;border:1px solid var(--border, rgba(255,255,255,.12));background:rgba(255,255,255,.22)}"
     ].join("");
 
     document.head.appendChild(style);
