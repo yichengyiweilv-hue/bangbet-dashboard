@@ -525,6 +525,10 @@
   <body>
     <div class="page">
       <!-- 顶部栏（样式/结构同 organic，看板文案换成买量版） -->
+
+
+
+      
       <header class="top-bar">
         <div class="top-left">
           <div class="brand-mark">
@@ -595,7 +599,20 @@
           </div>
         </div>
       </section>
-
+<div class="chart-controls" id="paid-global-filters">
+  <div class="chart-mini-filter">
+    <span class="chart-mini-label">全局国家：</span>
+    <div class="chart-mini-chips" id="paid-global-countries"></div>
+  </div>
+  <div class="chart-mini-filter">
+    <span class="chart-mini-label">全局媒体：</span>
+    <div class="chart-mini-chips" id="paid-global-medias"></div>
+  </div>
+  <div class="chart-mini-filter">
+    <span class="chart-mini-label">全局产品类型：</span>
+    <div class="chart-mini-chips" id="paid-global-products"></div>
+  </div>
+</div>
       <main class="content">
         <!-- 1) 买量注册数 -->
         <section class="chart-card" id="card-paid-registrations">
@@ -805,7 +822,7 @@
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
     <script src="paid-data.js"></script>
     <script src="paid-analytics.js"></script>
-
+<script src="paid-global-filter-sync.js"></script>
     <!-- ============ Core：全局聚合/格式化/筛选/分析块渲染 ============ -->
     <script>
       (function () {
