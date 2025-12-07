@@ -551,6 +551,55 @@
         </div>
       </header>
 
+  <!-- Hero -->
+      <section class="hero">
+        <div class="hero-main">
+          <div class="hero-title">
+            <span class="bar"></span>
+            <span>买量月度数据对比 · 看板</span>
+          </div>
+          <div class="hero-sub">
+            汇总买量投放在不同月份的注册规模、注册单价、D0/D7 付费率与 ARPPU、充值 ROI、人均流水（总/体育/游戏）以及次留/七留表现。
+            数据来源：window.RAW_PAID_BY_MONTH；金额口径：USD 等值；日切建议统一为 UTC+0。
+          </div>
+          <div class="hero-tags">
+            <span class="hero-tag">维度：country / media / productType</span>
+            <span class="hero-tag">指标：Spend / Registration / PayRate / ARPPU / ROI / BetFlow / Retention</span>
+            <span class="hero-tag" id="hero-data-range">数据范围：以 paid-data.js 为准</span>
+          </div>
+        </div>
+
+        <div class="hero-side">
+          <div>当前版本：v1.0 · 所有指标统一从 RAW_PAID_BY_MONTH 聚合。</div>
+          <div>每月新增数据：只需在 RAW_PAID_BY_MONTH 中新增一个月份数组，无需改图表逻辑。</div>
+
+          <div class="hero-pill">
+            提示：全局筛选只影响本页所有模块；你想做“每张图独立筛选”的话，后面再拆 state 即可。
+          </div>
+
+          <div class="hero-filter-title">全局筛选</div>
+
+          <div class="hero-filter-row">
+            <div class="label">国家</div>
+            <div class="chart-mini-chips" id="filter-countries"></div>
+          </div>
+
+          <div class="hero-filter-row">
+            <div class="label">媒体</div>
+            <div class="chart-mini-chips" id="filter-medias"></div>
+          </div>
+
+          <div class="hero-filter-row">
+            <div class="label">形态</div>
+            <div class="chart-mini-chips" id="filter-productTypes"></div>
+          </div>
+
+          <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px;">
+            <button class="btn" type="button" id="btn-reset-filters">全选 / 重置</button>
+          </div>
+        </div>
+      </section>
+      
     
 <div class="chart-controls" id="paid-global-filters">
   <div class="chart-mini-filter">
