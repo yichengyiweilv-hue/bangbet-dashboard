@@ -9,7 +9,7 @@
 
   const MODULE_ID = "m1-registration";
   // 固定顺序（与页面展示顺序一致）
-  const COUNTRIES = ["GH", "KE", "NG", "TZ"];
+  const COUNTRIES = ["GH", "KE", "NG", "TZ", "UG"];
 
   const ECHARTS_SRC =
     "https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js";
