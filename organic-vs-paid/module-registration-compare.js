@@ -7,758 +7,788 @@
       (OVP.modules || (OVP.modules = [])).push(m);
     };
 
-  const MODULE_ID = 'm1-registration';
-  const COUNTRIES = ['GH', 'KE', 'NG', 'TZ', 'UG'];
+  const MODULE_ID = "m1-registration";
+  // 固定顺序（与页面展示顺序一致）
+  const COUNTRIES = ["GH", "KE", "NG", "TZ"];
 
-  const ECHARTS_SRC = 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js';
+  const ECHARTS_SRC =
+    "https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js";
+
+  // 折线图：每个国家一个底色；自然=虚线，买量=实线
+  const COUNTRY_COLORS = {
+    GH: "#2563eb",
+    KE: "#7c3aed",
+    NG: "#16a34a",
+    TZ: "#f97316",
+    UG: "#0ea5e9",
+  };
 
   function injectStylesOnce() {
-    const id = 'ovp-m1-reg-style';
+    const id = "ovp-m1-reg-style";
     if (document.getElementById(id)) return;
 
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.id = id;
     style.textContent = `
       .ovp-m1{display:flex;flex-direction:column;gap:12px}
-      .ovp-m1 .row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
-      .ovp-m1 .fg{display:flex;flex-direction:column;gap:6px;min-width:180px}
-      .ovp-m1 label{font-size:12px;color:var(--muted, rgba(255,255,255,.62))}
+      .ovp-m1 .row{
+        display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;
+        margin-bottom:6px;
+      }
+      .ovp-m1 .fg{
+        display:flex; flex-direction:column; gap:6px;
+        min-width:180px;
+      }
+      .ovp-m1 label{
+        font-size:12px;
+        color: var(--text-sub, var(--muted, #6b7280));
+      }
       .ovp-m1 select{
-        height:36px; padding:0 10px; border-radius:10px;
-        border:1px solid var(--border, rgba(255,255,255,.12));
-        background:rgba(255,255,255,.03); color:var(--text, rgba(255,255,255,.92));
+        height:36px;
+        border-radius:10px;
+        padding:0 10px;
+        border:1px solid var(--border, rgba(148,163,184,.55));
+        background: var(--bg-card, rgba(249,250,251,.9));
+        color: var(--text-main, var(--text, #0f172a));
         outline:none;
       }
-
-      .ovp-m1 .chips{
-        display:flex;flex-wrap:wrap;gap:6px;
-        padding:6px;
-        border:1px solid var(--border, rgba(255,255,255,.12));
-        background:rgba(255,255,255,.03);
-        border-radius:12px;
-        min-height:36px;
-      }
-      .ovp-m1 .chip{
-        display:inline-flex;align-items:center;gap:8px;
-        padding:6px 10px;border-radius:999px;
-        border:1px solid var(--border, rgba(255,255,255,.12));
-        color:var(--muted, rgba(255,255,255,.62));
-        font-size:12px;cursor:pointer;user-select:none;
-        background:transparent;
-      }
-      .ovp-m1 .chip input{margin:0}
-      .ovp-m1 .chip.on{
-        color:var(--text, rgba(255,255,255,.92));
-        background:rgba(255,255,255,.08);
-      }
-
       .ovp-m1 .seg{
-        display:inline-flex; gap:6px; padding:4px;
-        border:1px solid var(--border, rgba(255,255,255,.12));
-        background:rgba(255,255,255,.03); border-radius:12px;
+        display:flex; gap:6px; flex-wrap:wrap;
+        padding:4px;
+        border:1px solid var(--border, rgba(148,163,184,.55));
+        border-radius:12px;
+        background: rgba(255,255,255,.5);
       }
       .ovp-m1 .seg button{
-        height:28px; padding:0 10px;
-        border:0; border-radius:10px;
-        background:transparent; color:var(--muted, rgba(255,255,255,.62));
+        height:28px;
+        padding:0 10px;
+        border-radius:10px;
+        border:1px solid transparent;
+        background:transparent;
+        color: var(--text-sub, var(--muted, #6b7280));
         cursor:pointer;
-      }
-      .ovp-m1 .seg button[aria-pressed="true"]{
-        background:rgba(255,255,255,.08);
-        color:var(--text, rgba(255,255,255,.92));
-      }
-
-      .ovp-m1 .hint{
-        margin-top:6px;
-        font-size:12px; color:var(--muted, rgba(255,255,255,.62));
-        line-height:1.5;
-      }
-      .ovp-m1 .chart{
-        height:340px; width:100%;
-        border:1px solid var(--border, rgba(255,255,255,.12));
-        border-radius:12px;
-        background:rgba(255,255,255,.02);
-      }
-
-      .ovp-m1 .table-wrap{overflow:auto}
-      .ovp-m1 table{
-        width:100%;
-        border-collapse:separate; border-spacing:0;
-        border:1px solid var(--border, rgba(255,255,255,.12));
-        border-radius:12px; overflow:hidden;
-        background:rgba(255,255,255,.02);
-      }
-      .ovp-m1 th,.ovp-m1 td{
-        padding:10px 12px;
-        border-bottom:1px solid var(--border, rgba(255,255,255,.12));
         font-size:12px;
         white-space:nowrap;
       }
-      .ovp-m1 th{color:var(--muted, rgba(255,255,255,.62)); text-align:left}
-      .ovp-m1 td{color:var(--text, rgba(255,255,255,.92)); text-align:left}
-      .ovp-m1 tbody tr.dim td{opacity:.55}
-      .ovp-m1 tbody tr:last-child td{border-bottom:0}
+      .ovp-m1 .seg button[aria-pressed="true"]{
+        background: var(--accent-soft, rgba(37,99,235,.10));
+        border-color: rgba(37,99,235,.35);
+        color: var(--accent-strong, #2563eb);
+        font-weight:600;
+      }
+
+      .ovp-m1 .chips{
+        display:flex; flex-wrap:wrap; gap:8px;
+        padding:2px 0;
+        max-width: 520px;
+      }
+      .ovp-m1 .chips .filter-chip{
+        font-size:11px;
+        padding:3px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        background: rgba(249, 250, 251, 0.9);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+        color: var(--text-sub, var(--muted, #6b7280));
+      }
+      .ovp-m1 .chips .filter-chip input{
+        accent-color: var(--accent-strong, #2563eb);
+        cursor:pointer;
+      }
+      .ovp-m1 .chips .filter-chip.filter-chip-active{
+        border-color: rgba(37, 99, 235, 0.9);
+        background: var(--accent-soft, rgba(37,99,235,.10));
+        color: var(--accent-strong, #2563eb);
+      }
+
+      .ovp-m1 .subline{
+        display:flex; gap:16px; align-items:center; flex-wrap:wrap;
+        font-size:12px;
+        color: var(--text-sub, var(--muted, #6b7280));
+        margin: 2px 0 8px;
+      }
+      .ovp-m1 .subline .k{ display:flex; align-items:center; gap:8px; }
+      .ovp-m1 .dot{ width:10px; height:10px; border-radius:999px; display:inline-block; }
+
+      .ovp-m1 .chart{
+        height:340px; width:100%;
+        border:1px solid var(--border, rgba(148,163,184,.55));
+        border-radius:12px;
+        background: rgba(255,255,255,.55);
+      }
+
+      .ovp-m1 .table-wrap{ overflow:auto; }
+      .ovp-m1 table{
+        width:100%;
+        border-collapse:separate; border-spacing:0;
+        border:1px solid var(--border, rgba(148,163,184,.55));
+        border-radius:12px; overflow:hidden;
+        background: rgba(255,255,255,.55);
+        margin-top: 6px;
+      }
+      .ovp-m1 th,.ovp-m1 td{
+        padding:10px 12px;
+        border-bottom:1px solid var(--border, rgba(148,163,184,.40));
+        font-size:12px;
+        white-space:nowrap;
+      }
+      .ovp-m1 th{
+        background: rgba(255,255,255,.75);
+        color: var(--text-sub, var(--muted, #6b7280));
+        text-align:left;
+      }
+      .ovp-m1 td{
+        color: var(--text-main, var(--text, #0f172a));
+        text-align:left;
+      }
+      .ovp-m1 tr:last-child td{ border-bottom:0; }
 
       .ovp-m1 .empty{
-        padding:12px; border:1px dashed var(--border, rgba(255,255,255,.12));
-        border-radius:12px; color:var(--muted, rgba(255,255,255,.62)); font-size:12px; line-height:1.6;
+        padding:12px;
+        border:1px dashed rgba(148,163,184,.55);
+        border-radius:12px;
+        color: var(--text-sub, var(--muted, #6b7280));
+        font-size:12px;
+        line-height:1.6;
+        background: rgba(255,255,255,.45);
       }
-      .ovp-m1 .subline{
-        display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
-        font-size:12px; color:var(--muted, rgba(255,255,255,.62));
-        margin-top:-4px;
-      }
-      .ovp-m1 .subline .k{display:inline-flex; gap:6px; align-items:center}
-      .ovp-m1 .dot{width:8px;height:8px;border-radius:999px;display:inline-block}
     `;
     document.head.appendChild(style);
   }
 
   function cssVar(name, fallback) {
     try {
-      const v = getComputedStyle(document.documentElement).getPropertyValue(name);
-      if (v && String(v).trim()) return String(v).trim();
-    } catch (_e) {}
-    return fallback;
-  }
-
-  function toNumber(x) {
-    const n = Number(x);
-    return Number.isFinite(n) ? n : null;
-  }
-
-  function pickKey(obj, keys) {
-    if (!obj || typeof obj !== 'object') return null;
-    for (const k of keys) if (Object.prototype.hasOwnProperty.call(obj, k)) return k;
-    const map = Object.create(null);
-    for (const k of Object.keys(obj)) map[String(k).toLowerCase()] = k;
-    for (const want of keys) {
-      const hit = map[String(want).toLowerCase()];
-      if (hit) return hit;
+      const v = getComputedStyle(document.documentElement)
+        .getPropertyValue(name)
+        .trim();
+      return v || fallback;
+    } catch (_e) {
+      return fallback;
     }
-    return null;
+  }
+
+  function pad2(n) {
+    const s = String(n);
+    return s.length === 1 ? "0" + s : s;
   }
 
   function normalizeMonth(input) {
-    // Prefer shared helper from insights-copy.js (keep month formats consistent)
-    if (window.OVP && OVP.insights && typeof OVP.insights.normalizeMonth === 'function') {
-      const v = OVP.insights.normalizeMonth(input);
-      if (v) return v;
-    }
     if (!input) return null;
-
+    if (input instanceof Date && !isNaN(input.getTime())) {
+      return input.getFullYear() + "-" + pad2(input.getMonth() + 1);
+    }
     const s = String(input).trim();
-    let m = s.match(/^(\d{4})-(\d{1,2})$/);
-    if (m) return `${m[1]}-${String(m[2]).padStart(2, '0')}`;
+    let m;
+
+    m = s.match(/^(\d{4})-(\d{1,2})$/);
+    if (m) return m[1] + "-" + pad2(m[2]);
+
+    m = s.match(/^(\d{4})\/(\d{1,2})$/);
+    if (m) return m[1] + "-" + pad2(m[2]);
 
     m = s.match(/^(\d{4})(\d{2})$/);
-    if (m) return `${m[1]}-${m[2]}`;
+    if (m) return m[1] + "-" + pad2(m[2]);
 
-    m = s.match(/^(\d{4})-(\d{1,2})-\d{1,2}$/);
-    if (m) return `${m[1]}-${String(m[2]).padStart(2, '0')}`;
+    m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) return m[1] + "-" + pad2(m[2]);
+
+    m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+    if (m) return m[1] + "-" + pad2(m[2]);
 
     return null;
   }
 
-  function monthValue(key) {
-    const m = String(key || '').match(/^(\d{4})-(\d{2})$/);
+  function monthValue(ym) {
+    const m = String(ym || "").match(/^(\d{4})-(\d{2})$/);
     if (!m) return -1;
     return Number(m[1]) * 100 + Number(m[2]);
   }
 
-  function resolveByMonthMap(input, globalNames) {
-    const tryObj = (x) => {
-      if (!x || typeof x !== 'object') return null;
-      if (Array.isArray(x)) return null;
+  function toNumber(v, fallback = 0) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
 
-      const keys = Object.keys(x);
-      if (keys.some((k) => /^\d{4}-\d{2}$/.test(k))) return x;
+  function readGlobal(name) {
+    try {
+      // Works for global var/let/const in non-module scripts
+      return Function(
+        `return (typeof ${name} !== "undefined") ? ${name} : undefined;`
+      )();
+    } catch (_e) {
+      return undefined;
+    }
+  }
 
-      // wrapper: {data:{...}} / {rows:{...}}
-      const wrapKey = pickKey(x, ['data', 'rows', 'items', 'list', 'byMonth', 'by_month']);
-      if (wrapKey) {
-        const inner = tryObj(x[wrapKey]);
-        if (inner) return inner;
+  function resolveRawByMonth(which, passedMaybe) {
+    const tryObj = (obj) => {
+      if (!obj || typeof obj !== "object") return null;
+
+      // { '2025-09': [ ... ] }
+      const keys = Object.keys(obj);
+      if (
+        keys.some((k) => /^\d{4}-\d{2}$/.test(k) && Array.isArray(obj[k]))
+      ) {
+        return obj;
       }
 
-      // wrapper: { RAW_ORGANIC_BY_MONTH: {...} }
-      for (const name of globalNames || []) {
-        if (Object.prototype.hasOwnProperty.call(x, name)) {
-          const inner = tryObj(x[name]);
-          if (inner) return inner;
+      // { months: { '2025-09': [ ... ] } }
+      if (obj.months && typeof obj.months === "object") {
+        const mk = Object.keys(obj.months);
+        if (
+          mk.some((k) => /^\d{4}-\d{2}$/.test(k) && Array.isArray(obj.months[k]))
+        ) {
+          return obj.months;
         }
       }
+
       return null;
     };
 
-    const direct = tryObj(input);
-    if (direct) return direct;
+    const hit = tryObj(passedMaybe);
+    if (hit) return hit;
 
-    for (const name of globalNames || []) {
-      const g = tryObj(window[name]);
-      if (g) return g;
+    const candidates =
+      which === "organic"
+        ? [
+            "RAW_ORGANIC_BY_MONTH",
+            "organicData",
+            "organicMonthlyData",
+            "ORGANIC_DATA",
+            "ORGANIC_MONTHLY_DATA",
+          ]
+        : [
+            "RAW_PAID_BY_MONTH",
+            "paidData",
+            "paidMonthlyData",
+            "PAID_DATA",
+            "PAID_MONTHLY_DATA",
+          ];
+
+    for (const k of candidates) {
+      const v = readGlobal(k);
+      const v2 = tryObj(v);
+      if (v2) return v2;
     }
-    return {};
+    return null;
   }
 
-  function listMonths(oMap, pMap) {
+  function listMonths(organicByMonth, paidByMonth) {
     const set = new Set();
-    for (const k of Object.keys(oMap || {})) {
-      const m = normalizeMonth(k) || k;
-      if (m) set.add(m);
-    }
-    for (const k of Object.keys(pMap || {})) {
-      const m = normalizeMonth(k) || k;
-      if (m) set.add(m);
-    }
-    const arr = Array.from(set);
+    if (organicByMonth) Object.keys(organicByMonth).forEach((k) => set.add(k));
+    if (paidByMonth) Object.keys(paidByMonth).forEach((k) => set.add(k));
+    const arr = Array.from(set).filter((k) => /^\d{4}-\d{2}$/.test(k));
     arr.sort((a, b) => monthValue(a) - monthValue(b));
     return arr;
   }
 
-  function pad2(n) {
-    return String(n).padStart(2, '0');
+  function latestMonth(months) {
+    if (!months || !months.length) return null;
+    return months[months.length - 1];
   }
 
-  function daysInMonth(monthKey) {
-    const m = String(monthKey || '').match(/^(\d{4})-(\d{2})$/);
+  function listDatesOfMonth(ym) {
+    const m = String(ym || "").match(/^(\d{4})-(\d{2})$/);
     if (!m) return [];
     const y = Number(m[1]);
-    const mm = Number(m[2]);
-    const last = new Date(y, mm, 0).getDate(); // mm is 1-12; use next month 0th day
+    const mo = Number(m[2]); // 1-12
+    const last = new Date(y, mo, 0).getDate(); // last day of month
     const out = [];
-    for (let d = 1; d <= last; d++) out.push(`${y}-${pad2(mm)}-${pad2(d)}`);
+    for (let d = 1; d <= last; d++) out.push(`${y}-${pad2(mo)}-${pad2(d)}`);
     return out;
   }
 
-  function monthArray(map, monthKey) {
-    if (!map || typeof map !== 'object') return [];
-    const norm = normalizeMonth(monthKey);
-    const hit = norm && map[norm] ? map[norm] : map[monthKey];
-    return Array.isArray(hit) ? hit : [];
+  function getMonthRows(byMonth, ym) {
+    if (!byMonth || !ym) return [];
+    const key = normalizeMonth(ym);
+    if (!key) return [];
+    const rows = byMonth[key];
+    return Array.isArray(rows) ? rows : [];
   }
 
-  function buildMonthCountryTotals(byMonthMap, monthKey) {
-    const totals = new Map();
-    for (const c of COUNTRIES) totals.set(c, 0);
+  function buildMonthlyTotals(rows) {
+    const out = {};
+    for (const c of COUNTRIES) out[c] = 0;
 
-    const rows = monthArray(byMonthMap, monthKey);
-    if (!rows.length) return totals;
-
-    for (const row of rows) {
-      if (!row || typeof row !== 'object') continue;
-      const cKey = pickKey(row, ['country', 'cc', 'market']);
-      const rKey = pickKey(row, ['registration', 'registrations', 'reg', 'register']);
-      if (!cKey || !rKey) continue;
-      const country = String(row[cKey] || '').toUpperCase();
-      if (!COUNTRIES.includes(country)) continue;
-      const reg = toNumber(row[rKey]);
-      if (reg === null) continue;
-      totals.set(country, (totals.get(country) || 0) + reg);
+    for (const r of rows || []) {
+      const c = String(r && r.country ? r.country : "").toUpperCase();
+      if (!out.hasOwnProperty(c)) continue;
+      out[c] += toNumber(r.registration, 0);
     }
-    return totals;
+    return out;
   }
 
-  function buildDayCountryMap(byMonthMap, monthKey) {
-    // key: `${date}|${country}` => sum(registration)
-    const map = new Map();
-    const rows = monthArray(byMonthMap, monthKey);
-    if (!rows.length) return map;
+  function buildDailySeries(rows, ym, countries) {
+    const dates = listDatesOfMonth(ym);
+    const idx = Object.create(null);
+    for (let i = 0; i < dates.length; i++) idx[dates[i]] = i;
 
-    for (const row of rows) {
-      if (!row || typeof row !== 'object') continue;
-      const cKey = pickKey(row, ['country', 'cc', 'market']);
-      const dKey = pickKey(row, ['date', 'day', 'dt']);
-      const rKey = pickKey(row, ['registration', 'registrations', 'reg', 'register']);
-      if (!cKey || !dKey || !rKey) continue;
+    const out = {};
+    for (const c of countries) out[c] = new Array(dates.length).fill(0);
 
-      const country = String(row[cKey] || '').toUpperCase();
-      if (!COUNTRIES.includes(country)) continue;
-
-      const dateStr = String(row[dKey] || '').slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) continue;
-
-      const reg = toNumber(row[rKey]);
-      if (reg === null) continue;
-
-      const key = `${dateStr}|${country}`;
-      map.set(key, (map.get(key) || 0) + reg);
+    for (const r of rows || []) {
+      const c = String(r && r.country ? r.country : "").toUpperCase();
+      if (!out[c]) continue;
+      const d = String(r && r.date ? r.date : "");
+      const i = idx[d];
+      if (i === undefined) continue;
+      out[c][i] += toNumber(r.registration, 0);
     }
-    return map;
+
+    return { dates, seriesByCountry: out };
   }
 
-  function loadScriptOnce(id, src) {
-    return new Promise((resolve, reject) => {
-      if (document.getElementById(id)) return resolve();
-      const s = document.createElement('script');
-      s.id = id;
-      s.src = src;
+  function formatInt(n) {
+    const v = Math.round(toNumber(n, 0));
+    try {
+      return v.toLocaleString("en-US");
+    } catch (_e) {
+      return String(v);
+    }
+  }
+
+  function formatPct(p) {
+    if (!Number.isFinite(p)) return "-";
+    return p.toFixed(1);
+  }
+
+  function loadScriptOnce(url, testFn) {
+    if (typeof testFn === "function" && testFn()) return Promise.resolve(true);
+
+    window.__ovp_script_promises = window.__ovp_script_promises || {};
+    if (window.__ovp_script_promises[url]) return window.__ovp_script_promises[url];
+
+    window.__ovp_script_promises[url] = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = url;
       s.async = true;
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error(`load failed: ${src}`));
+
+      const done = (ok, err) => {
+        try {
+          s.onload = null;
+          s.onerror = null;
+        } catch (_e) {}
+        ok ? resolve(true) : reject(err || new Error("script load failed"));
+      };
+
+      s.onload = () => {
+        if (typeof testFn === "function") {
+          if (testFn()) done(true);
+          else done(false, new Error("script loaded but echarts not available"));
+        } else {
+          done(true);
+        }
+      };
+      s.onerror = () => done(false, new Error("script load error"));
+
       document.head.appendChild(s);
+
+      setTimeout(() => {
+        if (typeof testFn === "function" && testFn()) return;
+        reject(new Error("script load timeout"));
+      }, 15000);
     });
+
+    return window.__ovp_script_promises[url];
   }
 
   function loadECharts() {
-    if (window.echarts) return Promise.resolve(window.echarts);
-    return loadScriptOnce('ovp-echarts', ECHARTS_SRC).then(() => {
-      if (!window.echarts) throw new Error('echarts not available');
-      return window.echarts;
-    });
+    return loadScriptOnce(ECHARTS_SRC, () => typeof window.echarts !== "undefined")
+      .then(() => window.echarts);
+  }
+
+  function buildBarOption(xCats, orgMap, paidMap) {
+    const textSub = cssVar("--text-sub", cssVar("--muted", "#6b7280"));
+    const border = cssVar("--border", "rgba(148,163,184,.55)");
+
+    const colorOrg = cssVar("--ovp-yellow", "#F6C344");
+    const colorPaid = cssVar("--ovp-blue", "#2563eb");
+
+    const orgData = xCats.map((c) => toNumber(orgMap[c], 0));
+    const paidData = xCats.map((c) => toNumber(paidMap[c], 0));
+
+    return {
+      grid: { left: 8, right: 12, top: 22, bottom: 38, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        valueFormatter: (v) => formatInt(v),
+        backgroundColor: "rgba(15,23,42,.92)",
+        borderColor: "rgba(15,23,42,.92)",
+        textStyle: { color: "#fff" },
+      },
+      legend: {
+        top: 0,
+        left: 0,
+        textStyle: { color: textSub, fontSize: 12 },
+        itemWidth: 12,
+        itemHeight: 8,
+      },
+      xAxis: {
+        type: "category",
+        data: xCats,
+        axisLine: { lineStyle: { color: border } },
+        axisTick: { show: false },
+        axisLabel: { color: textSub, fontSize: 12 },
+      },
+      yAxis: {
+        type: "value",
+        axisLine: { show: false },
+        splitLine: { lineStyle: { color: "rgba(148,163,184,.25)" } },
+        axisLabel: { color: textSub, fontSize: 12 },
+        name: "注册数",
+        nameTextStyle: { color: textSub, fontSize: 12 },
+      },
+      series: [
+        {
+          name: "自然量",
+          type: "bar",
+          data: orgData,
+          barMaxWidth: 34,
+          itemStyle: { color: colorOrg },
+        },
+        {
+          name: "买量",
+          type: "bar",
+          data: paidData,
+          barMaxWidth: 34,
+          itemStyle: { color: colorPaid },
+        },
+      ],
+    };
+  }
+
+  function buildLineOption(dateCats, countries, orgDaily, paidDaily) {
+    const textSub = cssVar("--text-sub", cssVar("--muted", "#6b7280"));
+    const border = cssVar("--border", "rgba(148,163,184,.55)");
+
+    const series = [];
+    for (const c of countries) {
+      const base = COUNTRY_COLORS[c] || "#2563eb";
+      series.push({
+        name: `${c} 自然`,
+        type: "line",
+        data: orgDaily[c] || [],
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 2, type: "dashed", color: base },
+        itemStyle: { color: base },
+      });
+      series.push({
+        name: `${c} 买量`,
+        type: "line",
+        data: paidDaily[c] || [],
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 2, type: "solid", color: base },
+        itemStyle: { color: base },
+      });
+    }
+
+    const dateShort = dateCats.map((d) => String(d).slice(5)); // MM-DD
+
+    return {
+      grid: { left: 8, right: 16, top: 42, bottom: 38, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        valueFormatter: (v) => formatInt(v),
+        backgroundColor: "rgba(15,23,42,.92)",
+        borderColor: "rgba(15,23,42,.92)",
+        textStyle: { color: "#fff" },
+      },
+      legend: {
+        type: "scroll",
+        top: 0,
+        left: 0,
+        textStyle: { color: textSub, fontSize: 12 },
+        pageIconColor: textSub,
+        pageTextStyle: { color: textSub },
+      },
+      xAxis: {
+        type: "category",
+        data: dateShort,
+        axisLine: { lineStyle: { color: border } },
+        axisTick: { show: false },
+        axisLabel: {
+          color: textSub,
+          fontSize: 11,
+          interval: 1, // 每隔 1 个显示一次（约每 2 天一个刻度）
+        },
+      },
+      yAxis: {
+        type: "value",
+        axisLine: { show: false },
+        splitLine: { lineStyle: { color: "rgba(148,163,184,.25)" } },
+        axisLabel: { color: textSub, fontSize: 12 },
+        name: "注册数",
+        nameTextStyle: { color: textSub, fontSize: 12 },
+      },
+      series,
+    };
   }
 
   register({
     id: MODULE_ID,
-    title: '自然量 vs 买量注册量',
-    subtitle: '注册量对比（自然量 / 买量）',
-    span: 'full',
-
-    render({ mountEl, organic, paid, utils }) {
+    title: "自然量 vs 买量注册量",
+    subtitle: "柱状图：月度国家对比；折线图：日级趋势（按国家拆分）。",
+    span: "full",
+    render: function ({ mountEl, organic, paid }) {
       injectStylesOnce();
 
-      // Accept both: ctx data OR global RAW_*_BY_MONTH
-      const organicByMonth = resolveByMonthMap(organic, [
-        'RAW_ORGANIC_BY_MONTH',
-        'organicData',
-        'ORGANIC_DATA',
-        'organicMonthlyData',
-        'ORGANIC_MONTHLY_DATA'
-      ]);
-      const paidByMonth = resolveByMonthMap(paid, [
-        'RAW_PAID_BY_MONTH',
-        'paidData',
-        'PAID_DATA',
-        'paidMonthlyData',
-        'PAID_MONTHLY_DATA'
-      ]);
+      const organicByMonth = resolveRawByMonth("organic", organic);
+      const paidByMonth = resolveRawByMonth("paid", paid);
 
       const months = listMonths(organicByMonth, paidByMonth);
-      if (!months.length) {
-        mountEl.innerHTML = `
-          <div class="ovp-m1">
-            <div class="empty">
-              没读到月份数据：需要 organic-data.js / paid-data.js 暴露按月分包的数据对象（例如 window.RAW_ORGANIC_BY_MONTH / window.RAW_PAID_BY_MONTH）。
-            </div>
-          </div>
-        `;
-        return;
-      }
+      const monthDefault = latestMonth(months);
+      const initMonth = monthDefault || normalizeMonth(new Date()) || null;
 
-      const latestMonth = months[months.length - 1];
-
-      // caches
-      const cache = {
-        orgMonthTotals: new Map(), // month => Map(country => sum)
-        paidMonthTotals: new Map(),
-        orgDayMap: new Map(), // month => Map(date|country => sum)
-        paidDayMap: new Map()
+      const state = {
+        month: initMonth,
+        chartType: "bar",
+        countries: COUNTRIES.slice(), // 默认全选
       };
-
-      function getMonthTotals(which, monthKey) {
-        const normMonth = normalizeMonth(monthKey) || monthKey;
-        const store = which === 'paid' ? cache.paidMonthTotals : cache.orgMonthTotals;
-        if (store.has(normMonth)) return store.get(normMonth);
-        const map =
-          which === 'paid'
-            ? buildMonthCountryTotals(paidByMonth, normMonth)
-            : buildMonthCountryTotals(organicByMonth, normMonth);
-        store.set(normMonth, map);
-        return map;
-      }
-
-      function getDayMap(which, monthKey) {
-        const normMonth = normalizeMonth(monthKey) || monthKey;
-        const store = which === 'paid' ? cache.paidDayMap : cache.orgDayMap;
-        if (store.has(normMonth)) return store.get(normMonth);
-        const map =
-          which === 'paid'
-            ? buildDayCountryMap(paidByMonth, normMonth)
-            : buildDayCountryMap(organicByMonth, normMonth);
-        store.set(normMonth, map);
-        return map;
-      }
-
-      const uid = `ovp-${MODULE_ID}-${Math.random().toString(16).slice(2)}`;
-      const monthId = `${uid}-month`;
-      const countryGroup = `${uid}-country`;
-      const chartId = `${uid}-chart`;
-      const tableId = `${uid}-table`;
-      const insightsId = `${uid}-insights`;
-      const hintId = `${uid}-hint`;
 
       mountEl.innerHTML = `
         <div class="ovp-m1">
           <div class="row">
             <div class="fg">
-              <label for="${monthId}">月份</label>
-              <select id="${monthId}"></select>
-            </div>
-
-            <div class="fg" style="min-width:320px">
-              <label>国家（多选）</label>
-              <div class="chips" id="${countryGroup}">
-                ${COUNTRIES.map((c, i) => {
-                  const inputId = `${uid}-c-${c}`;
-                  const checked = i === 0 ? 'checked' : '';
-                  return `
-                    <label class="chip ${checked ? 'on' : ''}" for="${inputId}">
-                      <input id="${inputId}" type="checkbox" value="${c}" ${checked} />
-                      <span>${c}</span>
-                    </label>
-                  `;
-                }).join('')}
-              </div>
+              <label>月份</label>
+              <select data-role="month"></select>
             </div>
 
             <div class="fg" style="min-width:260px">
+              <label>国家（多选）</label>
+              <div class="chips" data-role="countries"></div>
+            </div>
+
+            <div class="fg" style="min-width:220px">
               <label>图表</label>
-              <div class="seg" role="group" aria-label="图表类型切换">
-                <button type="button" data-type="bar" aria-pressed="true">月度柱状图</button>
-                <button type="button" data-type="line" aria-pressed="false">日级折线图</button>
+              <div class="seg" data-role="chartType">
+                <button type="button" data-value="bar" aria-pressed="true">月度柱状图</button>
+                <button type="button" data-value="line" aria-pressed="false">日级折线图</button>
               </div>
             </div>
           </div>
 
-          <div class="subline">
-            <div class="k"><span class="dot" style="background:${cssVar('--ovp-yellow', '#F6C344')}"></span>自然量</div>
-            <div class="k"><span class="dot" style="background:${cssVar('--ovp-blue', '#3B82F6')}"></span>买量</div>
-          </div>
+          <div class="subline" data-role="subline"></div>
+          <div class="chart" data-role="chart"></div>
+          <div class="table-wrap" data-role="table"></div>
 
-          <div id="${chartId}" class="chart"></div>
-          <div class="hint" id="${hintId}"></div>
-
-          <div class="table-wrap">
-            <table id="${tableId}">
-              <thead>
-                <tr>
-                  <th>国家</th>
-                  <th>自然量注册占比 (%)</th>
-                  <th>买量注册占比 (%)</th>
-                  <th>自然量注册数</th>
-                  <th>买量注册数</th>
-                  <th>总注册数</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-
-          <div id="${insightsId}"></div>
+          <div data-role="insights"></div>
         </div>
       `;
 
-      const monthSel = mountEl.querySelector(`#${CSS.escape(monthId)}`);
-      const chipsEl = mountEl.querySelector(`#${CSS.escape(countryGroup)}`);
-      const chartEl = mountEl.querySelector(`#${CSS.escape(chartId)}`);
-      const tableEl = mountEl.querySelector(`#${CSS.escape(tableId)}`);
-      const hintEl = mountEl.querySelector(`#${CSS.escape(hintId)}`);
-      const insightsEl = mountEl.querySelector(`#${CSS.escape(insightsId)}`);
+      const root = mountEl.querySelector(".ovp-m1");
+      const monthSel = root.querySelector('[data-role="month"]');
+      const chipsEl = root.querySelector('[data-role="countries"]');
+      const segEl = root.querySelector('[data-role="chartType"]');
+      const sublineEl = root.querySelector('[data-role="subline"]');
+      const chartBox = root.querySelector('[data-role="chart"]');
+      const tableWrap = root.querySelector('[data-role="table"]');
+      const insightsEl = root.querySelector('[data-role="insights"]');
 
-      // Fill month options
-      monthSel.innerHTML = months.map((m) => `<option value="${m}">${m}</option>`).join('');
-      monthSel.value = latestMonth;
-
-      const segBtns = Array.from(mountEl.querySelectorAll('.seg button'));
-      let chartType = 'bar';
-      let echartsApi = null;
-      let chart = null;
-
-      function setChartType(next) {
-        chartType = next === 'line' ? 'line' : 'bar';
-        for (const b of segBtns) {
-          const isOn = b.getAttribute('data-type') === chartType;
-          b.setAttribute('aria-pressed', isOn ? 'true' : 'false');
-        }
+      function renderMonthOptions() {
+        const opts = months.length ? months.slice().reverse() : [state.month].filter(Boolean); // 最新在前
+        monthSel.innerHTML = opts.map((m) => `<option value="${m}">${m}</option>`).join("");
+        if (state.month && opts.includes(state.month)) monthSel.value = state.month;
       }
 
-      function selectedCountries() {
-        const inputs = Array.from(chipsEl.querySelectorAll('input[type="checkbox"]'));
-        const selected = inputs.filter((i) => i.checked).map((i) => String(i.value || '').toUpperCase());
-        const uniq = Array.from(new Set(selected)).filter((c) => COUNTRIES.includes(c));
-
-        // Ensure at least one selection (avoid empty line chart)
-        if (!uniq.length) {
-          const first = chipsEl.querySelector(`input[value="${COUNTRIES[0]}"]`);
-          if (first) first.checked = true;
-          return [COUNTRIES[0]];
-        }
-        // Keep fixed order
-        return COUNTRIES.filter((c) => uniq.includes(c));
-      }
-
-      function fmtPct(x) {
-        if (x === null) return '—';
-        if (utils && typeof utils.fmtPct === 'function') return utils.fmtPct(x, 2);
-        return `${(x * 100).toFixed(2)}%`;
-      }
-      function fmtInt(x) {
-        if (utils && typeof utils.fmtInt === 'function') return utils.fmtInt(x);
-        const n = Number(x);
-        return Number.isFinite(n) ? n.toLocaleString('en-US') : '—';
-      }
-
-      function updateTable(monthKey, selected) {
-        const oTotals = getMonthTotals('organic', monthKey);
-        const pTotals = getMonthTotals('paid', monthKey);
-
-        const tbody = tableEl.querySelector('tbody');
-        tbody.innerHTML = '';
-
-        for (const c of COUNTRIES) {
-          const o = Number(oTotals.get(c) || 0);
-          const p = Number(pTotals.get(c) || 0);
-          const t = o + p;
-
-          const oShare = t > 0 ? o / t : null;
-          const pShare = t > 0 ? p / t : null;
-
-          const tr = document.createElement('tr');
-          if (!selected.includes(c)) tr.classList.add('dim');
-
-          tr.innerHTML = `
-            <td>${c}</td>
-            <td>${fmtPct(oShare)}</td>
-            <td>${fmtPct(pShare)}</td>
-            <td>${fmtInt(o)}</td>
-            <td>${fmtInt(p)}</td>
-            <td>${fmtInt(t)}</td>
+      function renderCountryChips() {
+        chipsEl.innerHTML = COUNTRIES.map((c) => {
+          const checked = state.countries.includes(c);
+          const activeCls = checked ? "filter-chip-active" : "";
+          return `
+            <label class="filter-chip ${activeCls}">
+              <input type="checkbox" value="${c}" ${checked ? "checked" : ""} />
+              ${c}
+            </label>
           `;
-          tbody.appendChild(tr);
+        }).join("");
+
+        chipsEl.querySelectorAll("input[type=checkbox]").forEach((inp) => {
+          inp.addEventListener("change", () => {
+            const v = String(inp.value || "").toUpperCase();
+            const next = new Set(state.countries);
+            if (inp.checked) next.add(v);
+            else next.delete(v);
+
+            // 至少保留 1 个
+            if (next.size === 0) {
+              next.add(v);
+              inp.checked = true;
+            }
+
+            state.countries = COUNTRIES.filter((x) => next.has(x));
+            renderCountryChips();
+            updateView();
+          });
+        });
+      }
+
+      function setChartType(type) {
+        state.chartType = type === "line" ? "line" : "bar";
+        segEl.querySelectorAll("button[data-value]").forEach((b) => {
+          const on = b.getAttribute("data-value") === state.chartType;
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        updateView();
+      }
+
+      segEl.querySelectorAll("button[data-value]").forEach((b) => {
+        b.addEventListener("click", () => setChartType(b.getAttribute("data-value")));
+      });
+
+      monthSel.addEventListener("change", () => {
+        state.month = normalizeMonth(monthSel.value) || state.month;
+        updateView();
+      });
+
+      function renderSubline() {
+        const colorOrg = cssVar("--ovp-yellow", "#F6C344");
+        const colorPaid = cssVar("--ovp-blue", "#2563eb");
+
+        if (state.chartType === "bar") {
+          sublineEl.innerHTML = `
+            <div class="k"><span class="dot" style="background:${colorOrg}"></span>自然量</div>
+            <div class="k"><span class="dot" style="background:${colorPaid}"></span>买量</div>
+          `;
+        } else {
+          sublineEl.innerHTML = `
+            <div class="k">颜色 = 国家</div>
+            <div class="k">虚线 = 自然量</div>
+            <div class="k">实线 = 买量</div>
+          `;
         }
       }
 
-      function updateInsights(monthKey) {
-        if (window.OVP && OVP.insights && typeof OVP.insights.render === 'function') {
-          OVP.insights.render(insightsEl, MODULE_ID, monthKey, { title: '数据分析' });
+      function updateTable(monthKey, displayCountries, orgMap, paidMap) {
+        if (!monthKey) {
+          tableWrap.innerHTML = `<div class="empty">未选择月份。</div>`;
           return;
         }
-        insightsEl.innerHTML = `
-          <div class="empty">未加载 insights-copy.js：请在 index.html 里把它放到各 module-*.js 之前。</div>
+
+        const rows = displayCountries.map((c) => {
+          const org = toNumber(orgMap[c], 0);
+          const pd = toNumber(paidMap[c], 0);
+          const total = org + pd;
+          const orgPct = total > 0 ? (org / total) * 100 : NaN;
+          const pdPct = total > 0 ? (pd / total) * 100 : NaN;
+
+          return `
+            <tr>
+              <td><strong>${c}</strong></td>
+              <td>${formatPct(orgPct)}</td>
+              <td>${formatPct(pdPct)}</td>
+              <td>${formatInt(org)}</td>
+              <td>${formatInt(pd)}</td>
+              <td>${formatInt(total)}</td>
+            </tr>
+          `;
+        }).join("");
+
+        tableWrap.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>国家</th>
+                <th>自然量注册占比 (%)</th>
+                <th>买量注册占比 (%)</th>
+                <th>自然量注册数</th>
+                <th>买量注册数</th>
+                <th>总注册数</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
         `;
       }
 
-      function buildBarOption(monthKey, selected) {
-        const text = cssVar('--text', 'rgba(255,255,255,.92)') || '#E5E7EB';
-        const muted = cssVar('--muted', 'rgba(255,255,255,.62)') || '#9CA3AF';
-        const border = cssVar('--border', 'rgba(255,255,255,.12)') || 'rgba(255,255,255,.12)';
-        const organicColor = cssVar('--ovp-yellow', '#F6C344');
-        const paidColor = cssVar('--ovp-blue', '#3B82F6');
-
-        const oTotals = getMonthTotals('organic', monthKey);
-        const pTotals = getMonthTotals('paid', monthKey);
-
-        const oData = COUNTRIES.map((c) => ({
-          value: Number(oTotals.get(c) || 0),
-          itemStyle: { opacity: selected.includes(c) ? 1 : 0.28 }
-        }));
-        const pData = COUNTRIES.map((c) => ({
-          value: Number(pTotals.get(c) || 0),
-          itemStyle: { opacity: selected.includes(c) ? 1 : 0.28 }
-        }));
-
-        return {
-          color: [organicColor, paidColor],
-          tooltip: {
-            trigger: 'axis',
-            axisPointer: { type: 'shadow' },
-            formatter: function (params) {
-              const lines = [];
-              if (params && params.length) {
-                lines.push(`${params[0].axisValue}`);
-                for (const it of params) {
-                  const v = Number(it.value) || 0;
-                  lines.push(`${it.marker}${it.seriesName}：${v.toLocaleString('en-US')}`);
-                }
-              }
-              return lines.join('<br/>');
-            }
-          },
-          legend: { data: ['自然量', '买量'], textStyle: { color: muted } },
-          grid: { left: 24, right: 18, top: 44, bottom: 28, containLabel: true },
-          xAxis: {
-            type: 'category',
-            data: COUNTRIES,
-            axisLabel: { color: muted },
-            axisLine: { lineStyle: { color: border } },
-            axisTick: { lineStyle: { color: border } }
-          },
-          yAxis: {
-            type: 'value',
-            axisLabel: { color: muted },
-            splitLine: { lineStyle: { color: border, opacity: 0.35 } }
-          },
-          series: [
-            { name: '自然量', type: 'bar', barMaxWidth: 30, data: oData, emphasis: { focus: 'series' } },
-            { name: '买量', type: 'bar', barMaxWidth: 30, data: pData, emphasis: { focus: 'series' } }
-          ],
-          title: {
-            text: `按国家对比（${monthKey}）`,
-            left: 0,
-            textStyle: { color: text, fontSize: 12, fontWeight: 600 }
-          }
-        };
+      function updateInsights(monthKey) {
+        if (window.OVP && OVP.insights && typeof OVP.insights.render === "function") {
+          OVP.insights.render(insightsEl, MODULE_ID, monthKey);
+        } else {
+          insightsEl.innerHTML = `<div class="empty">insights-copy.js 未加载或未初始化（OVP.insights.render 不存在）。</div>`;
+        }
       }
 
-      function buildLineOption(monthKey, selected) {
-        const text = cssVar('--text', 'rgba(255,255,255,.92)') || '#E5E7EB';
-        const muted = cssVar('--muted', 'rgba(255,255,255,.62)') || '#9CA3AF';
-        const border = cssVar('--border', 'rgba(255,255,255,.12)') || 'rgba(255,255,255,.12)';
-        const organicColor = cssVar('--ovp-yellow', '#F6C344');
-        const paidColor = cssVar('--ovp-blue', '#3B82F6');
+      // ---- ECharts ----
+      let chart = null;
+      let ec = null;
+      let disposed = false;
 
-        const days = daysInMonth(monthKey);
-        const oDayMap = getDayMap('organic', monthKey);
-        const pDayMap = getDayMap('paid', monthKey);
+      function ensureChart() {
+        if (ec && chart) return;
 
-        const series = [];
-        const legend = [];
-
-        // ✅ 修正点：不做“国家加总”，而是每个国家各两条线（自然量/买量）
-        for (const c of selected) {
-          const oName = `${c} · 自然量`;
-          const pName = `${c} · 买量`;
-          legend.push(oName, pName);
-
-          series.push({
-            name: oName,
-            type: 'line',
-            smooth: false,
-            showSymbol: false,
-            data: days.map((d) => Number(oDayMap.get(`${d}|${c}`) || 0)),
-            lineStyle: { width: 2, color: organicColor },
-            itemStyle: { color: organicColor }
+        loadECharts()
+          .then((echarts) => {
+            if (disposed) return;
+            ec = echarts;
+            chart = ec.init(chartBox);
+            window.addEventListener("resize", () => {
+              try { chart && chart.resize(); } catch (_e) {}
+            });
+            updateView();
+          })
+          .catch((err) => {
+            chartBox.innerHTML = `<div class="empty">图表库加载失败：${String(
+              err && err.message ? err.message : err
+            )}</div>`;
           });
-
-          series.push({
-            name: pName,
-            type: 'line',
-            smooth: false,
-            showSymbol: false,
-            data: days.map((d) => Number(pDayMap.get(`${d}|${c}`) || 0)),
-            lineStyle: { width: 2, color: paidColor },
-            itemStyle: { color: paidColor }
-          });
-        }
-
-        return {
-          tooltip: {
-            trigger: 'axis',
-            formatter: function (params) {
-              const lines = [];
-              if (params && params.length) {
-                lines.push(`${params[0].axisValue}`);
-                const byName = new Map();
-                for (const it of params) byName.set(it.seriesName, it);
-                for (const name of legend) {
-                  const it = byName.get(name);
-                  if (!it) continue;
-                  const v = Number(it.value) || 0;
-                  lines.push(`${it.marker}${it.seriesName}：${v.toLocaleString('en-US')}`);
-                }
-              }
-              return lines.join('<br/>');
-            }
-          },
-          legend: {
-            type: 'scroll',
-            data: legend,
-            textStyle: { color: muted }
-          },
-          grid: { left: 24, right: 18, top: 44, bottom: 28, containLabel: true },
-          xAxis: {
-            type: 'category',
-            data: days,
-            axisLabel: { color: muted },
-            axisLine: { lineStyle: { color: border } },
-            axisTick: { lineStyle: { color: border } }
-          },
-          yAxis: {
-            type: 'value',
-            axisLabel: { color: muted },
-            splitLine: { lineStyle: { color: border, opacity: 0.35 } }
-          },
-          series,
-          title: {
-            text: `日级趋势（${monthKey}）`,
-            left: 0,
-            textStyle: { color: text, fontSize: 12, fontWeight: 600 }
-          }
-        };
       }
 
       function updateView() {
-        const monthKey = monthSel.value;
-        const selected = selectedCountries();
+        const monthKey = normalizeMonth(state.month);
+        const displayCountries =
+          state.countries && state.countries.length ? state.countries : COUNTRIES.slice();
 
-        // Sync chip state styling
-        for (const lab of chipsEl.querySelectorAll('.chip')) {
-          const input = lab.querySelector('input');
-          if (!input) continue;
-          if (input.checked) lab.classList.add('on');
-          else lab.classList.remove('on');
-        }
+        renderSubline();
 
-        // hint
-        if (chartType === 'bar') {
-          hintEl.textContent = `月度柱状图：展示 5 国当月注册量对比；国家筛选用于高亮（当前 ${selected.join(',')}）。`;
-        } else {
-          hintEl.textContent = `日级折线图：展示所选月份内的每日注册量；每个国家两条线（自然量/买量），不做国家加总（当前 ${selected.join(',')}）。`;
-        }
+        const orgRows = getMonthRows(organicByMonth, monthKey);
+        const paidRows = getMonthRows(paidByMonth, monthKey);
 
-        updateTable(monthKey, selected);
+        const orgMonthly = buildMonthlyTotals(orgRows);
+        const paidMonthly = buildMonthlyTotals(paidRows);
+
+        updateTable(monthKey, displayCountries, orgMonthly, paidMonthly);
         updateInsights(monthKey);
 
-        if (!chart || !echartsApi) return;
+        if (!chart || !ec) return;
 
-        const option = chartType === 'bar' ? buildBarOption(monthKey, selected) : buildLineOption(monthKey, selected);
-
-        chart.setOption(option, true);
-        chart.resize();
+        if (state.chartType === "bar") {
+          const xCats = COUNTRIES.filter((c) => displayCountries.includes(c));
+          chart.setOption(buildBarOption(xCats, orgMonthly, paidMonthly), true);
+        } else {
+          // 日级折线图：按国家拆分，不做加总
+          const orgDaily = buildDailySeries(orgRows, monthKey, displayCountries);
+          const paidDaily = buildDailySeries(paidRows, monthKey, displayCountries);
+          chart.setOption(
+            buildLineOption(
+              orgDaily.dates,
+              displayCountries,
+              orgDaily.seriesByCountry,
+              paidDaily.seriesByCountry
+            ),
+            true
+          );
+        }
       }
 
-      // wire events
-      monthSel.addEventListener('change', updateView);
-      for (const input of chipsEl.querySelectorAll('input[type="checkbox"]')) {
-        input.addEventListener('change', updateView);
-      }
-      for (const b of segBtns) {
-        b.addEventListener('click', function () {
-          setChartType(b.getAttribute('data-type'));
-          updateView();
-        });
-      }
-
-      // init chart (lazy load echarts)
-      loadECharts()
-        .then((api) => {
-          echartsApi = api;
-          try {
-            echartsApi.dispose(chartEl);
-          } catch (_e) {}
-          chart = echartsApi.init(chartEl, null, { renderer: 'canvas' });
-
-          const onResize = () => {
-            try {
-              chart && chart.resize();
-            } catch (_e) {}
-          };
-          window.addEventListener('resize', onResize);
-
-          updateView();
-        })
-        .catch(() => {
-          chartEl.innerHTML = `
-            <div class="empty">
-              图表库加载失败（echarts）。当前仍会展示表格与数据分析位；如需图表，请确认 GitHub Pages 可访问 ${ECHARTS_SRC}。
-            </div>
-          `;
-          updateView();
-        });
-
-      // initial state
-      setChartType('bar');
+      // init
+      renderMonthOptions();
+      renderCountryChips();
+      ensureChart();
       updateView();
-    }
+
+      mountEl.__ovpDispose = function () {
+        disposed = true;
+        try { chart && chart.dispose(); } catch (_e) {}
+        chart = null;
+      };
+    },
   });
 })();
