@@ -1,447 +1,138 @@
-(function(){
-  'use strict';
-
+(function () {
   const moduleId = 'payrate';
-  const COUNTRY_ORDER = ['GH','KE','NG','TZ','UG'];
-  const METRIC_ORDER = ['D0','D7'];
 
-  function injectStyle(){
-    const styleId = 'ovp-style-payrate';
-    if (document.getElementById(styleId)) return;
+  const COUNTRY_ORDER = ['GH', 'KE', 'NG', 'TZ', 'UG'];
 
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = `
-      /* ===========================
-         Payrate module (D0/D7 付费率)
-         =========================== */
-      .ovp-pr-filters{
-        display:flex;
-        flex-wrap:wrap;
-        gap:10px 14px;
-        padding:10px 12px;
-        border:1px solid rgba(148, 163, 184, 0.60);
-        border-radius:12px;
-        background: rgba(255,255,255,0.72);
-      }
-      .ovp-pr-group{
-        display:flex;
-        flex-direction:column;
-        gap:6px;
-        min-width: 220px;
-      }
-      .ovp-pr-label{
-        font-size:11px;
-        color: var(--muted);
-        line-height:1;
-        margin-top:2px;
-      }
-      .ovp-pr-options{
-        display:flex;
-        flex-wrap:wrap;
-        gap:8px 10px;
-      }
-      .ovp-pr-option{
-        display:inline-flex;
-        align-items:center;
-        gap:6px;
-        padding:4px 8px;
-        border:1px solid rgba(148, 163, 184, 0.45);
-        border-radius:999px;
-        background: rgba(249, 250, 251, 0.92);
-        color: var(--text);
-        font-size:12px;
-        cursor:pointer;
-        user-select:none;
-      }
-      .ovp-pr-option input{
-        margin:0;
-        width:14px;
-        height:14px;
-        accent-color: #2563eb;
-      }
+  // 折线图：按国家固定配色（同国家 D0/D7 共用一个颜色）
+  const COUNTRY_COLOR = {
+    GH: '#2563eb',
+    KE: '#f59e0b',
+    NG: '#10b981',
+    TZ: '#ef4444',
+    UG: '#8b5cf6',
+  };
 
-      .ovp-pr-table-wrap{
-        border:1px solid rgba(148, 163, 184, 0.60);
-        border-radius:12px;
-        background: rgba(249, 250, 251, 0.90);
-        overflow:hidden;
-      }
-      .ovp-pr-table-scroll{
-        overflow:auto;
-      }
-      .ovp-pr-table{
-        width:100%;
-        border-collapse:separate;
-        border-spacing:0;
-        min-width: 520px;
-      }
-      .ovp-pr-table thead th{
-        position:sticky;
-        top:0;
-        background: rgba(255,255,255,0.96);
-        z-index:1;
-      }
-      .ovp-pr-table th,
-      .ovp-pr-table td{
-        padding:10px 10px;
-        border-bottom:1px solid rgba(148, 163, 184, 0.30);
-        text-align:right;
-        font-size:12px;
-        white-space:nowrap;
-      }
-      .ovp-pr-table th:first-child,
-      .ovp-pr-table td:first-child{
-        text-align:left;
-        padding-left:12px;
-      }
-      .ovp-pr-table tbody tr:last-child td{
-        border-bottom:none;
-      }
-      .ovp-pr-table .ovp-pr-country{
-        font-weight:600;
-      }
+  // 柱状图：按月份配色（同月份 D0/D7 共用一个颜色；D7 叠加斜线 decal）
+  const MONTH_PALETTE = [
+    '#2563eb', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6',
+    '#0ea5e9', '#f97316', '#14b8a6', '#64748b', '#d946ef',
+  ];
 
-      .ovp-pr-insight-head{
-        display:flex;
-        align-items:baseline;
-        justify-content:space-between;
-        gap:12px;
-        padding: 4px 2px 0;
-      }
-      .ovp-pr-insight-title{
-        font-size:12px;
-        color: var(--text);
-        font-weight:600;
-      }
-      .ovp-pr-insight-month{
-        font-size:11px;
-        color: var(--muted);
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  function cssVar(name, fallback){
-    try{
-      const v = getComputedStyle(document.documentElement).getPropertyValue(name);
-      const s = (v || '').trim();
-      return s || fallback;
-    }catch(_){
-      return fallback;
-    }
-  }
-
-  function num(v){
+  function safeNum(v) {
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
   }
-
-  function dateToUTCms(dateStr){
-    const s = String(dateStr || '');
-    const parts = s.split('-').map(x=>Number(x));
-    if (parts.length !== 3) return null;
-    const [y,m,d] = parts;
-    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
-    return Date.UTC(y, m-1, d);
+  function safeDiv(num, den) {
+    const n = Number(num);
+    const d = Number(den);
+    if (!Number.isFinite(n) || !Number.isFinite(d) || d <= 0) return null;
+    return n / d;
+  }
+  function fmtPct(v, digits = 2) {
+    const n = Number(v);
+    return Number.isFinite(n) ? `${(n * 100).toFixed(digits)}%` : '—';
+  }
+  function sortMonthsFallback(ms) {
+    return (Array.isArray(ms) ? ms.slice() : []).sort((a, b) => String(a).localeCompare(String(b)));
+  }
+  function normalizeId(s) {
+    return String(s).replace(/[^a-z0-9\-_]/gi, '_');
+  }
+  function monthColor(month, allMonths) {
+    const idx = Math.max(0, (allMonths || []).indexOf(month));
+    return MONTH_PALETTE[idx % MONTH_PALETTE.length];
+  }
+  function makeD7Decal() {
+    return {
+      symbol: 'rect',
+      symbolSize: 2,
+      dashArrayX: [4, 2],
+      dashArrayY: [6, 2],
+      rotation: Math.PI / 4,
+      color: 'rgba(255,255,255,0.60)',
+    };
   }
 
-  function fmtDateUTC(ms){
-    if (!Number.isFinite(ms)) return '';
-    const dt = new Date(ms);
-    const y = dt.getUTCFullYear();
-    const m = String(dt.getUTCMonth() + 1).padStart(2,'0');
-    const d = String(dt.getUTCDate()).padStart(2,'0');
-    return `${y}-${m}-${d}`;
-  }
+  function sumMonthCountry(rows, country) {
+    let reg = 0;
+    let d0 = 0;
+    let d7 = 0;
 
-  function fmtMDUTC(ms){
-    if (!Number.isFinite(ms)) return '';
-    const dt = new Date(ms);
-    const m = String(dt.getUTCMonth() + 1).padStart(2,'0');
-    const d = String(dt.getUTCDate()).padStart(2,'0');
-    return `${m}-${d}`;
-  }
-
-  function formatMonthSummary(ms){
-    const arr = Array.isArray(ms) ? ms.filter(Boolean) : [];
-    if (!arr.length) return '—';
-    if (arr.length <= 3) return arr.join('、');
-    const first = arr[0];
-    const last = arr[arr.length - 1];
-    return `${first} ~ ${last}（${arr.length}个月）`;
-  }
-
-  function computeCountryAgg(rawByMonth, months, countries){
-    const byCountry = {};
-    for (const c of countries){
-      byCountry[c] = { registration: 0, d0Payers: 0, d7Payers: 0, d0Rate: null, d7Rate: null };
+    for (const r of (Array.isArray(rows) ? rows : [])) {
+      if (!r || r.country !== country) continue;
+      reg += safeNum(r.registration);
+      d0 += safeNum(r.D0_unique_purchase);
+      d7 += safeNum(r.D7_unique_purchase);
     }
 
-    for (const m of months){
-      const rows = (rawByMonth && Array.isArray(rawByMonth[m])) ? rawByMonth[m] : [];
-      for (const r of rows){
-        const c = r && r.country;
-        if (!byCountry[c]) continue;
-        byCountry[c].registration += num(r.registration);
-        byCountry[c].d0Payers += num(r.D0_unique_purchase);
-        byCountry[c].d7Payers += num(r.D7_unique_purchase);
+    return {
+      reg,
+      d0,
+      d7,
+      d0Rate: safeDiv(d0, reg),
+      d7Rate: safeDiv(d7, reg),
+    };
+  }
+
+  function sumMonthsCountry(rawByMonth, monthsSel, country) {
+    let reg = 0;
+    let d0 = 0;
+    let d7 = 0;
+
+    for (const m of (Array.isArray(monthsSel) ? monthsSel : [])) {
+      const rows = rawByMonth && rawByMonth[m];
+      const s = sumMonthCountry(rows, country);
+      reg += safeNum(s.reg);
+      d0 += safeNum(s.d0);
+      d7 += safeNum(s.d7);
+    }
+
+    return {
+      reg,
+      d0,
+      d7,
+      d0Rate: safeDiv(d0, reg),
+      d7Rate: safeDiv(d7, reg),
+    };
+  }
+
+  function buildDailyMap(rawByMonth, monthsSel, countriesSet) {
+    const byCountry = new Map(); // country -> { D0:[[date,rate]], D7:[[date,rate]] }
+
+    for (const c of COUNTRY_ORDER) {
+      if (countriesSet && !countriesSet.has(c)) continue;
+      byCountry.set(c, { D0: [], D7: [] });
+    }
+
+    for (const m of (Array.isArray(monthsSel) ? monthsSel : [])) {
+      const rows = rawByMonth && rawByMonth[m];
+      if (!Array.isArray(rows)) continue;
+
+      for (const r of rows) {
+        if (!r || !r.country || !r.date) continue;
+        if (countriesSet && !countriesSet.has(r.country)) continue;
+        if (!byCountry.has(r.country)) continue;
+
+        const reg = safeNum(r.registration);
+        const d0 = safeNum(r.D0_unique_purchase);
+        const d7 = safeNum(r.D7_unique_purchase);
+        const d0Rate = safeDiv(d0, reg);
+        const d7Rate = safeDiv(d7, reg);
+
+        const bucket = byCountry.get(r.country);
+        bucket.D0.push([r.date, d0Rate]);
+        bucket.D7.push([r.date, d7Rate]);
       }
     }
 
-    for (const c of Object.keys(byCountry)){
-      const row = byCountry[c];
-      const reg = row.registration;
-      row.d0Rate = reg > 0 ? (row.d0Payers / reg) : null;
-      row.d7Rate = reg > 0 ? (row.d7Payers / reg) : null;
+    // sort by date (YYYY-MM-DD lex order == chrono order)
+    for (const [c, bucket] of byCountry.entries()) {
+      bucket.D0.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+      bucket.D7.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+      byCountry.set(c, bucket);
     }
 
     return byCountry;
-  }
-
-  function computeDailyByCountry(rawByMonth, months, countries){
-    const wanted = new Set(countries);
-    const bucket = new Map(); // key: country|date(utc ms)
-
-    for (const m of months){
-      const rows = (rawByMonth && Array.isArray(rawByMonth[m])) ? rawByMonth[m] : [];
-      for (const r of rows){
-        const c = r && r.country;
-        if (!wanted.has(c)) continue;
-
-        const t = dateToUTCms(r.date);
-        if (!Number.isFinite(t)) continue;
-
-        const key = `${c}|${t}`;
-        let o = bucket.get(key);
-        if (!o){
-          o = { country: c, t, registration: 0, d0Payers: 0, d7Payers: 0 };
-          bucket.set(key, o);
-        }
-        o.registration += num(r.registration);
-        o.d0Payers += num(r.D0_unique_purchase);
-        o.d7Payers += num(r.D7_unique_purchase);
-      }
-    }
-
-    const out = {};
-    for (const c of countries){
-      out[c] = { D0: [], D7: [] };
-    }
-
-    for (const o of bucket.values()){
-      const reg = o.registration;
-      const d0 = reg > 0 ? (o.d0Payers / reg) : null;
-      const d7 = reg > 0 ? (o.d7Payers / reg) : null;
-      if (!out[o.country]) continue;
-      out[o.country].D0.push([o.t, d0]);
-      out[o.country].D7.push([o.t, d7]);
-    }
-
-    for (const c of Object.keys(out)){
-      out[c].D0.sort((a,b)=>a[0]-b[0]);
-      out[c].D7.sort((a,b)=>a[0]-b[0]);
-    }
-
-    return out;
-  }
-
-  function renderTable(tableEl, aggByCountry, countries, metrics, utils){
-    if (!tableEl) return;
-
-    const showD0 = metrics.includes('D0');
-    const showD7 = metrics.includes('D7');
-
-    const headCells = [
-      '<th>国家</th>',
-      showD0 ? '<th>自然量D0付费率</th>' : '',
-      showD7 ? '<th>自然量D7付费率</th>' : '',
-    ].join('');
-
-    const bodyRows = countries.map(c=>{
-      const r = aggByCountry[c] || {};
-      const cells = [
-        `<td class="ovp-pr-country">${c}</td>`,
-        showD0 ? `<td>${utils.fmtPct(r.d0Rate, 2)}</td>` : '',
-        showD7 ? `<td>${utils.fmtPct(r.d7Rate, 2)}</td>` : '',
-      ].join('');
-      return `<tr>${cells}</tr>`;
-    }).join('');
-
-    tableEl.innerHTML = `
-      <thead><tr>${headCells}</tr></thead>
-      <tbody>${bodyRows}</tbody>
-    `;
-  }
-
-  function buildBarOption({ aggByCountry, countries, metrics, theme, utils }){
-    const baseColor = theme.blue;
-
-    const series = [];
-    if (metrics.includes('D0')){
-      series.push({
-        name: 'D0',
-        type: 'bar',
-        data: countries.map(c => (aggByCountry[c] ? aggByCountry[c].d0Rate : null)),
-        barMaxWidth: 34,
-        itemStyle: { color: baseColor },
-      });
-    }
-    if (metrics.includes('D7')){
-      series.push({
-        name: 'D7',
-        type: 'bar',
-        data: countries.map(c => (aggByCountry[c] ? aggByCountry[c].d7Rate : null)),
-        barMaxWidth: 34,
-        itemStyle: {
-          color: baseColor,
-          decal: {
-            symbol: 'rect',
-            dashArrayX: [1, 0],
-            dashArrayY: [3, 6],
-            rotation: Math.PI / 4,
-            color: 'rgba(255,255,255,0.45)',
-          }
-        },
-      });
-    }
-
-    return {
-      animationDuration: 350,
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        formatter: (params)=>{
-          if (!Array.isArray(params) || !params.length) return '';
-          const c = params[0].axisValue;
-          const row = aggByCountry[c] || {};
-          const reg = row.registration;
-          const lines = [
-            `<div style="margin-bottom:4px;"><strong>${c}</strong></div>`,
-            `<div style="color:${theme.muted};margin-bottom:6px;">registration: ${utils.fmtInt(reg)}</div>`,
-          ];
-          for (const p of params){
-            const v = (p.data === null || p.data === undefined) ? null : Number(p.data);
-            const pct = Number.isFinite(v) ? `${(v*100).toFixed(2)}%` : '—';
-            const nume = (p.seriesName === 'D0') ? row.d0Payers : row.d7Payers;
-            lines.push(
-              `<div>${p.marker}${p.seriesName}: ${pct} <span style="color:${theme.muted};">(${utils.fmtInt(nume)} / ${utils.fmtInt(reg)})</span></div>`
-            );
-          }
-          return lines.join('');
-        }
-      },
-      legend: {
-        top: 0,
-        textStyle: { color: theme.muted, fontSize: 11 },
-      },
-      grid: { left: 44, right: 22, top: 34, bottom: 30, containLabel: true },
-      xAxis: {
-        type: 'category',
-        data: countries,
-        axisLine: { lineStyle: { color: theme.border } },
-        axisTick: { alignWithLabel: true },
-        axisLabel: { color: theme.muted, fontSize: 11 },
-      },
-      yAxis: {
-        type: 'value',
-        axisLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: { color: theme.muted, fontSize: 11, formatter: (v)=>`${(Number(v)*100).toFixed(0)}%` },
-        splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.25)' } },
-      },
-      series,
-    };
-  }
-
-  function buildLineOption({ dailyByCountry, countries, metrics, theme, countryColors }){
-    const legendData = [];
-    const series = [];
-
-    for (const c of countries){
-      const color = countryColors[c] || theme.blue;
-      const src = dailyByCountry[c] || { D0: [], D7: [] };
-
-      if (metrics.includes('D0')){
-        legendData.push(`${c} D0`);
-        series.push({
-          name: `${c} D0`,
-          type: 'line',
-          data: src.D0,
-          showSymbol: false,
-          connectNulls: true,
-          lineStyle: { type: 'dashed', width: 2, color },
-          itemStyle: { color },
-          emphasis: { focus: 'series' },
-        });
-      }
-      if (metrics.includes('D7')){
-        legendData.push(`${c} D7`);
-        series.push({
-          name: `${c} D7`,
-          type: 'line',
-          data: src.D7,
-          showSymbol: false,
-          connectNulls: true,
-          lineStyle: { type: 'solid', width: 2, color },
-          itemStyle: { color },
-          emphasis: { focus: 'series' },
-        });
-      }
-    }
-
-    return {
-      animationDuration: 350,
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'line' },
-        formatter: (params)=>{
-          if (!Array.isArray(params) || !params.length) return '';
-          const ts = Number(params[0].axisValue);
-          const date = fmtDateUTC(ts);
-          const lines = [`<div style="margin-bottom:4px;"><strong>${date}</strong></div>`];
-          for (const p of params){
-            const v = Array.isArray(p.data) ? p.data[1]
-              : (Array.isArray(p.value) ? p.value[1] : null);
-            const pct = Number.isFinite(v) ? `${(v*100).toFixed(2)}%` : '—';
-            lines.push(`<div>${p.marker}${p.seriesName}: ${pct}</div>`);
-          }
-          return lines.join('');
-        }
-      },
-      legend: {
-        type: 'scroll',
-        top: 0,
-        data: legendData,
-        textStyle: { color: theme.muted, fontSize: 11 },
-      },
-      grid: { left: 48, right: 22, top: 44, bottom: 32, containLabel: true },
-      xAxis: {
-        type: 'time',
-        axisLine: { lineStyle: { color: theme.border } },
-        axisTick: { show: false },
-        axisLabel: { color: theme.muted, fontSize: 11, formatter: (v)=>fmtMDUTC(Number(v)) },
-        splitLine: { show: false },
-      },
-      yAxis: {
-        type: 'value',
-        axisLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: { color: theme.muted, fontSize: 11, formatter: (v)=>`${(Number(v)*100).toFixed(0)}%` },
-        splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.25)' } },
-      },
-      series,
-    };
-  }
-
-  function checkboxHtml(group, value, checked, label){
-    const id = `${moduleId}-${group}-${String(value).replace(/[^a-zA-Z0-9_-]/g,'_')}`;
-    return `
-      <label class="ovp-pr-option" for="${id}">
-        <input id="${id}" type="checkbox" data-group="${group}" value="${value}" ${checked ? 'checked' : ''} />
-        <span>${label}</span>
-      </label>
-    `;
   }
 
   OVP.registerModule({
@@ -450,243 +141,562 @@
     subtitle: '口径：D0_unique_purchase / registration；D7_unique_purchase / registration（单位：%）',
     span: 'full',
 
-    render({ mountEl, rawByMonth, months, latestMonth, utils }){
-      injectStyle();
+    render({ mountEl, rawByMonth, months, latestMonth, utils }) {
+      const sortMonths = (utils && typeof utils.sortMonths === 'function') ? utils.sortMonths.bind(utils) : sortMonthsFallback;
 
-      const safeMonths = Array.isArray(months) ? months.slice() : [];
-      const monthsSorted = (utils && typeof utils.sortMonths === 'function')
-        ? utils.sortMonths(safeMonths)
-        : safeMonths.sort((a,b)=>String(a).localeCompare(String(b)));
+      const { chartEl, chartNoteEl, insightEl } = OVP.ui.mountModule(mountEl, { moduleId, chartHeight: 380 });
+      const stackEl = mountEl.querySelector('.ovp-module-stack');
+      if (!stackEl || !chartEl) return;
 
-      const defaultMonth = latestMonth || (monthsSorted.length ? monthsSorted[monthsSorted.length - 1] : null);
+      // ---- styles (module-scoped) ----
+      const styleEl = document.createElement('style');
+      styleEl.textContent = `
+        /* payrate module */
+        .ovp-pr-filters{
+          display:flex;
+          flex-wrap:wrap;
+          gap:10px 14px;
+          padding:10px 12px;
+          border:1px solid rgba(148, 163, 184, 0.60);
+          border-radius:12px;
+          background: rgba(249, 250, 251, 0.90);
+        }
+        .ovp-pr-group{
+          min-width: 240px;
+          flex: 1 1 240px;
+        }
+        .ovp-pr-title{
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:10px;
+          margin:0 0 6px;
+          color: var(--muted);
+          font-size: 11px;
+          line-height: 1.2;
+        }
+        .ovp-pr-options{
+          display:flex;
+          flex-wrap:wrap;
+          gap:6px;
+        }
+        .ovp-pr-chip{
+          display:inline-flex;
+          align-items:center;
+          gap:6px;
+          padding:6px 10px;
+          border:1px solid rgba(148, 163, 184, 0.60);
+          border-radius: 999px;
+          background: rgba(255,255,255,0.96);
+          color: var(--text);
+          font-size: 11px;
+          user-select:none;
+          cursor:pointer;
+          white-space:nowrap;
+        }
+        .ovp-pr-chip input{
+          margin:0;
+          transform: translateY(0.5px);
+        }
+
+        .ovp-pr-tableWrap{
+          border:1px solid rgba(148, 163, 184, 0.60);
+          border-radius:12px;
+          background: rgba(249, 250, 251, 0.90);
+          overflow:hidden;
+        }
+        .ovp-pr-tableHead{
+          display:flex;
+          align-items:flex-end;
+          justify-content:space-between;
+          gap:12px;
+          padding:10px 12px 8px;
+          border-bottom:1px solid rgba(148, 163, 184, 0.45);
+          background: rgba(255,255,255,0.75);
+        }
+        .ovp-pr-tableHead .t{
+          font-size:12px;
+          color: var(--text);
+          letter-spacing:.1px;
+        }
+        .ovp-pr-tableHead .m{
+          font-size:11px;
+          color: var(--muted);
+        }
+        .ovp-pr-tableScroll{
+          overflow:auto;
+          max-height: 260px;
+        }
+        table.ovp-pr-table{
+          width:100%;
+          border-collapse:separate;
+          border-spacing:0;
+          font-size:11px;
+        }
+        table.ovp-pr-table thead th{
+          position: sticky;
+          top:0;
+          z-index:2;
+          background: rgba(249, 250, 251, 0.96);
+          color: var(--muted);
+          text-align:right;
+          padding:8px 10px;
+          border-bottom:1px solid rgba(148, 163, 184, 0.45);
+          font-weight:600;
+          white-space:nowrap;
+        }
+        table.ovp-pr-table thead th:first-child{ text-align:left; }
+        table.ovp-pr-table tbody td{
+          padding:8px 10px;
+          border-bottom:1px solid rgba(148, 163, 184, 0.25);
+          text-align:right;
+          color: var(--text);
+          white-space:nowrap;
+        }
+        table.ovp-pr-table tbody td:first-child{ text-align:left; font-weight:600; }
+        table.ovp-pr-table tbody tr:hover td{
+          background: rgba(15, 23, 42, 0.03);
+        }
+        .ovp-pr-muted{
+          color: var(--muted) !important;
+        }
+        .ovp-pr-emptyRow td{
+          text-align:center !important;
+          color: var(--muted) !important;
+          padding:12px 10px !important;
+        }
+        .ovp-pr-foot{
+          padding:8px 12px 10px;
+          font-size:11px;
+          color: var(--muted);
+          line-height:1.45;
+          background: rgba(255,255,255,0.75);
+        }
+      `;
+      mountEl.prepend(styleEl);
+
+      // ---- insert: filters (top) ----
+      const filtersEl = document.createElement('div');
+      filtersEl.className = 'ovp-pr-filters';
+      filtersEl.id = `filters-${moduleId}`;
+
+      // chart block is chartEl.parentElement (wrapper containing chart + note)
+      const chartBlockEl = chartEl.parentElement;
+      if (chartBlockEl) stackEl.insertBefore(filtersEl, chartBlockEl);
+
+      // ---- insert: table (below chart) ----
+      const tableWrapEl = document.createElement('div');
+      tableWrapEl.className = 'ovp-pr-tableWrap';
+      tableWrapEl.innerHTML = `
+        <div class="ovp-pr-tableHead">
+          <div class="t">数据表</div>
+          <div class="m" id="table-meta-${moduleId}"></div>
+        </div>
+        <div class="ovp-pr-tableScroll">
+          <table class="ovp-pr-table">
+            <thead>
+              <tr>
+                <th>国家</th>
+                <th>自然量D0付费率</th>
+                <th>自然量D7付费率</th>
+              </tr>
+            </thead>
+            <tbody id="table-tbody-${moduleId}"></tbody>
+          </table>
+        </div>
+        <div class="ovp-pr-foot">口径：∑D0_unique_purchase/∑registration；∑D7_unique_purchase/∑registration（单位：%）。</div>
+      `;
+      const tableMetaEl = tableWrapEl.querySelector(`#table-meta-${moduleId}`);
+      const tableTbodyEl = tableWrapEl.querySelector(`#table-tbody-${moduleId}`);
+      stackEl.insertBefore(tableWrapEl, insightEl);
+
+      // ---- state ----
+      const allMonths = sortMonths(Array.isArray(months) ? months : []);
+      const defaultMonth = (latestMonth && allMonths.includes(latestMonth))
+        ? latestMonth
+        : (allMonths.length ? allMonths[allMonths.length - 1] : null);
 
       const state = {
-        months: new Set(defaultMonth ? [defaultMonth] : monthsSorted),
+        months: new Set(defaultMonth ? [defaultMonth] : []),
         countries: new Set(COUNTRY_ORDER),
-        chartType: 'bar', // 'bar' | 'line'
-        metrics: new Set(['D0','D7']),
+        view: 'bar', // 'bar' | 'line'
+        metrics: new Set(['D0', 'D7']),
       };
 
-      const monthOptionsHtml = monthsSorted.map(m => checkboxHtml('months', m, state.months.has(m), m)).join('');
-      const countryOptionsHtml = COUNTRY_ORDER.map(c => checkboxHtml('countries', c, state.countries.has(c), c)).join('');
-      const chartTypeOptionsHtml = [
-        checkboxHtml('chartType', 'bar', state.chartType === 'bar', '月度柱状图'),
-        checkboxHtml('chartType', 'line', state.chartType === 'line', '日级折线图'),
-      ].join('');
-      const metricOptionsHtml = [
-        checkboxHtml('metrics', 'D0', state.metrics.has('D0'), 'D0'),
-        checkboxHtml('metrics', 'D7', state.metrics.has('D7'), 'D7'),
-      ].join('');
+      // ---- filters UI ----
+      function chip(group, value, label, checked) {
+        const id = normalizeId(`${moduleId}-${group}-${value}`);
+        return `
+          <label class="ovp-pr-chip" for="${id}">
+            <input id="${id}" type="checkbox" data-group="${group}" value="${String(value)}" ${checked ? 'checked' : ''}/>
+            <span>${label}</span>
+          </label>
+        `;
+      }
 
-      mountEl.innerHTML = `
-        <div class="ovp-module-stack">
-          <div class="ovp-pr-filters" id="filters-${moduleId}">
-            <div class="ovp-pr-group">
-              <div class="ovp-pr-label">月份（多选）</div>
-              <div class="ovp-pr-options">${monthOptionsHtml || '<span style="color:var(--muted);font-size:12px;">无月份</span>'}</div>
-            </div>
+      function renderFilters() {
+        const monthHtml = allMonths.map(m => chip('month', m, m, state.months.has(m))).join('');
+        const countryHtml = COUNTRY_ORDER.map(c => chip('country', c, c, state.countries.has(c))).join('');
+        const viewHtml = [
+          chip('view', 'bar', '月度柱状图', state.view === 'bar'),
+          chip('view', 'line', '日级折线图', state.view === 'line'),
+        ].join('');
+        const metricHtml = [
+          chip('metric', 'D0', 'D0数据', state.metrics.has('D0')),
+          chip('metric', 'D7', 'D7数据', state.metrics.has('D7')),
+        ].join('');
 
-            <div class="ovp-pr-group">
-              <div class="ovp-pr-label">国家（多选）</div>
-              <div class="ovp-pr-options">${countryOptionsHtml}</div>
-            </div>
-
-            <div class="ovp-pr-group">
-              <div class="ovp-pr-label">图表（单选）</div>
-              <div class="ovp-pr-options">${chartTypeOptionsHtml}</div>
-            </div>
-
-            <div class="ovp-pr-group">
-              <div class="ovp-pr-label">数据（多选）</div>
-              <div class="ovp-pr-options">${metricOptionsHtml}</div>
-            </div>
+        filtersEl.innerHTML = `
+          <div class="ovp-pr-group">
+            <div class="ovp-pr-title"><span>月份</span><span>${Array.from(state.months).length} / ${allMonths.length}</span></div>
+            <div class="ovp-pr-options">${monthHtml || '<span class="ovp-pr-muted">未检测到月份</span>'}</div>
           </div>
-
-          <div>
-            <div class="ovp-chart" id="chart-${moduleId}" style="height:360px;"></div>
-            <div class="ovp-chart-note" id="chart-note-${moduleId}"></div>
+          <div class="ovp-pr-group">
+            <div class="ovp-pr-title"><span>国家</span><span>${Array.from(state.countries).length} / ${COUNTRY_ORDER.length}</span></div>
+            <div class="ovp-pr-options">${countryHtml}</div>
           </div>
-
-          <div class="ovp-pr-table-wrap">
-            <div class="ovp-pr-table-scroll">
-              <table class="ovp-pr-table" id="table-${moduleId}"></table>
-            </div>
+          <div class="ovp-pr-group">
+            <div class="ovp-pr-title"><span>图形</span><span>单选</span></div>
+            <div class="ovp-pr-options">${viewHtml}</div>
           </div>
-
-          <div class="ovp-pr-insight-head">
-            <div class="ovp-pr-insight-title">数据分析</div>
-            <div class="ovp-pr-insight-month" id="insight-month-${moduleId}">—</div>
+          <div class="ovp-pr-group">
+            <div class="ovp-pr-title"><span>数据</span><span>${Array.from(state.metrics).length} / 2</span></div>
+            <div class="ovp-pr-options">${metricHtml}</div>
           </div>
-          <div class="ovp-insight is-empty" id="insight-${moduleId}">文案待填写：./insights.js</div>
-        </div>
-      `;
-
-      const filtersEl = mountEl.querySelector(`#filters-${moduleId}`);
-      const chartEl = mountEl.querySelector(`#chart-${moduleId}`);
-      const chartNoteEl = mountEl.querySelector(`#chart-note-${moduleId}`);
-      const tableEl = mountEl.querySelector(`#table-${moduleId}`);
-      const insightEl = mountEl.querySelector(`#insight-${moduleId}`);
-      const insightMonthEl = mountEl.querySelector(`#insight-month-${moduleId}`);
-
-      if (!utils){
-        utils = {
-          sortMonths: (ms)=> (Array.isArray(ms) ? ms.slice().sort((a,b)=>String(a).localeCompare(String(b))) : []),
-          fmtInt: (v)=> (Number.isFinite(Number(v)) ? Number(v).toLocaleString('en-US') : '—'),
-          fmtPct: (v,d=2)=> (Number.isFinite(Number(v)) ? `${(Number(v)*100).toFixed(d)}%` : '—'),
-        };
+        `;
       }
 
-      const theme = {
-        text: cssVar('--text', '#0f172a'),
-        muted: cssVar('--muted', '#6b7280'),
-        border: cssVar('--border', 'rgba(148, 163, 184, 0.60)'),
-        blue: cssVar('--ovp-blue', '#2563eb'),
-      };
-
-      const countryColors = {
-        GH: theme.blue,
-        KE: '#16a34a',
-        NG: '#f97316',
-        TZ: '#7c3aed',
-        UG: '#0ea5e9',
-      };
-
-      let chart = null;
-      function ensureChart(){
-        if (chart) return chart;
-        if (!chartEl) return null;
-        if (!window.echarts) return null;
-        chart = echarts.init(chartEl);
-        return chart;
+      function enforceNonEmpty(set, fallbackValue) {
+        if (set && set.size) return;
+        if (fallbackValue !== undefined && fallbackValue !== null) set.add(fallbackValue);
       }
 
-      // Resize handling
-      (function bindResize(){
-        const c = ensureChart();
-        if (!c) return;
-
-        if (typeof ResizeObserver !== 'undefined'){
-          const ro = new ResizeObserver(()=>{ try{ c.resize(); }catch(_){ } });
-          ro.observe(chartEl);
-        }else{
-          window.addEventListener('resize', ()=>{ try{ c.resize(); }catch(_){ } });
-        }
-      })();
-
-      function orderedMetrics(){
-        return METRIC_ORDER.filter(m=>state.metrics.has(m));
+      function getSelectedMonths() {
+        const ms = sortMonths(Array.from(state.months));
+        const valid = ms.filter(m => allMonths.includes(m));
+        if (!valid.length && allMonths.length) valid.push(allMonths[allMonths.length - 1]);
+        return valid;
       }
-      function orderedCountries(){
-        return COUNTRY_ORDER.filter(c=>state.countries.has(c));
+      function getSelectedCountries() {
+        return COUNTRY_ORDER.filter(c => state.countries.has(c));
+      }
+      function getSelectedMetrics() {
+        return ['D0', 'D7'].filter(x => state.metrics.has(x));
+      }
+      function getInsightMonth(selMonths) {
+        const ms = Array.isArray(selMonths) ? selMonths : [];
+        if (ms.length) return ms[ms.length - 1];
+        return defaultMonth;
       }
 
-      function pickInsightMonth(selMonths){
-        const arr = utils.sortMonths(selMonths);
-        if (!arr.length) return latestMonth || defaultMonth || null;
-        return (arr.length === 1) ? arr[0] : arr[arr.length - 1];
-      }
+      filtersEl.addEventListener('change', (e) => {
+        const input = e.target;
+        if (!(input instanceof HTMLInputElement)) return;
+        const group = input.dataset.group;
+        if (!group) return;
 
-      function update(){
-        const monthsSel = utils.sortMonths([...state.months]);
-        const countriesSel = orderedCountries();
-        const metricsSel = orderedMetrics();
+        const v = input.value;
+        const checked = input.checked;
 
-        const aggByCountry = computeCountryAgg(rawByMonth, monthsSel, countriesSel);
-        const dailyByCountry = (state.chartType === 'line')
-          ? computeDailyByCountry(rawByMonth, monthsSel, countriesSel)
-          : null;
-
-        const c = ensureChart();
-        if (!c){
-          if (chartEl){
-            chartEl.innerHTML = `<div class="ovp-alert" style="margin:12px;">ECharts 未加载，图表不可用。</div>`;
-          }
-        } else {
-          const opt = (state.chartType === 'line')
-            ? buildLineOption({ dailyByCountry, countries: countriesSel, metrics: metricsSel, theme, countryColors })
-            : buildBarOption({ aggByCountry, countries: countriesSel, metrics: metricsSel, theme, utils });
-
-          c.setOption(opt, true);
+        if (group === 'view') {
+          // 用 checkbox 呈现，但逻辑单选：永远保持一个选中
+          if (checked) state.view = v;
+          // 如果用户试图把当前 view 取消（变成全不选），直接回滚
+          if (!checked && state.view === v) state.view = v;
         }
 
-        if (chartNoteEl){
-          const chartName = (state.chartType === 'line') ? '日级折线图' : '月度柱状图';
-          chartNoteEl.textContent =
-            `${chartName} · 月份：${formatMonthSummary(monthsSel)} · 国家：${countriesSel.join('/')} · 数据：${metricsSel.join('/')} · 口径：D0_unique_purchase/registration；D7_unique_purchase/registration（单位：%）`;
+        if (group === 'month') {
+          if (checked) state.months.add(v);
+          else state.months.delete(v);
+          enforceNonEmpty(state.months, defaultMonth || v);
         }
 
-        renderTable(tableEl, aggByCountry, countriesSel, metricsSel, utils);
+        if (group === 'country') {
+          if (checked) state.countries.add(v);
+          else state.countries.delete(v);
+          enforceNonEmpty(state.countries, COUNTRY_ORDER[0] || v);
+        }
 
-        const insightMonth = pickInsightMonth(monthsSel);
-        if (insightMonthEl) insightMonthEl.textContent = insightMonth ? `解读月份：${insightMonth}` : '解读月份：—';
-        if (OVP && OVP.ui && typeof OVP.ui.renderInsight === 'function'){
-          OVP.ui.renderInsight({ moduleId, month: insightMonth, el: insightEl });
+        if (group === 'metric') {
+          if (checked) state.metrics.add(v);
+          else state.metrics.delete(v);
+          enforceNonEmpty(state.metrics, 'D0');
+        }
+
+        renderFilters();
+        renderAll();
+      });
+
+      renderFilters();
+
+      // ---- echarts init ----
+      if (!window.echarts) {
+        chartEl.classList.remove('is-empty');
+        chartEl.innerHTML = `<div class="ovp-alert">ECharts 未加载：请检查 echarts CDN 是否可用。</div>`;
+        if (chartNoteEl) chartNoteEl.textContent = '图表不可用（ECharts 未加载）。';
+        return;
+      }
+
+      chartEl.classList.remove('is-empty');
+      chartEl.innerHTML = '';
+      const chart = echarts.init(chartEl);
+
+      let resizeTimer = null;
+      function onResize() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          try { chart.resize(); } catch (_) {}
+        }, 80);
+      }
+      window.addEventListener('resize', onResize);
+
+      function setEmptyChart(msg) {
+        chart.setOption({
+          title: {
+            text: msg,
+            left: 'center',
+            top: 'middle',
+            textStyle: { color: '#6b7280', fontSize: 12, fontWeight: 400 },
+          },
+          tooltip: { show: false },
+          xAxis: { show: false },
+          yAxis: { show: false },
+          series: [],
+        }, { notMerge: true, lazyUpdate: false });
+      }
+
+      function renderBar(selMonths, selCountries, selMetrics) {
+        const series = [];
+
+        // 预聚合：month -> country -> rates
+        const monthCountryRate = new Map(); // key `${m}|${c}` -> {d0Rate,d7Rate}
+        for (const m of selMonths) {
+          const rows = rawByMonth && rawByMonth[m];
+          for (const c of selCountries) {
+            const s = sumMonthCountry(rows, c);
+            monthCountryRate.set(`${m}|${c}`, s);
+          }
+        }
+
+        for (const m of selMonths) {
+          const color = monthColor(m, allMonths);
+          for (const metric of selMetrics) {
+            const isD7 = metric === 'D7';
+            const data = selCountries.map(c => {
+              const s = monthCountryRate.get(`${m}|${c}`);
+              const v = isD7 ? (s ? s.d7Rate : null) : (s ? s.d0Rate : null);
+              return (v === null ? null : v);
+            });
+
+            series.push({
+              name: `${m} ${metric}`,
+              type: 'bar',
+              barMaxWidth: 18,
+              emphasis: { focus: 'series' },
+              itemStyle: isD7
+                ? { color, decal: makeD7Decal(), borderColor: color, borderWidth: 1 }
+                : { color },
+              data,
+            });
+          }
+        }
+
+        if (!selCountries.length || !series.length) {
+          setEmptyChart('暂无数据：请检查筛选条件');
+          return;
+        }
+
+        chart.setOption({
+          legend: { top: 8, left: 8, type: 'scroll' },
+          grid: { left: 46, right: 18, top: 56, bottom: 42, containLabel: true },
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            formatter: (params) => {
+              if (!Array.isArray(params) || !params.length) return '';
+              const country = params[0].axisValue;
+              const orderC = (x) => COUNTRY_ORDER.indexOf(x);
+              const orderM = (name) => {
+                const parts = String(name || '').split(/\s+/);
+                const m = parts[0] || '';
+                const idx = selMonths.indexOf(m);
+                return idx >= 0 ? idx : 9999;
+              };
+              const orderMetric = (name) => (String(name).includes(' D0') ? 0 : 1);
+              params.sort((a, b) => (orderM(a.seriesName) - orderM(b.seriesName)) || (orderMetric(a.seriesName) - orderMetric(b.seriesName)));
+
+              const lines = [`${country}`];
+              for (const p of params) {
+                lines.push(`${p.seriesName}: ${fmtPct(p.data, 2)}`);
+              }
+              return lines.join('<br/>');
+            },
+          },
+          xAxis: {
+            type: 'category',
+            data: selCountries,
+            axisTick: { alignWithLabel: true },
+          },
+          yAxis: {
+            type: 'value',
+            axisLabel: { formatter: (v) => fmtPct(v, 1) },
+            splitLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
+          },
+          series,
+          animationDuration: 220,
+        }, { notMerge: true, lazyUpdate: false });
+      }
+
+      function renderLine(selMonths, selCountries, selMetrics) {
+        const countriesSet = new Set(selCountries);
+        const dailyMap = buildDailyMap(rawByMonth, selMonths, countriesSet);
+
+        const series = [];
+        for (const c of selCountries) {
+          const bucket = dailyMap.get(c) || { D0: [], D7: [] };
+          for (const metric of selMetrics) {
+            const data = bucket[metric] || [];
+            if (!data.length) continue;
+
+            series.push({
+              id: `${c}-${metric}`,
+              name: c, // legend 以国家维度控制（同名 -> 一起开关）
+              type: 'line',
+              showSymbol: false,
+              connectNulls: false,
+              emphasis: { focus: 'series' },
+              lineStyle: { width: 2, type: metric === 'D0' ? 'dashed' : 'solid', color: COUNTRY_COLOR[c] || '#2563eb' },
+              itemStyle: { color: COUNTRY_COLOR[c] || '#2563eb' },
+              data, // [date, rate]
+            });
+          }
+        }
+
+        if (!selCountries.length || !series.length) {
+          setEmptyChart('暂无数据：请检查筛选条件');
+          return;
+        }
+
+        const metricOfSeriesId = (id) => (String(id).endsWith('-D0') ? 'D0' : 'D7');
+
+        chart.setOption({
+          legend: { top: 8, left: 8, type: 'scroll', data: selCountries },
+          grid: { left: 46, right: 18, top: 56, bottom: 42, containLabel: true },
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'line' },
+            formatter: (params) => {
+              if (!Array.isArray(params) || !params.length) return '';
+              const dateVal = params[0].axisValue;
+              const dateStr = (typeof dateVal === 'string')
+                ? dateVal
+                : (window.echarts && echarts.format ? echarts.format.formatTime('yyyy-MM-dd', dateVal) : String(dateVal));
+
+              const orderC = (x) => COUNTRY_ORDER.indexOf(x);
+              const orderMetric = (p) => (metricOfSeriesId(p.seriesId) === 'D0' ? 0 : 1);
+              params.sort((a, b) => (orderC(a.seriesName) - orderC(b.seriesName)) || (orderMetric(a) - orderMetric(b)));
+
+              const lines = [dateStr];
+              for (const p of params) {
+                const metric = metricOfSeriesId(p.seriesId);
+                const v = Array.isArray(p.data) ? p.data[1] : (Array.isArray(p.value) ? p.value[1] : p.value);
+                lines.push(`${p.seriesName} ${metric}: ${fmtPct(v, 2)}`);
+              }
+              return lines.join('<br/>');
+            },
+          },
+          xAxis: {
+            type: 'time',
+            axisLabel: {
+              formatter: (v) => (window.echarts && echarts.format ? echarts.format.formatTime('MM-dd', v) : String(v)),
+            },
+            splitLine: { show: false },
+          },
+          yAxis: {
+            type: 'value',
+            axisLabel: { formatter: (v) => fmtPct(v, 1) },
+            splitLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
+          },
+          series,
+          animationDuration: 220,
+        }, { notMerge: true, lazyUpdate: false });
+      }
+
+      function renderTable(selMonths, selCountries, selMetrics) {
+        if (!tableTbodyEl) return;
+
+        const showD0 = selMetrics.includes('D0');
+        const showD7 = selMetrics.includes('D7');
+
+        const rowsHtml = selCountries.map((c) => {
+          const agg = sumMonthsCountry(rawByMonth, selMonths, c);
+          const d0Text = showD0 ? fmtPct(agg.d0Rate, 2) : '—';
+          const d7Text = showD7 ? fmtPct(agg.d7Rate, 2) : '—';
+
+          return `
+            <tr>
+              <td>${c}</td>
+              <td class="${showD0 ? '' : 'ovp-pr-muted'}">${d0Text}</td>
+              <td class="${showD7 ? '' : 'ovp-pr-muted'}">${d7Text}</td>
+            </tr>
+          `;
+        }).join('');
+
+        tableTbodyEl.innerHTML = rowsHtml || `
+          <tr class="ovp-pr-emptyRow"><td colspan="3">暂无数据</td></tr>
+        `;
+
+        if (tableMetaEl) {
+          tableMetaEl.textContent = selMonths.length
+            ? `月份：${selMonths.join(', ')} · 国家：${selCountries.join(', ')}`
+            : `国家：${selCountries.join(', ')}`;
         }
       }
 
-      if (filtersEl){
-        filtersEl.addEventListener('change', (e)=>{
-          const t = e.target;
-          if (!t || t.tagName !== 'INPUT' || t.type !== 'checkbox') return;
-          const group = t.getAttribute('data-group');
-          const value = t.value;
-          const checked = !!t.checked;
+      function renderInsight(month) {
+        if (!insightEl) return;
+        const m = month || defaultMonth || '';
+        const text = (typeof OVP !== 'undefined' && typeof OVP.getInsight === 'function')
+          ? String(OVP.getInsight(moduleId, m) || '').trim()
+          : '';
 
-          if (group === 'chartType'){
-            if (!checked){
-              t.checked = true;
-              return;
-            }
-            state.chartType = value;
-            for (const el of filtersEl.querySelectorAll('input[type="checkbox"][data-group="chartType"]')){
-              if (el !== t) el.checked = false;
-            }
-            update();
-            return;
-          }
+        if (!text) {
+          insightEl.textContent = `数据分析（${m || '—'}）\n文案待填写：./insights.js`;
+          insightEl.classList.add('is-empty');
+          return;
+        }
 
-          if (group === 'metrics'){
-            if (checked) state.metrics.add(value);
-            else state.metrics.delete(value);
-
-            if (state.metrics.size === 0){
-              state.metrics.add(value);
-              t.checked = true;
-              return;
-            }
-            update();
-            return;
-          }
-
-          if (group === 'months'){
-            if (checked) state.months.add(value);
-            else state.months.delete(value);
-
-            if (state.months.size === 0){
-              state.months.add(value);
-              t.checked = true;
-              return;
-            }
-            update();
-            return;
-          }
-
-          if (group === 'countries'){
-            if (checked) state.countries.add(value);
-            else state.countries.delete(value);
-
-            if (state.countries.size === 0){
-              state.countries.add(value);
-              t.checked = true;
-              return;
-            }
-            update();
-            return;
-          }
-        });
+        insightEl.textContent = `数据分析（${m}）\n${text}`;
+        insightEl.classList.remove('is-empty');
       }
 
-      update();
-    }
+      function renderAll() {
+        const selMonths = getSelectedMonths();
+        const selCountries = getSelectedCountries();
+        const selMetrics = getSelectedMetrics();
+        const insightMonth = getInsightMonth(selMonths);
+
+        // chart note
+        if (chartNoteEl) {
+          const viewText = state.view === 'bar'
+            ? '月度柱状图（颜色=月份；斜线=D7）'
+            : '日级折线图（同色=同国家；虚线=D0、实线=D7）';
+
+          chartNoteEl.textContent = `口径：D0_unique_purchase/registration、D7_unique_purchase/registration（单位：%）。视图：${viewText}。`;
+        }
+
+        // chart
+        if (state.view === 'bar') renderBar(selMonths, selCountries, selMetrics);
+        else renderLine(selMonths, selCountries, selMetrics);
+
+        // table
+        renderTable(selMonths, selCountries, selMetrics);
+
+        // insight
+        renderInsight(insightMonth);
+      }
+
+      renderAll();
+    },
   });
 })();
