@@ -81,22 +81,36 @@
   }
 
   function ensureInsightStyles() {
-    if (document.getElementById('ovp-insights-style')) return;
+  if (document.getElementById('ovp-insights-style')) return;
 
-    var style = document.createElement('style');
-    style.id = 'ovp-insights-style';
-    style.textContent = [
-      '.ovp-analysis{margin-top:12px}',
-      '.ovp-analysis .meta{display:flex;justify-content:space-between;align-items:center;',
-      'gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted,#6b7280);margin:0 0 8px}',
-      '.ovp-analysis .box{padding:12px;border:1px solid var(--border, rgba(148,163,184,.6));',
-      'border-radius:12px;background:rgba(255,255,255,.65);color:var(--muted,#6b7280);',
-      'font-size:12px;line-height:1.65;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;',
-      'min-height:54px}',
-      '.ovp-analysis .box.is-empty{color:rgba(107,114,128,.75)}'
-    ].join('');
-    document.head.appendChild(style);
-  }
+  var style = document.createElement('style');
+  style.id = 'ovp-insights-style';
+  style.textContent = [
+    '.ovp-analysis{margin-top:12px;padding:12px;border:1px solid var(--border, rgba(255,255,255,.12));',
+    'border-radius:12px;background:rgba(255,255,255,.04)}',
+
+    // 元信息（月份/模块名）仍保持灰色；如果你也想黑色，把这里的 var(--muted...) 改成 var(--text...)
+    '.ovp-analysis .meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;',
+    'font-size:12px;color:var(--muted, rgba(255,255,255,.62));margin-bottom:8px}',
+
+    '.ovp-analysis .top{font-size:13px;color:var(--text, rgba(255,255,255,.92));font-weight:600;',
+    'margin:0 0 8px;line-height:1.45}',
+
+    // ✅ 正文列表改为黑色（跟随全局 --text）
+    '.ovp-analysis ul{margin:0;padding-left:18px;color:var(--text, rgba(255,255,255,.92));',
+    'font-size:12px;line-height:1.6}',
+
+    // ✅ actions 区正文也改为黑色（跟随全局 --text）
+    '.ovp-analysis .actions{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border, rgba(255,255,255,.12));',
+    'color:var(--text, rgba(255,255,255,.92));font-size:12px;line-height:1.6}',
+    '.ovp-analysis .actions .row{display:flex;flex-wrap:wrap;gap:8px}',
+    '.ovp-analysis .actions .pill{border:1px solid var(--border, rgba(255,255,255,.12));',
+    'border-radius:999px;padding:2px 8px;background:rgba(255,255,255,.03)}'
+  ].join('');
+
+  document.head.appendChild(style);
+}
+
 
   // ===== 你主要维护这块：STORE.months =====
   var STORE = {
