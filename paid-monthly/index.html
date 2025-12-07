@@ -519,6 +519,114 @@
           rgba(37, 99, 235, 0.04)
         );
       }
+
+      /* ================= 右侧悬浮：模块导航（hover 展开）================= */
+.module-nav {
+  position: fixed;
+  right: 18px;
+  top: 160px;
+  z-index: 999;
+}
+
+.module-nav-handle {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  user-select: none;
+}
+
+.module-nav-handle:focus {
+  outline: none;
+  border-color: rgba(37, 99, 235, 0.55);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18), 0 12px 30px rgba(15, 23, 42, 0.12);
+}
+
+.module-nav-handle-icon {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--accent-strong);
+}
+
+.module-nav-panel {
+  position: absolute;
+  top: 0;
+  right: 56px; /* 面板在按钮左侧展开 */
+  width: 260px;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 12px 12px 10px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.14);
+
+  opacity: 0;
+  transform: translateX(10px);
+  pointer-events: none;
+  transition: opacity 0.18s ease-out, transform 0.18s ease-out;
+}
+
+/* hover / 聚焦 / 点击固定展开 三种方式都能打开面板 */
+.module-nav:hover .module-nav-panel,
+.module-nav:focus-within .module-nav-panel,
+.module-nav.is-open .module-nav-panel {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.module-nav-title {
+  font-size: 11px;
+  color: var(--text-sub);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 2px 6px 10px;
+}
+
+.module-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 4px 2px;
+}
+
+.module-nav-item {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-main);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.12s ease-out, background 0.12s ease-out, border-color 0.12s ease-out;
+}
+
+.module-nav-item:hover {
+  background: var(--accent-soft);
+  border-color: rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+
+.module-nav-item:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 880px) {
+  .module-nav {
+    display: none; /* 小屏默认隐藏，避免挡内容；需要的话你再删掉这一段 */
+  }
+}
+
     </style>
   </head>
 
@@ -796,6 +904,18 @@
         >
         <span>数据来源：内部自然量报表 · 时间口径建议统一为 UTC+0 日切。</span>
       </footer>
+    </div>
+
+        <!-- 右侧悬浮：模块导航 -->
+    <div class="module-nav" id="module-nav" aria-label="模块导航">
+      <button class="module-nav-handle" id="module-nav-handle" type="button" aria-label="模块导航（悬停展开）">
+        <span class="module-nav-handle-icon">≡</span>
+      </button>
+
+      <div class="module-nav-panel" role="menu" aria-label="模块列表">
+        <div class="module-nav-title">Modules</div>
+        <div class="module-nav-list" id="module-nav-list"></div>
+      </div>
     </div>
 
     <!-- 依赖：ECharts + 数据 + 分析文案 -->
