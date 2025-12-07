@@ -1,978 +1,1047 @@
 /**
  * paid-module-betflow.js
- * ------------------------------------------------------------
- * 模块 7：D0/D7 人均流水（总流水 / 体育流水 / 游戏流水）
- * - 支持：月份（最多3个月）、国家/媒体/产品形态多选 +「全选但不区分」、视图（柱状/月度 vs 折线/日度）
- * - 支持：人均维度（总/体育/游戏，单选）、D0/D7（多选）
- * - 图表：柱状图按国家聚合；折线图按国家×媒体×形态拆线（可用「全选但不区分」收敛维度）
- * - 表格：月度汇总表，维度随筛选变化
+ * --------------------------
+ * 模块：D0/D7 人均流水（总流水 / 体育流水 / 游戏流水）
+ *
+ * 需求要点：
+ * - 独立筛选：月份(最多3)、国家、图形(月度柱状图/日级折线图)、媒体、产品类型、人均类型(总/体育/游戏)、D0/D7(多选)
+ * - “全选但不区分”：等价全选，但图/表聚合，不拆线、不拆维度
+ * - 柱状图：X轴国家固定顺序 GH/KE/NG/TZ；同月 D0/D7 同色；D7 斜线阴影(decal)区分
+ * - 折线图：日级，跨月连续；媒体/产品类型拆线（若选择“全选但不区分”则聚合）
+ * - 表格：与筛选联动；标题附带 (媒体, 产品类型)
+ *
+ * 数据源：window.RAW_PAID_BY_MONTH（见 paid-data.js）
  */
 
 (function () {
-  "use strict";
+  const MODULE_KEY = "betflow";
+  const FIXED_COUNTRY_ORDER = ["GH", "KE", "NG", "TZ"];
 
-  var MODULE_KEY = "flow";
-  var CARD_ID = "card-paid-betflow";
-  var CHART_ID = "chart-paid-betflow";
-  var TABLE_ID = "table-paid-betflow";
+  const DEFAULT_COLORS = ["#2563eb", "#16a34a", "#f97316", "#7c3aed", "#ef4444", "#0f766e"];
 
-  function init() {
-    var chartDom = document.getElementById(CHART_ID);
-    if (!chartDom || !window.echarts) return;
+  // D7 斜线阴影（ECharts 5 的 decal）
+  const D7_DECAL = {
+    symbol: "rect",
+    symbolSize: 1,
+    dashArrayX: [6, 3],
+    dashArrayY: [1, 0],
+    rotation: Math.PI / 4,
+    color: "rgba(255,255,255,0.35)",
+  };
 
-    var card =
-      document.getElementById(CARD_ID) ||
-      (chartDom.closest ? chartDom.closest("section") : null);
-    if (!card) return;
-
-    var chart = echarts.init(chartDom);
-    if (
-      window.PaidDashboard &&
-      typeof PaidDashboard.registerChart === "function"
-    ) {
-      PaidDashboard.registerChart(chart);
-    }
-
-    var RAW = window.RAW_PAID_BY_MONTH || {};
-    var ALL_MONTHS = Object.keys(RAW || {}).sort();
-    if (!ALL_MONTHS.length) {
-      renderEmpty(chart);
-      return;
-    }
-
-    var COLORS =
-      (window.PaidDashboard && PaidDashboard.COLORS) || [
-        "#2563eb",
-        "#16a34a",
-        "#f97316",
-        "#7c3aed",
-        "#ef4444",
-        "#0f766e",
-      ];
-
-    var COUNTRY_ORDER = ["GH", "KE", "NG", "TZ"];
-
-    var meta = collectMeta(RAW, COUNTRY_ORDER);
-
-    // 默认：最近2个月；D0；总流水
-    var state = {
-      view: "bar", // bar | line
-      months: ALL_MONTHS.slice(Math.max(0, ALL_MONTHS.length - 2)),
-      countries: meta.countriesOrdered.slice(),
-      countriesAllNoSplit: false,
-      medias: meta.mediasOrdered.slice(),
-      mediasAllNoSplit: false,
-      productTypes: meta.productTypesOrdered.slice(),
-      productTypesAllNoSplit: false,
-      flowDim: "total", // total | sports | games
-      dayTypes: ["D0"], // ["D0","D7"]
-    };
-
-    var ui = ensureUI(card);
-
-    function render() {
-      // 1) 容错：空选=全选；月份最多3个
-      state.months = normalizeMonths(state.months, ALL_MONTHS);
-      state.countries = normalizeSelection(state.countries, meta.countriesOrdered);
-      state.medias = normalizeSelection(state.medias, meta.mediasOrdered);
-      state.productTypes = normalizeSelection(
-        state.productTypes,
-        meta.productTypesOrdered
-      );
-      state.dayTypes = normalizeDayTypes(state.dayTypes);
-
-      // 2) 更新卡片标题（人均维度）
-      updateTitles(ui, state);
-
-      // 3) 重建筛选器（保证禁用/高亮状态正确）
-      renderFilters(ui, state, meta, ALL_MONTHS, function () {
-        render();
-      });
-
-      // 4) 月度聚合（表格 + 柱状图复用）
-      var monthsSel = state.months.slice(0, 3);
-      var dayTypesSel = state.dayTypes.slice();
-      var monthlyAgg = computeMonthlyAgg(RAW, monthsSel, dayTypesSel, state, meta);
-
-      renderTable(ui, monthlyAgg, monthsSel, dayTypesSel, state);
-
-      // 5) 图表渲染
-      if (state.view === "line") {
-        var daily = computeDailySeries(
-          RAW,
-          monthsSel,
-          dayTypesSel,
-          state,
-          meta,
-          COLORS
-        );
-        renderLineChart(chart, daily);
-      } else {
-        renderBarChart(
-          chart,
-          monthlyAgg,
-          monthsSel,
-          dayTypesSel,
-          state,
-          COLORS
-        );
-      }
-    }
-
-    render();
+  function getRAW() {
+    return window.RAW_PAID_BY_MONTH || {};
   }
 
-  // ---------------------------
-  // UI 组装
-  // ---------------------------
+  function normalizeCountry(v) {
+    return String(v || "").toUpperCase();
+  }
+  function normalizeMedia(v) {
+    return String(v || "").toUpperCase();
+  }
+  function normalizeProductType(v) {
+    return String(v || "").toLowerCase();
+  }
 
-  function ensureUI(card) {
-    var titleEl = card.querySelector(".chart-title");
-    var subEl = card.querySelector(".chart-sub");
-    var controlsEl = card.querySelector(".chart-controls");
+  function formatProductTypeLabel(v) {
+    const t = normalizeProductType(v);
+    if (t === "app") return "APP";
+    if (t === "h5") return "H5";
+    return String(v || "");
+  }
 
-    // 保证 controls 存在
-    if (!controlsEl) {
-      var header = card.querySelector(".chart-card-header");
-      controlsEl = document.createElement("div");
-      controlsEl.className = "chart-controls";
-      if (header) header.appendChild(controlsEl);
+  function formatMonthLabel(monthKey) {
+    if (window.PaidDashboard && typeof window.PaidDashboard.formatMonthLabel === "function") {
+      return window.PaidDashboard.formatMonthLabel(monthKey);
     }
+    if (!monthKey || typeof monthKey !== "string") return "";
+    const parts = monthKey.split("-");
+    const mm = parts[1] || monthKey;
+    const mNum = parseInt(mm, 10) || 0;
+    return (mNum > 0 ? mNum : mm) + "月";
+  }
 
-    // 表格容器（不存在就补）
-    var summaryEl = card.querySelector(".chart-summary");
-    var tableSection = card.querySelector(".chart-table-section");
-    var tableTitle;
-    var tableEl;
+  function formatUSD(v, digits) {
+    const d = typeof digits === "number" ? digits : 2;
+    if (v == null || !isFinite(v)) return "-";
+    return Number(v).toLocaleString(undefined, {
+      minimumFractionDigits: d,
+      maximumFractionDigits: d,
+    });
+  }
 
-    if (!tableSection) {
-      tableSection = document.createElement("div");
-      tableSection.className = "chart-table-section";
+  function safeDiv(a, b) {
+    const na = Number(a);
+    const nb = Number(b);
+    if (!isFinite(na) || !isFinite(nb) || nb === 0) return null;
+    return na / nb;
+  }
 
-      tableTitle = document.createElement("div");
-      tableTitle.className = "chart-table-title";
-      tableTitle.textContent = "当前筛选 · 人均流水（月度汇总）";
+  function uniq(arr) {
+    return Array.from(new Set((arr || []).filter((v) => v != null)));
+  }
 
-      var wrapper = document.createElement("div");
-      wrapper.className = "chart-table-wrapper";
+  function setArray(target, values) {
+    target.length = 0;
+    (values || []).forEach((v) => target.push(v));
+  }
 
-      tableEl = document.createElement("table");
-      tableEl.id = TABLE_ID;
-      tableEl.className = "chart-table";
+  function sortCountries(list) {
+    const arr = (list || []).slice();
+    arr.sort((a, b) => {
+      const ia = FIXED_COUNTRY_ORDER.indexOf(a);
+      const ib = FIXED_COUNTRY_ORDER.indexOf(b);
+      const ha = ia !== -1;
+      const hb = ib !== -1;
+      if (ha && hb) return ia - ib;
+      if (ha) return -1;
+      if (hb) return 1;
+      return String(a).localeCompare(String(b));
+    });
+    return arr;
+  }
 
-      wrapper.appendChild(tableEl);
-      tableSection.appendChild(tableTitle);
-      tableSection.appendChild(wrapper);
+  function pickDefaultMonths(allMonths) {
+    const months = (allMonths || []).slice();
+    if (!months.length) return [];
+    // 默认取最近 2 个月（不够就取 1 个）
+    return months.slice(Math.max(0, months.length - 2));
+  }
 
-      if (summaryEl && summaryEl.parentNode) {
-        summaryEl.parentNode.insertBefore(tableSection, summaryEl.nextSibling);
-      } else {
-        card.appendChild(tableSection);
-      }
-    } else {
-      tableTitle = tableSection.querySelector(".chart-table-title");
-      tableEl =
-        tableSection.querySelector("table#" + TABLE_ID) ||
-        tableSection.querySelector("table");
-      if (tableEl && !tableEl.id) tableEl.id = TABLE_ID;
-    }
+  function buildOptionsFromRAW() {
+    const RAW = getRAW();
+    const months = Object.keys(RAW).sort();
+    const cSet = new Set();
+    const mSet = new Set();
+    const pSet = new Set();
+
+    months.forEach((month) => {
+      (RAW[month] || []).forEach((r) => {
+        if (!r) return;
+        if (r.country) cSet.add(normalizeCountry(r.country));
+        if (r.media) mSet.add(normalizeMedia(r.media));
+        if (r.productType) pSet.add(normalizeProductType(r.productType));
+      });
+    });
 
     return {
-      titleEl: titleEl,
-      subEl: subEl,
-      controlsEl: controlsEl,
-      tableTitleEl: tableTitle,
-      tableEl: tableEl,
+      months,
+      countries: sortCountries(Array.from(cSet)),
+      medias: Array.from(mSet).sort(),
+      productTypes: Array.from(pSet).sort(),
     };
   }
 
-  function updateTitles(ui, state) {
-    var dimLabel = flowDimLabel(state.flowDim);
-    if (ui && ui.titleEl) {
-      ui.titleEl.textContent = dimLabel + "流水 · 月度趋势";
-    }
-    if (ui && ui.subEl) {
-      ui.subEl.textContent =
-        "公式：BET_FLOW / BET_PLACED_USER；口径可选 D0/D7；支持切到日级折线。";
-    }
+  function ensureNonEmpty(state, opts) {
+    if (!state.months.length) state.months = pickDefaultMonths(opts.months);
+    if (!state.months.length) state.months = (opts.months || []).slice(-1);
+
+    if (!state.countries.length) state.countries = (opts.countries || []).slice();
+    if (!state.medias.length) state.medias = (opts.medias || []).slice();
+    if (!state.productTypes.length) state.productTypes = (opts.productTypes || []).slice();
+
+    if (!state.windows.length) state.windows = ["D0", "D7"];
+    if (!state.kind) state.kind = "total";
+    if (!state.view) state.view = "bar";
   }
 
-  function renderFilters(ui, state, meta, allMonths, rerender) {
-    var controls = ui.controlsEl;
-    if (!controls) return;
+  function injectTableStylesOnce() {
+    if (document.getElementById("paid-data-table-style")) return;
+    const style = document.createElement("style");
+    style.id = "paid-data-table-style";
+    style.textContent = `
+      .data-table-wrap{width:100%;overflow:auto;border-radius:12px;border:1px solid rgba(148,163,184,0.35);background:rgba(255,255,255,0.85);}
+      table.data-table{width:100%;border-collapse:collapse;font-size:11px;}
+      table.data-table thead th{position:sticky;top:0;background:rgba(37,99,235,0.06);color:#475569;font-weight:600;z-index:1;}
+      table.data-table th,table.data-table td{padding:6px 8px;border-bottom:1px solid rgba(148,163,184,0.28);white-space:nowrap;}
+      table.data-table tbody tr:hover td{background:rgba(37,99,235,0.04);}
+      table.data-table th{text-align:right;}
+      table.data-table td{text-align:right;}
+      table.data-table th:first-child,table.data-table td:first-child{text-align:left;}
+      .table-block{margin-top:10px;}
+      .table-title{font-size:12px;font-weight:600;color:#0f172a;margin:6px 0 8px;display:flex;gap:10px;align-items:center;}
+      .table-sub{font-size:11px;font-weight:500;color:#475569;}
+    `;
+    document.head.appendChild(style);
+  }
 
-    controls.innerHTML = "";
+  function kindLabel(kind) {
+    if (kind === "sports") return "体育";
+    if (kind === "games") return "游戏";
+    return "总";
+  }
 
-    // badge
-    var badge = document.createElement("span");
-    badge.className = "chart-badge";
-    badge.textContent = "单位：USD";
-    controls.appendChild(badge);
+  function fieldsFor(win, kind) {
+    const prefix = win === "D7" ? "D7" : "D0";
+    if (kind === "sports") {
+      return {
+        flowField: `${prefix}_SPORTS_BET_FLOW`,
+        userField: `${prefix}_SPORTS_BET_PLACED_USER`,
+      };
+    }
+    if (kind === "games") {
+      return {
+        flowField: `${prefix}_GAMES_BET_FLOW`,
+        userField: `${prefix}_GAMES_BET_PLACED_USER`,
+      };
+    }
+    return {
+      flowField: `${prefix}_TOTAL_BET_FLOW`,
+      userField: `${prefix}_TOTAL_BET_PLACED_USER`,
+    };
+  }
 
-    // 视图：bar / line
-    controls.appendChild(
-      makeRadioFilter(
-        "视图：",
-        "flow-view",
+  function buildTitleSuffix(state, opts) {
+    const allMedias = opts.medias || [];
+    const allTypes = opts.productTypes || [];
+
+    const mediaText = state.collapse.medias
+      ? "全部媒体"
+      : state.medias.length === allMedias.length
+      ? "全部媒体"
+      : state.medias.join("+");
+
+    const typeText = state.collapse.productTypes
+      ? "全部形态"
+      : state.productTypes.length === allTypes.length
+      ? "全部形态"
+      : state.productTypes.map(formatProductTypeLabel).join("+");
+
+    return `（${mediaText}, ${typeText}）`;
+  }
+
+  function init() {
+    const chartEl = document.getElementById("chart-paid-betflow");
+    if (!chartEl || !window.echarts) return;
+
+    injectTableStylesOnce();
+
+    const card = chartEl.closest(".chart-card") || document.getElementById("card-paid-betflow") || chartEl.parentElement;
+    if (!card) return;
+
+    // 如果旧版 index.html 还保留了 flow-daytype / flow-type，先隐藏掉，避免和本模块的多选冲突
+    ["flow-daytype", "flow-type"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const wrap = el.closest(".chart-mini-filter");
+      if (wrap) wrap.style.display = "none";
+    });
+
+    const opts = buildOptionsFromRAW();
+
+    const state = {
+      view: "bar", // bar | line
+      months: [],
+      countries: [],
+      medias: [],
+      productTypes: [],
+      kind: "total", // total | sports | games
+      windows: ["D0", "D7"], // 多选
+      collapse: { countries: false, medias: false, productTypes: false },
+    };
+
+    ensureNonEmpty(state, opts);
+
+    // -----------------------------
+    // DOM: 筛选区 + 表格区（没有就自动补）
+    // -----------------------------
+    const headerEl = card.querySelector("header");
+
+    const PANEL_ID = "betflow-filters";
+    let panel = card.querySelector(`#${PANEL_ID}`);
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = PANEL_ID;
+      panel.style.padding = "10px 16px 12px";
+      panel.style.borderBottom = "1px solid rgba(148,163,184,0.25)";
+      panel.style.background = "linear-gradient(to right, rgba(37,99,235,0.04), rgba(255,255,255,0.75))";
+
+      function makeRow(labelText, rightEl) {
+        const row = document.createElement("div");
+        row.className = "hero-filter-row";
+        const label = document.createElement("div");
+        label.className = "label";
+        label.textContent = labelText;
+        row.appendChild(label);
+        row.appendChild(rightEl);
+        return row;
+      }
+
+      const viewWrap = document.createElement("div");
+      viewWrap.className = "chart-mini-radio";
+      viewWrap.id = "betflow-view";
+
+      const monthsWrap = document.createElement("div");
+      monthsWrap.className = "chart-mini-chips";
+      monthsWrap.id = "betflow-months";
+
+      const countriesWrap = document.createElement("div");
+      countriesWrap.className = "chart-mini-chips";
+      countriesWrap.id = "betflow-countries";
+
+      const mediasWrap = document.createElement("div");
+      mediasWrap.className = "chart-mini-chips";
+      mediasWrap.id = "betflow-medias";
+
+      const typesWrap = document.createElement("div");
+      typesWrap.className = "chart-mini-chips";
+      typesWrap.id = "betflow-productTypes";
+
+      const kindWrap = document.createElement("div");
+      kindWrap.className = "chart-mini-radio";
+      kindWrap.id = "betflow-kind";
+
+      const windowsWrap = document.createElement("div");
+      windowsWrap.className = "chart-mini-chips";
+      windowsWrap.id = "betflow-windows";
+
+      panel.appendChild(makeRow("图形", viewWrap));
+      panel.appendChild(makeRow("月份", monthsWrap));
+      panel.appendChild(makeRow("国家", countriesWrap));
+      panel.appendChild(makeRow("媒体", mediasWrap));
+      panel.appendChild(makeRow("形态", typesWrap));
+      panel.appendChild(makeRow("人均", kindWrap));
+      panel.appendChild(makeRow("D0/D7", windowsWrap));
+
+      if (headerEl) headerEl.insertAdjacentElement("afterend", panel);
+      else card.insertAdjacentElement("afterbegin", panel);
+    }
+
+    // 表格块：插在 chart 与 analysis 之间（如果 analysis 存在）
+    const summaryEl =
+      card.querySelector('.chart-summary[data-analysis-key="flow"]') || card.querySelector(".chart-summary");
+    let tableBlock = card.querySelector("#betflow-table-block");
+    if (!tableBlock) {
+      tableBlock = document.createElement("div");
+      tableBlock.id = "betflow-table-block";
+      tableBlock.className = "table-block";
+      tableBlock.style.padding = "0 16px 14px";
+
+      const titleRow = document.createElement("div");
+      titleRow.className = "table-title";
+
+      const titleText = document.createElement("span");
+      titleText.id = "table-title-betflow";
+
+      const subText = document.createElement("span");
+      subText.id = "table-sub-betflow";
+      subText.className = "table-sub";
+      subText.style.marginLeft = "auto";
+
+      titleRow.appendChild(titleText);
+      titleRow.appendChild(subText);
+
+      const wrap = document.createElement("div");
+      wrap.className = "data-table-wrap";
+
+      const table = document.createElement("table");
+      table.id = "table-betflow";
+      table.className = "data-table";
+
+      wrap.appendChild(table);
+
+      tableBlock.appendChild(titleRow);
+      tableBlock.appendChild(wrap);
+
+      if (summaryEl) summaryEl.insertAdjacentElement("beforebegin", tableBlock);
+      else chartEl.insertAdjacentElement("afterend", tableBlock);
+    }
+
+    const viewWrap = document.getElementById("betflow-view");
+    const monthsWrap = document.getElementById("betflow-months");
+    const countriesWrap = document.getElementById("betflow-countries");
+    const mediasWrap = document.getElementById("betflow-medias");
+    const typesWrap = document.getElementById("betflow-productTypes");
+    const kindWrap = document.getElementById("betflow-kind");
+    const windowsWrap = document.getElementById("betflow-windows");
+
+    const tableTitleEl = document.getElementById("table-title-betflow");
+    const tableSubEl = document.getElementById("table-sub-betflow");
+    const tableEl = document.getElementById("table-betflow");
+
+    const colors =
+      window.PaidDashboard && Array.isArray(window.PaidDashboard.COLORS) && window.PaidDashboard.COLORS.length
+        ? window.PaidDashboard.COLORS
+        : DEFAULT_COLORS;
+
+    const chart = echarts.init(chartEl);
+    if (window.PaidDashboard && typeof window.PaidDashboard.registerChart === "function") {
+      window.PaidDashboard.registerChart(chart);
+    } else {
+      window.addEventListener("resize", () => {
+        try {
+          chart.resize();
+        } catch (e) {}
+      });
+    }
+
+    // -----------------------------
+    // UI 渲染：radio / chips
+    // -----------------------------
+    function renderRadio(container, groupName, items, currentValue, onPick) {
+      if (!container) return;
+      container.innerHTML = "";
+      items.forEach((it) => {
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = groupName;
+        input.value = it.value;
+        input.checked = it.value === currentValue;
+        input.addEventListener("change", () => {
+          if (!input.checked) return;
+          onPick(it.value);
+        });
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(it.label));
+        container.appendChild(label);
+      });
+    }
+
+    function renderChips(container, values, stateArray, options) {
+      if (!container) return;
+      const max = options && options.max ? options.max : null;
+      const allowEmpty = options && options.allowEmpty ? true : false;
+      const getLabel = options && options.getLabel ? options.getLabel : null;
+
+      container.innerHTML = "";
+
+      if (Array.isArray(stateArray) && stateArray.length === 0) {
+        setArray(stateArray, values);
+      }
+
+      values.forEach((value, idx) => {
+        const labelEl = document.createElement("label");
+        labelEl.className = "filter-chip";
+
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = value;
+
+        const selected = stateArray.indexOf(value) !== -1;
+        input.checked = selected;
+        labelEl.classList.toggle("filter-chip-active", selected);
+
+        labelEl.appendChild(input);
+        labelEl.appendChild(document.createTextNode(typeof getLabel === "function" ? getLabel(value, idx) : value));
+
+        input.addEventListener("change", () => {
+          const existsIndex = stateArray.indexOf(value);
+
+          if (input.checked) {
+            if (max === 1) {
+              setArray(stateArray, [value]);
+            } else if (max && stateArray.length >= max && existsIndex === -1) {
+              input.checked = false;
+              return;
+            } else {
+              if (existsIndex === -1) stateArray.push(value);
+            }
+          } else {
+            if (existsIndex !== -1) stateArray.splice(existsIndex, 1);
+            if (!allowEmpty && stateArray.length === 0) {
+              stateArray.push(value);
+              input.checked = true;
+            }
+          }
+
+          renderAll();
+        });
+
+        container.appendChild(labelEl);
+      });
+    }
+
+    // 带“全选但不区分”的 chips（勾上后强制全选，图/表不拆维度）
+    function renderChipsWithCollapse(container, values, stateArray, collapseKey, options) {
+      if (!container) return;
+      const max = options && options.max ? options.max : null;
+      const allowEmpty = options && options.allowEmpty ? true : false;
+      const getLabel = options && options.getLabel ? options.getLabel : null;
+
+      const _values = (values || []).slice();
+      container.innerHTML = "";
+
+      // 先插入“全选但不区分”
+      {
+        const labelEl = document.createElement("label");
+        labelEl.className = "filter-chip";
+
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = !!state.collapse[collapseKey];
+
+        labelEl.appendChild(input);
+        labelEl.appendChild(document.createTextNode("全选但不区分"));
+        labelEl.classList.toggle("filter-chip-active", input.checked);
+
+        input.addEventListener("change", () => {
+          state.collapse[collapseKey] = input.checked;
+          if (input.checked) setArray(stateArray, _values);
+          if (!stateArray.length) setArray(stateArray, _values);
+          renderAll();
+        });
+
+        container.appendChild(labelEl);
+      }
+
+      // 默认全选
+      if (Array.isArray(stateArray) && stateArray.length === 0) {
+        setArray(stateArray, _values);
+      }
+
+      _values.forEach((value, idx) => {
+        const labelEl = document.createElement("label");
+        labelEl.className = "filter-chip";
+
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = value;
+
+        const selected = stateArray.indexOf(value) !== -1;
+        input.checked = selected;
+        labelEl.classList.toggle("filter-chip-active", selected);
+
+        labelEl.appendChild(input);
+        labelEl.appendChild(document.createTextNode(typeof getLabel === "function" ? getLabel(value, idx) : value));
+
+        input.addEventListener("change", () => {
+          // “全选但不区分”模式下：强制全选；想排除某些值就先取消该模式
+          if (state.collapse[collapseKey]) {
+            setArray(stateArray, _values);
+            renderAll();
+            return;
+          }
+
+          const existsIndex = stateArray.indexOf(value);
+
+          if (input.checked) {
+            if (max === 1) {
+              setArray(stateArray, [value]);
+            } else if (max && stateArray.length >= max && existsIndex === -1) {
+              input.checked = false;
+              return;
+            } else {
+              if (existsIndex === -1) stateArray.push(value);
+            }
+          } else {
+            if (existsIndex !== -1) stateArray.splice(existsIndex, 1);
+            if (!allowEmpty && stateArray.length === 0) {
+              stateArray.push(value);
+              input.checked = true;
+            }
+          }
+
+          renderAll();
+        });
+
+        container.appendChild(labelEl);
+      });
+    }
+
+    // -----------------------------
+    // 数据过滤
+    // -----------------------------
+    function filteredRowsForMonth(monthKey, extra) {
+      const RAW = getRAW();
+      const rows = (RAW[monthKey] || []).slice();
+
+      const cSet = new Set(state.countries.map(normalizeCountry));
+      const mSet = new Set(state.medias.map(normalizeMedia));
+      const pSet = new Set(state.productTypes.map(normalizeProductType));
+
+      return rows.filter((r) => {
+        if (!r) return false;
+        const c = normalizeCountry(r.country);
+        const m = normalizeMedia(r.media);
+        const p = normalizeProductType(r.productType);
+
+        if (cSet.size && !cSet.has(c)) return false;
+        if (mSet.size && !mSet.has(m)) return false;
+        if (pSet.size && !pSet.has(p)) return false;
+
+        if (extra && typeof extra === "function") return !!extra(r);
+        return true;
+      });
+    }
+
+    function computePerCapitaForRows(rows, win) {
+      const f = fieldsFor(win, state.kind);
+      let num = 0;
+      let den = 0;
+      rows.forEach((r) => {
+        const a = Number(r[f.flowField]);
+        const b = Number(r[f.userField]);
+        if (isFinite(a)) num += a;
+        if (isFinite(b)) den += b;
+      });
+      return safeDiv(num, den);
+    }
+
+    function computeMonthlyCell(monthKey, win, countryGroup, mediaGroup, typeGroup) {
+      const rows = filteredRowsForMonth(monthKey, (r) => {
+        if (countryGroup !== "ALL" && normalizeCountry(r.country) !== countryGroup) return false;
+        if (mediaGroup !== "ALL" && normalizeMedia(r.media) !== mediaGroup) return false;
+        if (typeGroup !== "ALL" && normalizeProductType(r.productType) !== typeGroup) return false;
+        return true;
+      });
+      return computePerCapitaForRows(rows, win);
+    }
+
+    // -----------------------------
+    // 图表渲染
+    // -----------------------------
+    function renderBar() {
+      const monthsSel = uniq(state.months).sort();
+      const winsSel = uniq(state.windows).sort((a, b) => (a === "D0" ? -1 : 1));
+
+      let countriesAxis = sortCountries(uniq(state.countries.map(normalizeCountry)));
+      if (state.collapse.countries) countriesAxis = ["ALL"];
+
+      const series = [];
+
+      monthsSel.forEach((monthKey, mi) => {
+        const mLabel = formatMonthLabel(monthKey);
+        const color = colors[mi % colors.length];
+
+        winsSel.forEach((win) => {
+          const name = `${mLabel} ${win}`;
+          const decal = win === "D7" ? D7_DECAL : null;
+
+          const data = countriesAxis.map((c) => {
+            const rows = filteredRowsForMonth(monthKey, (r) => {
+              if (c === "ALL") return true;
+              return normalizeCountry(r.country) === c;
+            });
+            return computePerCapitaForRows(rows, win);
+          });
+
+          series.push({
+            name,
+            type: "bar",
+            barMaxWidth: 18,
+            itemStyle: { color, decal },
+            emphasis: { focus: "series" },
+            data,
+          });
+        });
+      });
+
+      const option = {
+        grid: { left: 54, right: 22, top: 28, bottom: 48 },
+        tooltip: {
+          trigger: "axis",
+          backgroundColor: "rgba(15, 23, 42, 0.92)",
+          borderWidth: 0,
+          textStyle: { fontSize: 11 },
+          axisPointer: { type: "shadow" },
+          formatter: (params) => {
+            const lines = [];
+            if (params && params.length) {
+              lines.push(params[0].axisValue);
+              params.forEach((p) => {
+                const v = p && p.value != null ? formatUSD(p.value, 2) : "-";
+                lines.push(`${p.marker}${p.seriesName}：${v}`);
+              });
+            }
+            return lines.join("<br/>");
+          },
+        },
+        legend: {
+          type: "scroll",
+          right: 16,
+          top: 8,
+          textStyle: { fontSize: 11, color: "#475569" },
+        },
+        xAxis: {
+          type: "category",
+          data: countriesAxis,
+          axisTick: { show: false },
+          axisLine: { lineStyle: { color: "rgba(148,163,184,0.6)" } },
+          axisLabel: { color: "#334155", fontSize: 11 },
+        },
+        yAxis: {
+          type: "value",
+          splitLine: { lineStyle: { color: "rgba(148,163,184,0.22)" } },
+          axisLabel: {
+            color: "#64748b",
+            fontSize: 11,
+            formatter: (v) => formatUSD(v, 2),
+          },
+        },
+        series,
+      };
+
+      chart.setOption(option, true);
+    }
+
+    function buildSeriesName(c, m, p, win) {
+      const parts = [];
+      parts.push(c);
+      if (!state.collapse.medias) parts.push(m);
+      if (!state.collapse.productTypes) parts.push(formatProductTypeLabel(p));
+      parts.push(win);
+      return parts.join(" ");
+    }
+
+    function renderLine() {
+      const monthsSel = uniq(state.months).sort();
+      const winsSel = uniq(state.windows).sort((a, b) => (a === "D0" ? -1 : 1));
+
+      // 先把所有满足筛选的行拉出来（跨月）
+      const dateSet = new Set();
+      const agg = new Map(); // key -> Map(date -> {num, den})
+
+      monthsSel.forEach((monthKey) => {
+        const rows = filteredRowsForMonth(monthKey);
+        rows.forEach((r) => {
+          const date = r.date;
+          if (!date) return;
+
+          dateSet.add(date);
+
+          const c = state.collapse.countries ? "ALL" : normalizeCountry(r.country);
+          const m = state.collapse.medias ? "ALL" : normalizeMedia(r.media);
+          const p = state.collapse.productTypes ? "ALL" : normalizeProductType(r.productType);
+
+          winsSel.forEach((win) => {
+            const f = fieldsFor(win, state.kind);
+            const num = Number(r[f.flowField]);
+            const den = Number(r[f.userField]);
+
+            const key = [c, m, p, win].join("||");
+            let dateMap = agg.get(key);
+            if (!dateMap) {
+              dateMap = new Map();
+              agg.set(key, dateMap);
+            }
+
+            let cell = dateMap.get(date);
+            if (!cell) {
+              cell = { num: 0, den: 0 };
+              dateMap.set(date, cell);
+            }
+
+            if (isFinite(num)) cell.num += num;
+            if (isFinite(den)) cell.den += den;
+          });
+        });
+      });
+
+      const dates = Array.from(dateSet).sort();
+
+      const series = [];
+      agg.forEach((dateMap, key) => {
+        const parts = key.split("||");
+        const c = parts[0];
+        const m = parts[1];
+        const p = parts[2];
+        const win = parts[3];
+
+        const data = dates.map((d) => {
+          const cell = dateMap.get(d);
+          return cell ? safeDiv(cell.num, cell.den) : null;
+        });
+
+        series.push({
+          c,
+          m,
+          p,
+          win,
+          name: buildSeriesName(c, m, p, win),
+          data,
+        });
+      });
+
+      // 排序：国家固定顺序 -> media -> type -> win
+      series.sort((a, b) => {
+        const ia = FIXED_COUNTRY_ORDER.indexOf(a.c);
+        const ib = FIXED_COUNTRY_ORDER.indexOf(b.c);
+        const ha = ia !== -1;
+        const hb = ib !== -1;
+        if (ha && hb && ia !== ib) return ia - ib;
+        if (ha !== hb) return ha ? -1 : 1;
+        if (a.c !== b.c) return String(a.c).localeCompare(String(b.c));
+
+        if (a.m !== b.m) return String(a.m).localeCompare(String(b.m));
+        if (a.p !== b.p) return String(a.p).localeCompare(String(b.p));
+
+        if (a.win !== b.win) return a.win === "D0" ? -1 : 1;
+        return 0;
+      });
+
+      const option = {
+        grid: { left: 54, right: 22, top: 28, bottom: 58 },
+        tooltip: {
+          trigger: "axis",
+          backgroundColor: "rgba(15, 23, 42, 0.92)",
+          borderWidth: 0,
+          textStyle: { fontSize: 11 },
+          axisPointer: { type: "line" },
+          formatter: (params) => {
+            const lines = [];
+            if (params && params.length) {
+              lines.push(params[0].axisValue);
+              params.forEach((p) => {
+                const v = p && p.value != null ? formatUSD(p.value, 2) : "-";
+                lines.push(`${p.marker}${p.seriesName}：${v}`);
+              });
+            }
+            return lines.join("<br/>");
+          },
+        },
+        legend: {
+          type: "scroll",
+          right: 16,
+          top: 8,
+          textStyle: { fontSize: 11, color: "#475569" },
+        },
+        xAxis: {
+          type: "category",
+          data: dates,
+          axisTick: { show: false },
+          axisLine: { lineStyle: { color: "rgba(148,163,184,0.6)" } },
+          axisLabel: {
+            color: "#334155",
+            fontSize: 10,
+            formatter: (v) => {
+              // 2025-09-01 -> 09-01（跨月更清楚）
+              if (typeof v === "string" && v.length >= 10) return v.slice(5);
+              return v;
+            },
+          },
+        },
+        yAxis: {
+          type: "value",
+          splitLine: { lineStyle: { color: "rgba(148,163,184,0.22)" } },
+          axisLabel: {
+            color: "#64748b",
+            fontSize: 11,
+            formatter: (v) => formatUSD(v, 2),
+          },
+        },
+        series: series.map((s) => ({
+          name: s.name,
+          type: "line",
+          data: s.data,
+          smooth: true,
+          showSymbol: false,
+          lineStyle: { width: 2, type: s.win === "D7" ? "dashed" : "solid" },
+          emphasis: { focus: "series" },
+        })),
+      };
+
+      chart.setOption(option, true);
+    }
+
+    // -----------------------------
+    // 表格渲染
+    // -----------------------------
+    function th(text) {
+      const el = document.createElement("th");
+      el.textContent = text;
+      return el;
+    }
+    function td(text) {
+      const el = document.createElement("td");
+      el.textContent = text;
+      return el;
+    }
+
+    function renderTable() {
+      if (!tableEl) return;
+
+      const monthsSel = uniq(state.months).sort();
+      const winsSel = uniq(state.windows).sort((a, b) => (a === "D0" ? -1 : 1));
+
+      const metricName = `人均${kindLabel(state.kind)}流水`;
+      const suffix = buildTitleSuffix(state, opts);
+
+      if (tableTitleEl) tableTitleEl.textContent = `当前筛选 · ${metricName}${suffix}`;
+      if (tableSubEl) tableSubEl.textContent = `单位：USD；月份最多 3；D7 用斜线阴影区分（柱状图）`;
+
+      const thead = document.createElement("thead");
+      const trh = document.createElement("tr");
+
+      trh.appendChild(th("国家"));
+
+      const breakdown = state.view === "line";
+      if (breakdown) {
+        trh.appendChild(th("媒体"));
+        trh.appendChild(th("形态"));
+      }
+
+      monthsSel.forEach((m) => {
+        winsSel.forEach((w) => {
+          trh.appendChild(th(`${formatMonthLabel(m)} ${w}`));
+        });
+      });
+
+      thead.appendChild(trh);
+
+      const tbody = document.createElement("tbody");
+
+      let rowCountries = sortCountries(uniq(state.countries.map(normalizeCountry)));
+      if (state.collapse.countries) rowCountries = ["ALL"];
+
+      let rowMedias = ["ALL"];
+      let rowTypes = ["ALL"];
+      if (breakdown) {
+        if (!state.collapse.medias) rowMedias = uniq(state.medias.map(normalizeMedia));
+        if (!state.collapse.productTypes) rowTypes = uniq(state.productTypes.map(normalizeProductType));
+      }
+
+      rowCountries.forEach((c) => {
+        rowMedias.forEach((m) => {
+          rowTypes.forEach((p) => {
+            const tr = document.createElement("tr");
+
+            tr.appendChild(td(c));
+
+            if (breakdown) {
+              tr.appendChild(td(m === "ALL" ? "—" : m));
+              tr.appendChild(td(p === "ALL" ? "—" : formatProductTypeLabel(p)));
+            }
+
+            monthsSel.forEach((monthKey) => {
+              winsSel.forEach((win) => {
+                const v = computeMonthlyCell(monthKey, win, c, m, p);
+                tr.appendChild(td(v == null ? "-" : formatUSD(v, 2)));
+              });
+            });
+
+            tbody.appendChild(tr);
+          });
+        });
+      });
+
+      tableEl.innerHTML = "";
+      tableEl.appendChild(thead);
+      tableEl.appendChild(tbody);
+    }
+
+    // -----------------------------
+    // 总渲染
+    // -----------------------------
+    function sanitizeSelections() {
+      // 数据更新后，剔除无效选项；再确保不为空
+      state.months = state.months.filter((m) => (opts.months || []).indexOf(m) !== -1);
+      state.countries = state.countries.filter((c) => (opts.countries || []).indexOf(c) !== -1);
+      state.medias = state.medias.filter((m) => (opts.medias || []).indexOf(m) !== -1);
+      state.productTypes = state.productTypes.filter((p) => (opts.productTypes || []).indexOf(p) !== -1);
+
+      ensureNonEmpty(state, opts);
+
+      // months 约束：最多 3
+      if (state.months.length > 3) state.months = state.months.slice(0, 3);
+    }
+
+    function renderFilters() {
+      renderRadio(
+        viewWrap,
+        "betflowView",
         [
-          { value: "bar", label: "柱状（月度）" },
-          { value: "line", label: "折线（日度）" },
+          { value: "bar", label: "月度柱状图" },
+          { value: "line", label: "日级折线图" },
         ],
         state.view,
-        function (val) {
-          state.view = val;
-          rerender();
+        (v) => {
+          state.view = v;
+          renderAll();
         }
-      )
-    );
+      );
 
-    // 月份（最多3个）
-    controls.appendChild(
-      makeMultiChipFilter(
-        "月份：",
-        "flow-months",
-        allMonths,
-        state.months,
-        {
-          max: 3,
-          getLabel: formatMonthLabel,
-        },
-        function (next) {
-          state.months = next;
-          rerender();
-        }
-      )
-    );
+      renderChips(monthsWrap, opts.months || [], state.months, {
+        max: 3,
+        allowEmpty: false,
+        getLabel: (v) => formatMonthLabel(v),
+      });
 
-    // 国家 + 全选但不区分
-    controls.appendChild(
-      makeDimFilterWithNoSplit(
-        "国家：",
-        "flow-countries",
-        meta.countriesOrdered,
-        state.countries,
-        state.countriesAllNoSplit,
-        function (nextSelected, nextNoSplit) {
-          state.countries = nextSelected;
-          state.countriesAllNoSplit = nextNoSplit;
-          rerender();
-        }
-      )
-    );
+      renderChipsWithCollapse(countriesWrap, opts.countries || [], state.countries, "countries", {
+        allowEmpty: false,
+        getLabel: (v) => v,
+      });
 
-    // 媒体 + 全选但不区分
-    controls.appendChild(
-      makeDimFilterWithNoSplit(
-        "媒体：",
-        "flow-medias",
-        meta.mediasOrdered,
-        state.medias,
-        state.mediasAllNoSplit,
-        function (nextSelected, nextNoSplit) {
-          state.medias = nextSelected;
-          state.mediasAllNoSplit = nextNoSplit;
-          rerender();
-        }
-      )
-    );
+      renderChipsWithCollapse(mediasWrap, opts.medias || [], state.medias, "medias", {
+        allowEmpty: false,
+        getLabel: (v) => v,
+      });
 
-    // 形态 + 全选但不区分
-    controls.appendChild(
-      makeDimFilterWithNoSplit(
-        "形态：",
-        "flow-productTypes",
-        meta.productTypesOrdered,
-        state.productTypes,
-        state.productTypesAllNoSplit,
-        function (nextSelected, nextNoSplit) {
-          state.productTypes = nextSelected;
-          state.productTypesAllNoSplit = nextNoSplit;
-          rerender();
-        }
-      )
-    );
+      renderChipsWithCollapse(typesWrap, opts.productTypes || [], state.productTypes, "productTypes", {
+        allowEmpty: false,
+        getLabel: (v) => formatProductTypeLabel(v),
+      });
 
-    // 人均维度（单选）
-    controls.appendChild(
-      makeRadioFilter(
-        "人均：",
-        "flow-dim",
+      renderRadio(
+        kindWrap,
+        "betflowKind",
         [
           { value: "total", label: "总流水" },
           { value: "sports", label: "体育流水" },
           { value: "games", label: "游戏流水" },
         ],
-        state.flowDim,
-        function (val) {
-          state.flowDim = val;
-          rerender();
+        state.kind,
+        (v) => {
+          state.kind = v;
+          renderAll();
         }
-      )
-    );
+      );
 
-    // D0/D7（多选）
-    controls.appendChild(
-      makeMultiChipFilter(
-        "口径：",
-        "flow-dayTypes",
-        ["D0", "D7"],
-        state.dayTypes,
-        { max: null, getLabel: function (v) { return v; } },
-        function (next) {
-          state.dayTypes = next;
-          rerender();
-        }
-      )
-    );
-  }
-
-  function makeRadioFilter(labelText, groupId, options, value, onChange) {
-    var wrap = document.createElement("div");
-    wrap.className = "chart-mini-filter";
-
-    var label = document.createElement("span");
-    label.className = "chart-mini-label";
-    label.textContent = labelText;
-    wrap.appendChild(label);
-
-    var radioWrap = document.createElement("div");
-    radioWrap.className = "chart-mini-radio";
-    radioWrap.id = groupId;
-
-    options.forEach(function (opt) {
-      var lab = document.createElement("label");
-
-      var input = document.createElement("input");
-      input.type = "radio";
-      input.name = groupId;
-      input.value = opt.value;
-      input.checked = String(opt.value) === String(value);
-
-      input.addEventListener("change", function () {
-        if (input.checked) onChange(opt.value);
+      renderChips(windowsWrap, ["D0", "D7"], state.windows, {
+        max: 2,
+        allowEmpty: false,
+        getLabel: (v) => v,
       });
-
-      lab.appendChild(input);
-      lab.appendChild(document.createTextNode(opt.label));
-      radioWrap.appendChild(lab);
-    });
-
-    wrap.appendChild(radioWrap);
-    return wrap;
-  }
-
-  function makeMultiChipFilter(labelText, containerId, values, selected, options, onChange) {
-    var wrap = document.createElement("div");
-    wrap.className = "chart-mini-filter";
-
-    var label = document.createElement("span");
-    label.className = "chart-mini-label";
-    label.textContent = labelText;
-    wrap.appendChild(label);
-
-    var chips = document.createElement("div");
-    chips.className = "chart-mini-chips";
-    chips.id = containerId;
-
-    var max = options && typeof options.max === "number" ? options.max : null;
-    var getLabel =
-      options && typeof options.getLabel === "function"
-        ? options.getLabel
-        : function (v) { return String(v); };
-
-    if (!Array.isArray(selected) || selected.length === 0) selected = values.slice();
-
-    values.forEach(function (value) {
-      var lab = document.createElement("label");
-      lab.className = "filter-chip";
-
-      var input = document.createElement("input");
-      input.type = "checkbox";
-      input.value = String(value);
-      input.checked = selected.indexOf(value) !== -1;
-
-      lab.classList.toggle("filter-chip-active", input.checked);
-
-      input.addEventListener("change", function () {
-        var next = selected.slice();
-        var idx = next.indexOf(value);
-
-        if (input.checked) {
-          if (max && next.length >= max) {
-            input.checked = false;
-            return;
-          }
-          if (idx === -1) next.push(value);
-        } else {
-          if (idx !== -1) next.splice(idx, 1);
-        }
-
-        if (next.length === 0) next = values.slice();
-        onChange(next);
-      });
-
-      lab.appendChild(input);
-      lab.appendChild(document.createTextNode(getLabel(value)));
-      chips.appendChild(lab);
-    });
-
-    wrap.appendChild(chips);
-    return wrap;
-  }
-
-  function makeDimFilterWithNoSplit(labelText, containerId, values, selected, noSplit, onChange) {
-    var wrap = document.createElement("div");
-    wrap.className = "chart-mini-filter";
-
-    var label = document.createElement("span");
-    label.className = "chart-mini-label";
-    label.textContent = labelText;
-    wrap.appendChild(label);
-
-    var chips = document.createElement("div");
-    chips.className = "chart-mini-chips";
-    chips.id = containerId;
-
-    // 1) 全选但不区分（勾选后禁用其他值）
-    var allLab = document.createElement("label");
-    allLab.className = "filter-chip";
-
-    var allInput = document.createElement("input");
-    allInput.type = "checkbox";
-    allInput.checked = !!noSplit;
-
-    allLab.classList.toggle("filter-chip-active", allInput.checked);
-
-    allInput.addEventListener("change", function () {
-      var nextNoSplit = allInput.checked;
-      var nextSelected = values.slice();
-      onChange(nextSelected, nextNoSplit);
-    });
-
-    allLab.appendChild(allInput);
-    allLab.appendChild(document.createTextNode("全选但不区分"));
-    chips.appendChild(allLab);
-
-    // 2) 具体值
-    if (!Array.isArray(selected) || selected.length === 0) selected = values.slice();
-
-    values.forEach(function (value) {
-      var lab = document.createElement("label");
-      lab.className = "filter-chip";
-
-      var input = document.createElement("input");
-      input.type = "checkbox";
-      input.value = String(value);
-      input.checked = selected.indexOf(value) !== -1;
-      input.disabled = !!noSplit;
-
-      lab.classList.toggle("filter-chip-active", input.checked);
-
-      input.addEventListener("change", function () {
-        var next = selected.slice();
-        var idx = next.indexOf(value);
-
-        if (input.checked) {
-          if (idx === -1) next.push(value);
-        } else {
-          if (idx !== -1) next.splice(idx, 1);
-        }
-
-        if (next.length === 0) next = values.slice();
-        onChange(next, false);
-      });
-
-      lab.appendChild(input);
-      lab.appendChild(document.createTextNode(String(value)));
-      chips.appendChild(lab);
-    });
-
-    wrap.appendChild(chips);
-    return wrap;
-  }
-
-  // ---------------------------
-  // 数据计算
-  // ---------------------------
-
-  function computeMonthlyAgg(RAW, months, dayTypes, state, meta) {
-    var rowsMap = {}; // rowKey -> rowObj
-    var barMap = {};  // country|month|dayType -> {flow,users}
-
-    var effCountries = state.countriesAllNoSplit ? meta.countriesOrdered : state.countries;
-    var effMedias = state.mediasAllNoSplit ? meta.mediasOrdered : state.medias;
-    var effProducts = state.productTypesAllNoSplit ? meta.productTypesOrdered : state.productTypes;
-
-    months.forEach(function (month) {
-      var rows = RAW[month] || [];
-      rows.forEach(function (r) {
-        if (!r) return;
-
-        var c = normalizeCountry(r.country);
-        var m = normalizeMedia(r.media);
-        var p = normalizeProductType(r.productType);
-
-        if (effCountries.indexOf(c) === -1) return;
-        if (effMedias.indexOf(m) === -1) return;
-        if (effProducts.indexOf(p) === -1) return;
-
-        var cKey = state.countriesAllNoSplit ? "ALL" : c;
-        var mKey = state.mediasAllNoSplit ? "ALL" : m;
-        var pKey = state.productTypesAllNoSplit ? "ALL" : p;
-
-        var rowKey = cKey + "|" + mKey + "|" + pKey;
-        if (!rowsMap[rowKey]) {
-          rowsMap[rowKey] = {
-            country: cKey,
-            media: mKey,
-            productType: pKey,
-            sums: {}, // month -> dayType -> {flow,users}
-          };
-        }
-
-        dayTypes.forEach(function (dayType) {
-          var fields = betFlowFields(dayType, state.flowDim);
-          var flow = toNumber(r[fields.flow]);
-          var users = toNumber(r[fields.users]);
-
-          if (!rowsMap[rowKey].sums[month]) rowsMap[rowKey].sums[month] = {};
-          if (!rowsMap[rowKey].sums[month][dayType]) {
-            rowsMap[rowKey].sums[month][dayType] = { flow: 0, users: 0 };
-          }
-          rowsMap[rowKey].sums[month][dayType].flow += flow;
-          rowsMap[rowKey].sums[month][dayType].users += users;
-
-          var barKey = cKey + "|" + month + "|" + dayType;
-          if (!barMap[barKey]) barMap[barKey] = { flow: 0, users: 0 };
-          barMap[barKey].flow += flow;
-          barMap[barKey].users += users;
-        });
-      });
-    });
-
-    var rowsArr = Object.keys(rowsMap).map(function (k) { return rowsMap[k]; });
-
-    // 排序：国家 > 媒体 > 形态
-    rowsArr.sort(function (a, b) {
-      var ia = meta.countrySortIndex[a.country] != null ? meta.countrySortIndex[a.country] : 999;
-      var ib = meta.countrySortIndex[b.country] != null ? meta.countrySortIndex[b.country] : 999;
-      if (ia !== ib) return ia - ib;
-
-      if (a.media !== b.media) return String(a.media).localeCompare(String(b.media));
-      if (a.productType !== b.productType) return String(a.productType).localeCompare(String(b.productType));
-      return 0;
-    });
-
-    // bar categories（固定顺序）
-    var categories = state.countriesAllNoSplit
-      ? ["ALL"]
-      : meta.countriesOrdered.filter(function (c) { return state.countries.indexOf(c) !== -1; });
-
-    return { categories: categories, barMap: barMap, rows: rowsArr };
-  }
-
-  function computeDailySeries(RAW, months, dayTypes, state, meta, colors) {
-    var dateSet = {};
-    var baseColorMap = {};
-    var nextColorIdx = 0;
-    var seriesMap = {}; // varKey -> { baseKey, dayType, dataMap: {date:{flow,users}} }
-
-    var effCountries = state.countriesAllNoSplit ? meta.countriesOrdered : state.countries;
-    var effMedias = state.mediasAllNoSplit ? meta.mediasOrdered : state.medias;
-    var effProducts = state.productTypesAllNoSplit ? meta.productTypesOrdered : state.productTypes;
-
-    months.forEach(function (month) {
-      var rows = RAW[month] || [];
-      rows.forEach(function (r) {
-        if (!r || !r.date) return;
-
-        var date = String(r.date);
-        var c = normalizeCountry(r.country);
-        var m = normalizeMedia(r.media);
-        var p = normalizeProductType(r.productType);
-
-        if (effCountries.indexOf(c) === -1) return;
-        if (effMedias.indexOf(m) === -1) return;
-        if (effProducts.indexOf(p) === -1) return;
-
-        dateSet[date] = true;
-
-        var cKey = state.countriesAllNoSplit ? "ALL" : c;
-        var mKey = state.mediasAllNoSplit ? "ALL" : m;
-        var pKey = state.productTypesAllNoSplit ? "ALL" : p;
-
-        var baseKey = cKey + "|" + mKey + "|" + pKey;
-
-        if (!baseColorMap[baseKey]) {
-          baseColorMap[baseKey] = colors[nextColorIdx % colors.length];
-          nextColorIdx += 1;
-        }
-
-        dayTypes.forEach(function (dayType) {
-          var varKey = baseKey + "|" + dayType;
-          if (!seriesMap[varKey]) {
-            seriesMap[varKey] = {
-              baseKey: baseKey,
-              dayType: dayType,
-              country: cKey,
-              media: mKey,
-              productType: pKey,
-              dataMap: {},
-            };
-          }
-
-          var fields = betFlowFields(dayType, state.flowDim);
-          var flow = toNumber(r[fields.flow]);
-          var users = toNumber(r[fields.users]);
-
-          if (!seriesMap[varKey].dataMap[date]) {
-            seriesMap[varKey].dataMap[date] = { flow: 0, users: 0 };
-          }
-          seriesMap[varKey].dataMap[date].flow += flow;
-          seriesMap[varKey].dataMap[date].users += users;
-        });
-      });
-    });
-
-    var dates = Object.keys(dateSet).sort();
-
-    var seriesArr = Object.keys(seriesMap).map(function (key) {
-      var s = seriesMap[key];
-
-      var data = dates.map(function (d) {
-        var cell = s.dataMap[d];
-        if (!cell) return null;
-        return safeDiv(cell.flow, cell.users);
-      });
-
-      var name = buildSeriesName(s, state, dayTypes);
-
-      return {
-        name: name,
-        type: "line",
-        data: data,
-        showSymbol: false,
-        connectNulls: false,
-        lineStyle: { width: 2, type: s.dayType === "D7" ? "dashed" : "solid" },
-        itemStyle: { color: baseColorMap[s.baseKey] },
-        emphasis: { focus: "series" },
-      };
-    });
-
-    seriesArr.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
-
-    return { dates: dates, series: seriesArr };
-  }
-
-  function renderTable(ui, monthlyAgg, months, dayTypes, state) {
-    if (!ui || !ui.tableEl) return;
-
-    var dimLabel = flowDimLabel(state.flowDim);
-    var mediaLabel = state.mediasAllNoSplit ? "全媒体不区分" : state.medias.join("+");
-    var prodLabel = state.productTypesAllNoSplit ? "全形态不区分" : state.productTypes.join("+");
-
-    var titleSuffix = "（" + [mediaLabel, prodLabel].filter(Boolean).join("，") + "）";
-
-    if (ui.tableTitleEl) {
-      ui.tableTitleEl.textContent =
-        "当前筛选 · " + dimLabel + "流水（月度汇总）" + titleSuffix;
     }
 
-    var showMedia = !state.mediasAllNoSplit;
-    var showProd = !state.productTypesAllNoSplit;
+    function renderAll() {
+      sanitizeSelections();
+      renderFilters();
 
-    var th = ["国家"];
-    if (showMedia) th.push("媒体");
-    if (showProd) th.push("形态");
-
-    months.forEach(function (m) {
-      dayTypes.forEach(function (d) {
-        th.push(formatMonthLabel(m) + " " + d + " " + dimLabel + "流水");
-      });
-    });
-
-    var html = [];
-    html.push("<thead><tr>");
-    th.forEach(function (h) { html.push("<th>" + escapeHtml(h) + "</th>"); });
-    html.push("</tr></thead><tbody>");
-
-    monthlyAgg.rows.forEach(function (row) {
-      html.push("<tr>");
-      html.push("<td>" + escapeHtml(row.country) + "</td>");
-      if (showMedia) html.push("<td>" + escapeHtml(row.media) + "</td>");
-      if (showProd) html.push("<td>" + escapeHtml(row.productType) + "</td>");
-
-      months.forEach(function (m) {
-        dayTypes.forEach(function (d) {
-          var cell = row.sums && row.sums[m] && row.sums[m][d] ? row.sums[m][d] : null;
-          var val = cell ? safeDiv(cell.flow, cell.users) : null;
-          html.push("<td style=\"text-align:right\">" + formatUSD(val, 2) + "</td>");
-        });
-      });
-
-      html.push("</tr>");
-    });
-
-    html.push("</tbody>");
-    ui.tableEl.innerHTML = html.join("");
-  }
-
-  // ---------------------------
-  // 图表渲染
-  // ---------------------------
-
-  function renderBarChart(chart, monthlyAgg, months, dayTypes, state, colors) {
-    var categories = monthlyAgg.categories.slice();
-    var series = [];
-
-    months.forEach(function (m, mi) {
-      var color = colors[mi % colors.length];
-
-      dayTypes.forEach(function (d) {
-        var data = categories.map(function (c) {
-          var key = c + "|" + m + "|" + d;
-          var cell = monthlyAgg.barMap[key];
-          if (!cell) return null;
-          return safeDiv(cell.flow, cell.users);
-        });
-
-        series.push({
-          name: formatMonthLabel(m) + " " + d,
-          type: "bar",
-          data: data,
-          barMaxWidth: 26,
-          itemStyle:
-            d === "D7"
-              ? {
-                  color: color,
-                  shadowBlur: 10,
-                  shadowColor: "rgba(15, 23, 42, 0.25)",
-                  shadowOffsetY: 2,
-                }
-              : { color: color },
-          emphasis: { focus: "series" },
-        });
-      });
-    });
-
-    chart.setOption(
-      {
-        tooltip: {
-          trigger: "axis",
-          axisPointer: { type: "shadow" },
-          valueFormatter: function (v) {
-            return v == null ? "-" : formatUSD(v, 2) + " USD";
-          },
-        },
-        legend: { type: "scroll" },
-        grid: { left: 46, right: 18, top: 46, bottom: 38 },
-        xAxis: { type: "category", data: categories },
-        yAxis: { type: "value", axisLabel: { formatter: function (v) { return formatUSD(v, 2); } } },
-        series: series,
-      },
-      true
-    );
-  }
-
-  function renderLineChart(chart, daily) {
-    chart.setOption(
-      {
-        tooltip: {
-          trigger: "axis",
-          valueFormatter: function (v) {
-            return v == null ? "-" : formatUSD(v, 2) + " USD";
-          },
-        },
-        legend: { type: "scroll" },
-        grid: { left: 46, right: 18, top: 46, bottom: 38 },
-        xAxis: {
-          type: "category",
-          data: daily.dates,
-          axisLabel: {
-            interval: Math.max(0, Math.floor(daily.dates.length / 12)),
-            formatter: function (v) { return String(v).slice(5); }, // 2025-09-01 -> 09-01
-          },
-        },
-        yAxis: { type: "value", axisLabel: { formatter: function (v) { return formatUSD(v, 2); } } },
-        series: daily.series,
-      },
-      true
-    );
-  }
-
-  function renderEmpty(chart) {
-    chart.clear();
-    chart.setOption(
-      {
-        title: { text: "暂无数据", left: "center", top: "center" },
-        xAxis: { show: false },
-        yAxis: { show: false },
-        series: [],
-      },
-      true
-    );
-  }
-
-  // ---------------------------
-  // Meta / helpers
-  // ---------------------------
-
-  function collectMeta(RAW, countryOrder) {
-    var cSet = {};
-    var mSet = {};
-    var pSet = {};
-
-    Object.keys(RAW || {}).forEach(function (month) {
-      (RAW[month] || []).forEach(function (r) {
-        if (!r) return;
-        var c = normalizeCountry(r.country);
-        var m = normalizeMedia(r.media);
-        var p = normalizeProductType(r.productType);
-        if (c) cSet[c] = true;
-        if (m) mSet[m] = true;
-        if (p) pSet[p] = true;
-      });
-    });
-
-    var countries = Object.keys(cSet);
-    var medias = Object.keys(mSet);
-    var products = Object.keys(pSet);
-
-    var countriesOrdered = uniqOrdered(countries, countryOrder);
-    var mediasOrdered = uniqOrdered(medias, ["FB", "GG"]);
-    var productTypesOrdered = uniqOrdered(products, ["app", "H5"]);
-
-    var sortIndex = {};
-    countriesOrdered.forEach(function (c, idx) { sortIndex[c] = idx; });
-    sortIndex["ALL"] = -1;
-
-    return {
-      countriesOrdered: countriesOrdered,
-      mediasOrdered: mediasOrdered,
-      productTypesOrdered: productTypesOrdered,
-      countrySortIndex: sortIndex,
-    };
-  }
-
-  function uniqOrdered(values, preferredOrder) {
-    var seen = {};
-    var res = [];
-
-    (preferredOrder || []).forEach(function (v) {
-      if (values.indexOf(v) !== -1 && !seen[v]) {
-        seen[v] = true;
-        res.push(v);
+      // 动态更新卡片标题（如果存在）
+      const titleEl = card.querySelector(".chart-title");
+      if (titleEl) {
+        const metricName = `人均${kindLabel(state.kind)}流水`;
+        titleEl.textContent = `${metricName} · ${state.view === "bar" ? "月度柱状图" : "日级折线图"}`;
       }
-    });
 
-    values.slice().sort().forEach(function (v) {
-      if (!seen[v]) {
-        seen[v] = true;
-        res.push(v);
+      if (!opts.months || !opts.months.length) {
+        chart.clear();
+        chart.setOption(
+          {
+            graphic: [
+              {
+                type: "text",
+                left: "center",
+                top: "middle",
+                style: {
+                  text: "暂无数据：请先在 paid-data.js 填写 RAW_PAID_BY_MONTH",
+                  fill: "#475569",
+                  fontSize: 12,
+                },
+              },
+            ],
+          },
+          true
+        );
+        if (tableEl) tableEl.innerHTML = "";
+        return;
       }
-    });
 
-    return res;
-  }
+      if (state.view === "line") renderLine();
+      else renderBar();
 
-  function normalizeMonths(months, allMonths) {
-    var list = Array.isArray(months) ? months.slice() : [];
-    list = list.filter(function (m) { return allMonths.indexOf(m) !== -1; });
-
-    if (list.length === 0) list = allMonths.slice(Math.max(0, allMonths.length - 2));
-    list.sort(function (a, b) { return allMonths.indexOf(a) - allMonths.indexOf(b); });
-    if (list.length > 3) list = list.slice(0, 3);
-    return list;
-  }
-
-  function normalizeSelection(selected, allValues) {
-    var list = Array.isArray(selected) ? selected.slice() : [];
-    list = list.filter(function (v) { return allValues.indexOf(v) !== -1; });
-    if (list.length === 0) return allValues.slice();
-    return list;
-  }
-
-  function normalizeDayTypes(dayTypes) {
-    var list = Array.isArray(dayTypes) ? dayTypes.slice() : [];
-    list = list.filter(function (d) { return d === "D0" || d === "D7"; });
-    if (list.length === 0) list = ["D0"];
-    if (list.indexOf("D0") !== -1 && list.indexOf("D7") !== -1) return ["D0", "D7"];
-    return list;
-  }
-
-  function betFlowFields(dayType, flowDim) {
-    var prefix = dayType === "D7" ? "D7_" : "D0_";
-    if (flowDim === "sports") {
-      return { flow: prefix + "SPORTS_BET_FLOW", users: prefix + "SPORTS_BET_PLACED_USER" };
+      renderTable();
     }
-    if (flowDim === "games") {
-      return { flow: prefix + "GAMES_BET_FLOW", users: prefix + "GAMES_BET_PLACED_USER" };
-    }
-    return { flow: prefix + "TOTAL_BET_FLOW", users: prefix + "TOTAL_BET_PLACED_USER" };
+
+    renderAll();
   }
 
-  function flowDimLabel(dim) {
-    if (dim === "sports") return "人均体育";
-    if (dim === "games") return "人均游戏";
-    return "人均总";
-  }
-
-  function buildSeriesName(s, state, dayTypes) {
-    var parts = [];
-    if (!state.countriesAllNoSplit) parts.push(s.country);
-    if (!state.mediasAllNoSplit) parts.push(s.media);
-    if (!state.productTypesAllNoSplit) parts.push(s.productType);
-    if (dayTypes.length > 1) parts.push(s.dayType);
-    return parts.length ? parts.join(" | ") : "ALL";
-  }
-
-  function normalizeCountry(v) { return v == null ? "" : String(v).trim().toUpperCase(); }
-  function normalizeMedia(v) { return v == null ? "" : String(v).trim().toUpperCase(); }
-  function normalizeProductType(v) {
-    if (v == null) return "";
-    var t = String(v).trim();
-    if (!t) return "";
-    if (t.toLowerCase() === "h5") return "H5";
-    if (t.toLowerCase() === "app") return "app";
-    return t;
-  }
-
-  function toNumber(v) { var n = Number(v); return isFinite(n) ? n : 0; }
-  function safeDiv(a, b) { var na = Number(a), nb = Number(b); if (!isFinite(na) || !isFinite(nb) || nb === 0) return null; return na / nb; }
-
-  function formatMonthLabel(monthKey) {
-    if (!monthKey || typeof monthKey !== "string") return "";
-    var parts = monthKey.split("-");
-    var mm = parts[1] || monthKey;
-    var mNum = parseInt(mm, 10) || 0;
-    return (mNum > 0 ? mNum : mm) + "月";
-  }
-
-  function formatUSD(v, decimals) {
-    if (v == null || !isFinite(Number(v))) return "-";
-    var n = Number(v);
-    var d = typeof decimals === "number" ? decimals : 2;
-    return n.toFixed(d);
-  }
-
-  function escapeHtml(s) {
-    var str = String(s == null ? "" : s);
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  // 注册模块
-  if (window.PaidDashboard && typeof PaidDashboard.registerModule === "function") {
-    PaidDashboard.registerModule(MODULE_KEY, init);
+  if (window.PaidDashboard && typeof window.PaidDashboard.registerModule === "function") {
+    window.PaidDashboard.registerModule(MODULE_KEY, init);
+  } else if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
   } else {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", init);
-    } else {
-      init();
-    }
+    init();
   }
 })();
