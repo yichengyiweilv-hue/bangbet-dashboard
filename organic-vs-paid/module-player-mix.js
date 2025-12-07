@@ -1,118 +1,194 @@
 // organic-vs-paid/module-player-mix.js
+// 模块5：D0/D7 体育 vs 游戏玩家比例（玩家结构：仅游戏/双投/仅体育）
+//
+// 依赖：
+// - 数据：organic-data.js / paid-data.js（按月日维度明细）
+// - 文案：insights-copy.js（可选）
+// - 图表：ECharts（本文件会按需加载）
+//
+// 说明：
+// - 柱状图：按国家（月度聚合），每个国家按【来源(自然/买量) × D0/D7】分组；每根柱子内部为堆叠：仅游戏 / 双投 / 仅体育（合计=总投注人数）
+// - 折线图：日级堆积面积图；进入折线图后，国家/来源/D0-D7 自动收敛为单选（避免多选导致信息过载）
+//
+// 数据字段口径：D0/D7_*_BET_PLACED_USER, D0/D7_TOTAL_BET_PLACED_USER
 (function () {
   window.OVP = window.OVP || {};
-  const register = OVP.registerModule || function (m) { (OVP.modules || (OVP.modules = [])).push(m); };
+  const register =
+    OVP.registerModule ||
+    function (m) {
+      (OVP.modules || (OVP.modules = [])).push(m);
+    };
 
-  const MODULE_ID = 'm5-player-mix';
-  const COUNTRIES = ['GH', 'KE', 'NG', 'TZ', 'UG']; 
-
-  const SOURCES = [
-    { key: 'organic', label: '自然量' },
-    { key: 'paid', label: '买量' },
+  const MODULE_ID = "m5-player-mix";
+  const COUNTRY_ORDER = ["GH", "KE", "NG", "TZ"];
+  const SOURCE_OPTIONS = [
+    { key: "organic", label: "自然量" },
+    { key: "paid", label: "买量" },
   ];
-
-  const WINDOWS = [
-    { key: 'D0', label: 'D0数据' },
-    { key: 'D7', label: 'D7数据' },
+  const WINDOW_OPTIONS = [
+    { key: "D0", label: "D0" },
+    { key: "D7", label: "D7" },
   ];
-
-  const CHARTS = [
-    { key: 'bar', label: '月度柱状图' },
-    { key: 'line', label: '日级折线图' },
-  ];
-
-  const ECHARTS_SRC = 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js';
+  const ECHARTS_SRC =
+    "https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js";
 
   function injectStylesOnce() {
-    const id = 'ovp-m5-player-style';
+    const id = "ovp-m5-player-mix-style";
     if (document.getElementById(id)) return;
 
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.id = id;
     style.textContent = `
       .ovp-m5{display:flex;flex-direction:column;gap:12px}
-      .ovp-m5 .row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+      .ovp-m5 .row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
       .ovp-m5 .fg{display:flex;flex-direction:column;gap:6px;min-width:180px}
-      .ovp-m5 label{font-size:12px;color:var(--muted, var(--text-sub, #6b7280))}
+      .ovp-m5 label{font-size:12px;color:var(--text-sub, var(--muted, #6b7280))}
       .ovp-m5 select{
-        height:36px; padding:0 10px; border-radius:10px;
-        border:1px solid var(--border, var(--border-subtle, rgba(148,163,184,.45)));
-        background:rgba(255,255,255,.82); color:var(--text, var(--text-main, #0f172a));
+        height:36px;
+        border-radius:10px;
+        padding:0 10px;
+        border:1px solid var(--border, rgba(148,163,184,.55));
+        background: var(--bg-card, rgba(249,250,251,.9));
+        color: var(--text-main, var(--text, #0f172a));
         outline:none;
       }
+
       .ovp-m5 .seg{
-        display:inline-flex; gap:6px; padding:4px;
-        border:1px solid var(--border, var(--border-subtle, rgba(148,163,184,.45)));
-        background:rgba(255,255,255,.78); border-radius:12px;
+        display:flex; gap:6px; flex-wrap:wrap;
+        padding:4px;
+        border:1px solid var(--border, rgba(148,163,184,.55));
+        border-radius:12px;
+        background: rgba(255,255,255,.5);
       }
       .ovp-m5 .seg button{
-        height:28px; padding:0 10px;
-        border:0; border-radius:10px;
-        background:transparent; color:var(--muted, var(--text-sub, #6b7280));
-        cursor:pointer; transition:all .15s ease-out;
-        font-size:12px;
-      }
-      .ovp-m5 .seg button[aria-pressed="true"]{
-        background:rgba(37,99,235,.10);
-        color:var(--text, var(--text-main, #0f172a));
-      }
-      .ovp-m5 .chips{
-        display:flex; flex-wrap:wrap; gap:8px;
-        padding:8px;
-        border:1px solid var(--border, var(--border-subtle, rgba(148,163,184,.45)));
-        border-radius:12px;
-        background:rgba(255,255,255,.78);
-        min-height:36px;
-      }
-      .ovp-m5 .chip{
-        height:26px;
+        height:28px;
         padding:0 10px;
-        border-radius:999px;
-        border:1px solid rgba(148,163,184,.55);
-        background:rgba(15,23,42,.03);
-        color:var(--text, var(--text-main, #0f172a));
+        border-radius:10px;
+        border:1px solid transparent;
+        background:transparent;
+        color: var(--text-sub, var(--muted, #6b7280));
         cursor:pointer;
-        font-size:12px;
-        transition:all .12s ease-out;
-      }
-      .ovp-m5 .chip[aria-pressed="true"]{
-        border-color: rgba(37,99,235,.45);
-        background: rgba(37,99,235,.10);
-      }
-      .ovp-m5 .subline{
-        display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
-        font-size:12px; color:var(--muted, var(--text-sub, #6b7280));
-        margin-top:-4px;
-      }
-      .ovp-m5 .subline .k{display:inline-flex; gap:8px; align-items:center}
-      .ovp-m5 .dot{width:8px;height:8px;border-radius:999px;display:inline-block}
-      .ovp-m5 .chart{
-        height:360px; width:100%;
-        border:1px solid var(--border, var(--border-subtle, rgba(148,163,184,.45)));
-        border-radius:14px;
-        background:rgba(255,255,255,.86);
-      }
-      .ovp-m5 .table-wrap{overflow:auto}
-      .ovp-m5 table{
-        width:100%;
-        border-collapse:separate; border-spacing:0;
-        border:1px solid var(--border, var(--border-subtle, rgba(148,163,184,.45)));
-        border-radius:14px; overflow:hidden;
-        background:rgba(255,255,255,.86);
-      }
-      .ovp-m5 th,.ovp-m5 td{
-        padding:10px 12px;
-        border-bottom:1px solid rgba(148,163,184,.25);
         font-size:12px;
         white-space:nowrap;
       }
-      .ovp-m5 th{color:var(--muted, var(--text-sub, #6b7280)); text-align:left; background:rgba(15,23,42,.02)}
-      .ovp-m5 td{color:var(--text, var(--text-main, #0f172a)); text-align:left}
+      .ovp-m5 .seg button[aria-pressed="true"]{
+        background: var(--accent-soft, rgba(37,99,235,.10));
+        border-color: rgba(37,99,235,.35);
+        color: var(--accent-strong, #2563eb);
+        font-weight:600;
+      }
+
+      .ovp-m5 .chips{
+        display:flex; flex-wrap:wrap; gap:8px;
+        padding:2px 0;
+      }
+      .ovp-m5 .filter-chip{
+        font-size:11px;
+        padding:3px 8px;
+        border-radius:999px;
+        border:1px solid rgba(148, 163, 184, 0.6);
+        background: rgba(249, 250, 251, 0.9);
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        cursor:pointer;
+        user-select:none;
+        white-space:nowrap;
+        color: var(--text-sub, var(--muted, #6b7280));
+      }
+      .ovp-m5 .filter-chip input{ accent-color: var(--accent-strong, #2563eb); cursor:pointer; }
+      .ovp-m5 .filter-chip.filter-chip-active{
+        border-color: rgba(37, 99, 235, 0.9);
+        background: var(--accent-soft, rgba(37,99,235,.10));
+        color: var(--accent-strong, #2563eb);
+      }
+
+      .ovp-m5 .hint{
+        font-size:12px;
+        color: var(--text-sub, var(--muted, #6b7280));
+        line-height:1.5;
+      }
+
+      .ovp-m5 .chart{
+        height:360px; width:100%;
+        border:1px solid var(--border, rgba(148,163,184,.55));
+        border-radius:12px;
+        background: rgba(255,255,255,.02);
+      }
+
+      .ovp-m5 .table-wrap{overflow:auto; border-radius:12px}
+      .ovp-m5 .table-title{
+        display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
+        margin: 2px 0 8px;
+        font-size:12px;
+        color: var(--text-sub, var(--muted, #6b7280));
+      }
+
+      .ovp-m5 table{
+        width:100%;
+        border-collapse:separate; border-spacing:0;
+        border:1px solid var(--border, rgba(148,163,184,.55));
+        border-radius:12px;
+        overflow:hidden;
+        background: rgba(255,255,255,.02);
+      }
+      .ovp-m5 th,.ovp-m5 td{
+        padding:10px 12px;
+        border-bottom:1px solid var(--border, rgba(148,163,184,.35));
+        font-size:12px;
+        vertical-align:top;
+      }
+      .ovp-m5 th{
+        color: var(--text-sub, var(--muted, #6b7280));
+        text-align:left;
+        background: rgba(148,163,184,.10);
+        white-space:nowrap;
+      }
+      .ovp-m5 td{ color: var(--text-main, var(--text, #0f172a)); }
       .ovp-m5 tr:last-child td{border-bottom:0}
+      .ovp-m5 th:first-child, .ovp-m5 td:first-child{position:sticky; left:0; background: rgba(255,255,255,.90); z-index:1;}
+      .ovp-m5 th:first-child{z-index:2;}
+
+      .ovp-m5 .mix-cell{
+        font-size:13px;
+        line-height:1.65;
+        white-space:nowrap;
+      }
+      .ovp-m5 .mix-cell .line{
+        display:flex;
+        gap:10px;
+        align-items:baseline;
+      }
+      .ovp-m5 .mix-cell .k{
+        min-width:58px;
+        font-weight:600;
+        color: var(--text-main, var(--text, #0f172a));
+      }
+      .ovp-m5 .mix-cell .v{
+        font-weight:700;
+        color: var(--text-main, var(--text, #0f172a));
+      }
+      .ovp-m5 .mix-cell .p{
+        font-weight:600;
+        color: var(--text-sub, var(--muted, #6b7280));
+      }
+      .ovp-m5 .mix-cell .total{
+        margin-top:2px;
+        color: var(--text-sub, var(--muted, #6b7280));
+      }
+      .ovp-m5 .mix-cell .total .k,
+      .ovp-m5 .mix-cell .total .v{
+        color: inherit;
+        font-weight:600;
+      }
+
       .ovp-m5 .empty{
-        padding:12px; border:1px dashed rgba(148,163,184,.55);
-        border-radius:14px; color:var(--muted, var(--text-sub, #6b7280)); font-size:12px; line-height:1.6;
-        background:rgba(255,255,255,.78);
+        padding:12px;
+        border:1px dashed var(--border, rgba(148,163,184,.55));
+        border-radius:12px;
+        color: var(--text-sub, var(--muted, #6b7280));
+        font-size:12px;
+        line-height:1.6;
       }
     `;
     document.head.appendChild(style);
@@ -121,856 +197,926 @@
   function cssVar(name, fallback) {
     try {
       const v = getComputedStyle(document.documentElement).getPropertyValue(name);
-      if (v && String(v).trim()) return String(v).trim();
-    } catch (_e) {}
-    return fallback;
-  }
-
-  function isFiniteNumber(x) { return typeof x === 'number' && Number.isFinite(x); }
-  function toNumber(x) {
-    if (isFiniteNumber(x)) return x;
-    const n = Number(x);
-    return Number.isFinite(n) ? n : null;
-  }
-
-  function pickKey(obj, keys) {
-    if (!obj || typeof obj !== 'object') return null;
-
-    for (let i = 0; i < keys.length; i++) {
-      const k = keys[i];
-      if (Object.prototype.hasOwnProperty.call(obj, k)) return k;
+      const s = (v || "").trim();
+      return s || fallback;
+    } catch (_e) {
+      return fallback;
     }
-
-    const map = Object.create(null);
-    for (const k of Object.keys(obj)) map[String(k).toLowerCase()] = k;
-    for (let i = 0; i < keys.length; i++) {
-      const want = String(keys[i]).toLowerCase();
-      if (map[want]) return map[want];
-    }
-    return null;
   }
 
-  // 优先复用 insights 的 month 归一化，避免口径不一致
+  function safeNumber(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function fmtInt(utils, v) {
+    if (utils && typeof utils.fmtInt === "function") return utils.fmtInt(v);
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "—";
+    return Math.round(n).toLocaleString("en-US");
+  }
+
+  function fmtPct(utils, v, digits) {
+    if (utils && typeof utils.fmtPct === "function") return utils.fmtPct(v, digits);
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "—";
+    return `${(n * 100).toFixed(digits == null ? 1 : digits)}%`;
+  }
+
+  function readGlobal(name) {
+    try {
+      return Function(
+        `return (typeof ${name} !== "undefined") ? ${name} : undefined;`
+      )();
+    } catch (_e) {
+      return undefined;
+    }
+  }
+
+  function resolveDataset(passed, which) {
+    if (passed !== undefined && passed !== null) return passed;
+
+    const keys =
+      which === "organic"
+        ? ["organicData", "organicMonthlyData", "ORGANIC_DATA", "RAW_ORGANIC_BY_MONTH"]
+        : ["paidData", "paidMonthlyData", "PAID_DATA", "RAW_PAID_BY_MONTH"];
+
+    for (const k of keys) {
+      const v = readGlobal(k);
+      if (v !== undefined) return v;
+      if (typeof window !== "undefined" && window[k] !== undefined) return window[k];
+    }
+    return undefined;
+  }
+
   function normalizeMonth(input) {
-    if (window.OVP && OVP.insights && typeof OVP.insights.normalizeMonth === 'function') {
+    if (window.OVP && OVP.insights && typeof OVP.insights.normalizeMonth === "function") {
       return OVP.insights.normalizeMonth(input);
     }
     if (!input) return null;
 
     if (input instanceof Date && !isNaN(input.getTime())) {
       const y = input.getFullYear();
-      const m = String(input.getMonth() + 1).padStart(2, '0');
+      const m = String(input.getMonth() + 1).padStart(2, "0");
       return `${y}-${m}`;
     }
 
     const s = String(input).trim();
-    const m1 = s.match(/^(\d{4})[-\/](\d{1,2})$/);
-    if (m1) {
-      const y = Number(m1[1]);
-      const m = Number(m1[2]);
-      if (m >= 1 && m <= 12) return `${y}-${String(m).padStart(2, '0')}`;
+    let m = s.match(/^(\d{4})[-\/](\d{1,2})$/);
+    if (m) {
+      const y = Number(m[1]);
+      const mm = Number(m[2]);
+      if (mm >= 1 && mm <= 12) return `${y}-${String(mm).padStart(2, "0")}`;
     }
-
-    const m2 = s.match(/^(\d{4})(\d{2})$/);
-    if (m2) return `${m2[1]}-${m2[2]}`;
-
-    const m3 = s.match(/^(\d{4})[-\/](\d{2})[-\/](\d{2})/);
-    if (m3) return `${m3[1]}-${m3[2]}`;
-
+    m = s.match(/^(\d{4})(\d{2})$/);
+    if (m) {
+      const y = Number(m[1]);
+      const mm = Number(m[2]);
+      if (mm >= 1 && mm <= 12) return `${y}-${String(mm).padStart(2, "0")}`;
+    }
+    m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+    if (m) {
+      const y = Number(m[1]);
+      const mm = Number(m[2]);
+      if (mm >= 1 && mm <= 12) return `${y}-${String(mm).padStart(2, "0")}`;
+    }
     return null;
   }
 
-  function normalizeDate(input) {
-    if (!input) return null;
-    if (input instanceof Date && !isNaN(input.getTime())) {
-      const y = input.getFullYear();
-      const m = String(input.getMonth() + 1).padStart(2, '0');
-      const d = String(input.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
+  function monthValue(key) {
+    if (!key) return -1;
+    const m = String(key).match(/^(\d{4})-(\d{2})$/);
+    if (!m) return -1;
+    return Number(m[1]) * 100 + Number(m[2]);
+  }
+
+  function extractRows(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+
+    if (raw && typeof raw === "object") {
+      for (const k of ["data", "rows", "items", "list"]) {
+        if (Array.isArray(raw[k])) return raw[k];
+      }
+
+      const monthsBag =
+        (raw.months && typeof raw.months === "object" && raw.months) ||
+        (raw.byMonth && typeof raw.byMonth === "object" && raw.byMonth) ||
+        (raw.dataByMonth && typeof raw.dataByMonth === "object" && raw.dataByMonth) ||
+        raw;
+
+      const out = [];
+      for (const k of Object.keys(monthsBag || {})) {
+        const v = monthsBag[k];
+        if (!Array.isArray(v)) continue;
+        for (const row of v) out.push(row);
+      }
+      return out;
     }
-    const s = String(input).trim();
-    const m = s.match(/^(\d{4})[-\/](\d{2})[-\/](\d{2})/);
-    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-    return null;
+    return [];
   }
 
-  function monthValue(m) {
-    const mm = normalizeMonth(m);
-    if (!mm) return -1;
-    const parts = mm.split('-');
-    return Number(parts[0]) * 12 + Number(parts[1]);
-  }
+  function listMonthsFrom(raw) {
+    const set = new Set();
 
-  function orderedSubset(allOrder, selected) {
-    const set = new Set((selected || []).map(x => String(x).toUpperCase()));
-    return allOrder.filter(c => set.has(String(c).toUpperCase()));
-  }
-
-  function resolveDataFallback(which, preferVal) {
-    if (preferVal) return preferVal;
-
-    const names = which === 'organic'
-      ? ['organicData', 'organic_data', 'ORGANIC_DATA', 'organicMonthlyData', 'ORGANIC_MONTHLY_DATA', 'RAW_ORGANIC_BY_MONTH']
-      : ['paidData', 'paid_data', 'PAID_DATA', 'paidMonthlyData', 'PAID_MONTHLY_DATA', 'RAW_PAID_BY_MONTH'];
-
-    for (const n of names) {
-      if (typeof window !== 'undefined' && window[n] !== undefined) return window[n];
-      try {
-        const v = Function(`return (typeof ${n} !== "undefined") ? ${n} : undefined;`)();
-        if (v !== undefined) return v;
-      } catch (_e) {}
-    }
-    return undefined;
-  }
-
-  function normalizePlayerMixRecords(raw) {
-    const out = [];
-    if (!raw) return out;
-
-    const pushRow = (outerMonth, row) => {
-      if (!row || typeof row !== 'object') return;
-
-      const countryKey = pickKey(row, ['country', 'geo', 'ctry']);
-      const dateKey = pickKey(row, ['date', 'day', 'dt']);
-      const monthKey = pickKey(row, ['month', 'ym']);
-
-      const country = String(countryKey ? row[countryKey] : '').toUpperCase().trim();
-      const date = normalizeDate(dateKey ? row[dateKey] : null);
-      const month = normalizeMonth(outerMonth || (monthKey ? row[monthKey] : null) || date);
-
-      if (!country || !date || !month) return;
-      if (COUNTRIES.indexOf(country) === -1) return;
-
-      const kD0T = pickKey(row, ['D0_TOTAL_BET_PLACED_USER', 'd0_total_bet_placed_user']);
-      const kD0S = pickKey(row, ['D0_SPORTS_BET_PLACED_USER', 'd0_sports_bet_placed_user']);
-      const kD0G = pickKey(row, ['D0_GAMES_BET_PLACED_USER', 'd0_games_bet_placed_user']);
-
-      const kD7T = pickKey(row, ['D7_TOTAL_BET_PLACED_USER', 'd7_total_bet_placed_user']);
-      const kD7S = pickKey(row, ['D7_SPORTS_BET_PLACED_USER', 'd7_sports_bet_placed_user']);
-      const kD7G = pickKey(row, ['D7_GAMES_BET_PLACED_USER', 'd7_games_bet_placed_user']);
-
-      const D0_total = toNumber(kD0T ? row[kD0T] : null) || 0;
-      const D0_sports = toNumber(kD0S ? row[kD0S] : null) || 0;
-      const D0_games = toNumber(kD0G ? row[kD0G] : null) || 0;
-
-      const D7_total = toNumber(kD7T ? row[kD7T] : null) || 0;
-      const D7_sports = toNumber(kD7S ? row[kD7S] : null) || 0;
-      const D7_games = toNumber(kD7G ? row[kD7G] : null) || 0;
-
-      out.push({
-        month, date, country,
-        D0_total, D0_sports, D0_games,
-        D7_total, D7_sports, D7_games,
-      });
-    };
-
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-      const arrKey = pickKey(raw, ['data', 'rows', 'items', 'list']);
-      if (arrKey && Array.isArray(raw[arrKey])) return normalizePlayerMixRecords(raw[arrKey]);
-
-      const monthsKey = pickKey(raw, ['months', 'byMonth', 'dataByMonth']);
-      if (monthsKey && raw[monthsKey] && typeof raw[monthsKey] === 'object') return normalizePlayerMixRecords(raw[monthsKey]);
-
-      const keys = Object.keys(raw);
-      const monthKeys = keys.filter(k => /^\d{4}[-\/]?\d{2}$/.test(String(k)));
-      if (monthKeys.length) {
-        for (const mk of monthKeys) {
-          const arr = raw[mk];
-          if (Array.isArray(arr)) {
-            for (const row of arr) pushRow(mk, row);
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      for (const k of Object.keys(raw)) {
+        const mk = normalizeMonth(k);
+        if (mk && Array.isArray(raw[k])) set.add(mk);
+      }
+      for (const key of ["months", "byMonth", "dataByMonth"]) {
+        if (raw[key] && typeof raw[key] === "object") {
+          for (const k2 of Object.keys(raw[key])) {
+            const mk2 = normalizeMonth(k2);
+            if (mk2 && Array.isArray(raw[key][k2])) set.add(mk2);
           }
         }
-        return out;
       }
     }
 
-    if (Array.isArray(raw)) {
-      for (const row of raw) pushRow(null, row);
+    const arr = extractRows(raw);
+    for (const r of arr) {
+      const mk = normalizeMonth(r.month || r.ym || r.date || r.day || r.dt);
+      if (mk) set.add(mk);
+    }
+
+    const months = Array.from(set).filter(Boolean);
+    months.sort((a, b) => monthValue(a) - monthValue(b));
+    return months;
+  }
+
+  function getMonthRows(raw, monthKey) {
+    if (!raw || !monthKey) return [];
+
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      if (Array.isArray(raw[monthKey])) return raw[monthKey];
+      for (const key of ["months", "byMonth", "dataByMonth"]) {
+        if (raw[key] && typeof raw[key] === "object" && Array.isArray(raw[key][monthKey])) {
+          return raw[key][monthKey];
+        }
+      }
+    }
+
+    const rows = extractRows(raw);
+    return rows.filter((r) => normalizeMonth(r.month || r.ym || r.date || r.day || r.dt) === monthKey);
+  }
+
+  function pickCountry(row) {
+    const c = row && (row.country || row.Country || row.geo || row.cc || row.market || row.nation);
+    return c ? String(c).toUpperCase().trim() : null;
+  }
+
+  function pickDate(row) {
+    const d = row && (row.date || row.day || row.dt || row.Date);
+    if (!d) return null;
+    const s = String(d).trim();
+    return s.length >= 10 ? s.slice(0, 10) : s;
+  }
+
+  function splitCounts(sports, games, total) {
+    let both = sports + games - total;
+
+    if (!Number.isFinite(both)) both = 0;
+    if (both < 0) both = 0;
+
+    const cap = Math.min(sports, games);
+    if (both > cap) both = cap;
+
+    let onlySports = sports - both;
+    let onlyGames = games - both;
+
+    if (onlySports < 0) onlySports = 0;
+    if (onlyGames < 0) onlyGames = 0;
+
+    const fixedTotal = onlySports + onlyGames + both;
+
+    return {
+      onlyGames,
+      both,
+      onlySports,
+      total: fixedTotal,
+    };
+  }
+
+  function aggMonthByCountry(raw, monthKey) {
+    const rows = getMonthRows(raw, monthKey);
+    const out = {};
+
+    for (const r of rows) {
+      const c = pickCountry(r);
+      if (!c) continue;
+
+      const slot =
+        out[c] ||
+        (out[c] = {
+          D0: { sports: 0, games: 0, total: 0 },
+          D7: { sports: 0, games: 0, total: 0 },
+        });
+
+      for (const w of ["D0", "D7"]) {
+        slot[w].sports += safeNumber(r[`${w}_SPORTS_BET_PLACED_USER`]);
+        slot[w].games += safeNumber(r[`${w}_GAMES_BET_PLACED_USER`]);
+        slot[w].total += safeNumber(r[`${w}_TOTAL_BET_PLACED_USER`]);
+      }
+    }
+
+    const finalOut = {};
+    for (const c of Object.keys(out)) {
+      finalOut[c] = {
+        D0: splitCounts(out[c].D0.sports, out[c].D0.games, out[c].D0.total),
+        D7: splitCounts(out[c].D7.sports, out[c].D7.games, out[c].D7.total),
+      };
+    }
+    return finalOut;
+  }
+
+  function aggDaily(raw, monthKey, country) {
+    const rows = getMonthRows(raw, monthKey);
+    const target = String(country || "").toUpperCase();
+
+    const byDate = {};
+    for (const r of rows) {
+      const c = pickCountry(r);
+      if (!c || c !== target) continue;
+
+      const d = pickDate(r);
+      if (!d) continue;
+
+      const slot =
+        byDate[d] ||
+        (byDate[d] = {
+          D0: { sports: 0, games: 0, total: 0 },
+          D7: { sports: 0, games: 0, total: 0 },
+        });
+
+      for (const w of ["D0", "D7"]) {
+        slot[w].sports += safeNumber(r[`${w}_SPORTS_BET_PLACED_USER`]);
+        slot[w].games += safeNumber(r[`${w}_GAMES_BET_PLACED_USER`]);
+        slot[w].total += safeNumber(r[`${w}_TOTAL_BET_PLACED_USER`]);
+      }
+    }
+
+    const dates = Object.keys(byDate).sort();
+    const out = {
+      dates,
+      D0: { onlySports: [], onlyGames: [], both: [], total: [] },
+      D7: { onlySports: [], onlyGames: [], both: [], total: [] },
+    };
+
+    for (const d of dates) {
+      for (const w of ["D0", "D7"]) {
+        const s = byDate[d][w].sports;
+        const g = byDate[d][w].games;
+        const t = byDate[d][w].total;
+        const split = splitCounts(s, g, t);
+        out[w].onlySports.push(split.onlySports);
+        out[w].onlyGames.push(split.onlyGames);
+        out[w].both.push(split.both);
+        out[w].total.push(split.total);
+      }
     }
 
     return out;
   }
 
-  function buildAgg(records) {
-    const monthMap = new Map();        // "YYYY-MM|GH"
-    const dayGroupMap = new Map();     // "YYYY-MM|GH" -> Map("YYYY-MM-DD" -> agg)
+  function loadScriptOnce(id, src) {
+    return new Promise((resolve, reject) => {
+      if (document.getElementById(id)) {
+        const tick = () => {
+          if (window.echarts) resolve();
+          else setTimeout(tick, 40);
+        };
+        tick();
+        return;
+      }
 
-    const ensureAgg = (obj) => obj || ({
-      D0_total: 0, D0_sports: 0, D0_games: 0,
-      D7_total: 0, D7_sports: 0, D7_games: 0,
-    });
-
-    for (const r of (records || [])) {
-      const mcKey = `${r.month}|${r.country}`;
-
-      const mAgg = ensureAgg(monthMap.get(mcKey));
-      mAgg.D0_total += toNumber(r.D0_total) || 0;
-      mAgg.D0_sports += toNumber(r.D0_sports) || 0;
-      mAgg.D0_games += toNumber(r.D0_games) || 0;
-      mAgg.D7_total += toNumber(r.D7_total) || 0;
-      mAgg.D7_sports += toNumber(r.D7_sports) || 0;
-      mAgg.D7_games += toNumber(r.D7_games) || 0;
-      monthMap.set(mcKey, mAgg);
-
-      let dayMap = dayGroupMap.get(mcKey);
-      if (!dayMap) { dayMap = new Map(); dayGroupMap.set(mcKey, dayMap); }
-
-      const dKey = r.date;
-      const dAgg = ensureAgg(dayMap.get(dKey));
-      dAgg.D0_total += toNumber(r.D0_total) || 0;
-      dAgg.D0_sports += toNumber(r.D0_sports) || 0;
-      dAgg.D0_games += toNumber(r.D0_games) || 0;
-      dAgg.D7_total += toNumber(r.D7_total) || 0;
-      dAgg.D7_sports += toNumber(r.D7_sports) || 0;
-      dAgg.D7_games += toNumber(r.D7_games) || 0;
-      dayMap.set(dKey, dAgg);
-    }
-
-    return { monthMap, dayGroupMap };
-  }
-
-  function computeSegments(total, sports, games) {
-    const T = Math.max(0, toNumber(total) || 0);
-    const S = Math.max(0, toNumber(sports) || 0);
-    const G = Math.max(0, toNumber(games) || 0);
-
-    let both = S + G - T;
-    if (!Number.isFinite(both) || both < 0) both = 0;
-    const cap = Math.min(S, G);
-    if (both > cap) both = cap;
-
-    const onlySports = Math.max(0, S - both);
-    const onlyGames = Math.max(0, G - both);
-
-    return { total: T, sports: S, games: G, both, onlySports, onlyGames };
-  }
-
-  function getMonthAgg(aggMap, month, country) {
-    return aggMap.get(`${month}|${country}`) || null;
-  }
-
-  function getWindowTriplet(agg, win) {
-    if (!agg) return null;
-    if (win === 'D7') return { total: agg.D7_total, sports: agg.D7_sports, games: agg.D7_games };
-    return { total: agg.D0_total, sports: agg.D0_sports, games: agg.D0_games };
-  }
-
-  function hexToRgba(hex, alpha) {
-    const h = String(hex || '').trim();
-    if (!h) return `rgba(0,0,0,${alpha})`;
-    if (h.startsWith('rgba(')) return h;
-    if (h.startsWith('rgb(')) {
-      const nums = h.replace(/rgba?\(/, '').replace(')', '').split(',').map(s => Number(s.trim()));
-      if (nums.length >= 3) return `rgba(${nums[0]},${nums[1]},${nums[2]},${alpha})`;
-      return `rgba(0,0,0,${alpha})`;
-    }
-    const m = h.replace('#', '');
-    if (m.length === 3) {
-      const r = parseInt(m[0] + m[0], 16);
-      const g = parseInt(m[1] + m[1], 16);
-      const b = parseInt(m[2] + m[2], 16);
-      return `rgba(${r},${g},${b},${alpha})`;
-    }
-    if (m.length === 6) {
-      const r = parseInt(m.slice(0, 2), 16);
-      const g = parseInt(m.slice(2, 4), 16);
-      const b = parseInt(m.slice(4, 6), 16);
-      return `rgba(${r},${g},${b},${alpha})`;
-    }
-    return `rgba(0,0,0,${alpha})`;
-  }
-
-  function ensureECharts() {
-    if (window.echarts) return Promise.resolve(window.echarts);
-    if (window.__OVP_ECHARTS_PROMISE) return window.__OVP_ECHARTS_PROMISE;
-
-    window.__OVP_ECHARTS_PROMISE = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = ECHARTS_SRC;
+      const s = document.createElement("script");
+      s.id = id;
+      s.src = src;
       s.async = true;
-      s.onload = () => window.echarts ? resolve(window.echarts) : reject(new Error('echarts not available'));
-      s.onerror = reject;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error(`failed to load script: ${src}`));
       document.head.appendChild(s);
     });
+  }
 
-    return window.__OVP_ECHARTS_PROMISE;
+  function loadECharts() {
+    if (window.echarts) return Promise.resolve(window.echarts);
+    return loadScriptOnce("ovp-echarts", ECHARTS_SRC).then(() => {
+      if (!window.echarts) throw new Error("echarts not available");
+      return window.echarts;
+    });
+  }
+
+  function hatchDecal() {
+    return {
+      symbol: "rect",
+      rotation: Math.PI / 4,
+      dashArrayX: [1, 0],
+      dashArrayY: [4, 2],
+      color: "rgba(15, 23, 42, 0.22)",
+    };
+  }
+
+  function monthShort(ym) {
+    const m = String(ym || "").match(/-(\d{2})$/);
+    if (!m) return String(ym || "");
+    return String(Number(m[1])) + "月";
+  }
+
+  function uniqOrdered(arr) {
+    const set = new Set();
+    const out = [];
+    for (const v of arr || []) {
+      if (v == null) continue;
+      const s = String(v);
+      if (set.has(s)) continue;
+      set.add(s);
+      out.push(s);
+    }
+    return out;
+  }
+
+  function orderCountries(selected) {
+    const want = new Set((selected || []).map((x) => String(x).toUpperCase()));
+    const ordered = [];
+    for (const c of COUNTRY_ORDER) if (want.has(c)) ordered.push(c);
+
+    for (const c of (selected || []).map((x) => String(x).toUpperCase())) {
+      if (!ordered.includes(c)) ordered.push(c);
+    }
+    return ordered;
+  }
+
+  function renderChipGroup(container, options, selectedKeys, onToggle, singleMode) {
+    container.innerHTML = "";
+    const selected = new Set((selectedKeys || []).map(String));
+
+    for (const opt of options) {
+      const val = String(opt.key);
+      const isOn = selected.has(val);
+
+      const lab = document.createElement("label");
+      lab.className = "filter-chip" + (isOn ? " filter-chip-active" : "");
+
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = val;
+      input.checked = isOn;
+
+      input.addEventListener("change", (e) => {
+        const checked = Boolean(e.target.checked);
+
+        if (singleMode) {
+          onToggle([val]);
+          return;
+        }
+
+        const next = new Set(selectedKeys || []);
+        if (checked) next.add(val);
+        else next.delete(val);
+
+        onToggle(Array.from(next));
+      });
+
+      lab.appendChild(input);
+      lab.appendChild(document.createTextNode(opt.label));
+      container.appendChild(lab);
+    }
+  }
+
+  function renderCountryChips(container, countries, selected, onToggle, singleMode) {
+    container.innerHTML = "";
+    const selectedSet = new Set((selected || []).map((x) => String(x).toUpperCase()));
+
+    for (const c of countries) {
+      const isOn = selectedSet.has(c);
+
+      const lab = document.createElement("label");
+      lab.className = "filter-chip" + (isOn ? " filter-chip-active" : "");
+
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = c;
+      input.checked = isOn;
+
+      input.addEventListener("change", (e) => {
+        const checked = Boolean(e.target.checked);
+
+        if (singleMode) {
+          onToggle([c]);
+          return;
+        }
+
+        const next = new Set(selected || []);
+        if (checked) next.add(c);
+        else next.delete(c);
+
+        onToggle(Array.from(next));
+      });
+
+      lab.appendChild(input);
+      lab.appendChild(document.createTextNode(c));
+      container.appendChild(lab);
+    }
   }
 
   register({
     id: MODULE_ID,
-    title: 'D0/D7 体育 vs 游戏玩家比例',
-    subtitle: '柱状：总投注人数拆分（仅游戏 / 两者皆有 / 仅体育）；表格：体育投注玩家/总投注玩家、游戏投注玩家/总投注玩家',
-    span: 'full',
+    title: "D0/D7 体育 vs 游戏玩家比例",
+    subtitle: "玩家结构：仅游戏 / 双投 / 仅体育（柱状=月度，折线=日级堆积）",
+    span: "full",
 
     render({ mountEl, organic, paid, utils }) {
       injectStylesOnce();
 
-      const u = utils || (window.OVP && OVP.utils) || {
-        fmtPct: (x, d = 2) => (x === null || x === undefined || !Number.isFinite(Number(x))) ? '—' : `${(Number(x) * 100).toFixed(d)}%`,
-        fmtInt: (x) => (x === null || x === undefined || !Number.isFinite(Number(x))) ? '—' : Number(x).toLocaleString('en-US'),
-      };
+      const organicRaw = resolveDataset(organic, "organic");
+      const paidRaw = resolveDataset(paid, "paid");
 
-      const organicRaw = resolveDataFallback('organic', organic);
-      const paidRaw = resolveDataFallback('paid', paid);
-
-      const organicRecords = normalizePlayerMixRecords(organicRaw);
-      const paidRecords = normalizePlayerMixRecords(paidRaw);
-
-      const organicAgg = buildAgg(organicRecords);
-      const paidAgg = buildAgg(paidRecords);
-
-      const monthsSet = new Set();
-      for (const r of organicRecords) monthsSet.add(r.month);
-      for (const r of paidRecords) monthsSet.add(r.month);
-
-      const months = Array.from(monthsSet).filter(Boolean).sort((a, b) => monthValue(a) - monthValue(b));
+      const months = uniqOrdered([
+        ...listMonthsFrom(organicRaw),
+        ...listMonthsFrom(paidRaw),
+      ]).sort((a, b) => monthValue(a) - monthValue(b));
 
       if (!months.length) {
         mountEl.innerHTML = `
           <div class="ovp-m5">
             <div class="empty">
-              没读到可用月份数据：请检查 organic-data.js / paid-data.js 是否包含字段：
-              date、country、D0/D7_TOTAL_BET_PLACED_USER、D0/D7_SPORTS_BET_PLACED_USER、D0/D7_GAMES_BET_PLACED_USER。
+              没读到月份数据：请检查 organic-data.js / paid-data.js 是否包含 date + country + D0/D7_*_BET_PLACED_USER 字段。
             </div>
           </div>
         `;
         return;
       }
 
-      const uid = `ovp-m5-${Math.random().toString(16).slice(2, 10)}`;
-      const monthId = `${uid}-month`;
-      const countryWrapId = `${uid}-countries`;
-      const sourceWrapId = `${uid}-sources`;
-      const windowWrapId = `${uid}-windows`;
-      const chartSegId = `${uid}-chartseg`;
-      const chartId = `${uid}-chart`;
-      const tableId = `${uid}-table`;
-      const analysisId = `${uid}-analysis`;
-
-      const latestMonth = months[months.length - 1];
-
-      const state = {
-        month: latestMonth,
-        chart: 'bar', // bar|line
-        bar: {
-          countries: [...COUNTRIES],
-          sources: ['organic', 'paid'],
-          windows: ['D0', 'D7'],
-        },
-        line: {
-          country: COUNTRIES[0],
-          source: 'organic',
-          window: 'D0',
-        }
+      let state = {
+        month: months[months.length - 1],
+        countries: COUNTRY_ORDER.filter(Boolean),
+        sources: ["organic", "paid"],
+        windows: ["D0", "D7"],
+        chartType: "bar",
       };
 
-      function labelSource(k) { return (k === 'paid') ? '买量' : '自然量'; }
-      function labelWindow(k) { return (k === 'D7') ? 'D7' : 'D0'; }
-
-      function ensureNonEmptyBar() {
-        if (!state.bar.countries.length) state.bar.countries = [...COUNTRIES];
-        if (!state.bar.sources.length) state.bar.sources = ['organic'];
-        if (!state.bar.windows.length) state.bar.windows = ['D0'];
-      }
-
-      function syncControls() {
-        const monthSel = document.getElementById(monthId);
-        if (monthSel) monthSel.value = state.month;
-
-        const seg = document.getElementById(chartSegId);
-        if (seg) {
-          seg.querySelectorAll('button[data-type]').forEach(btn => {
-            btn.setAttribute('aria-pressed', String(btn.dataset.type === state.chart));
-          });
-        }
-
-        const showBar = state.chart === 'bar';
-        syncChips(countryWrapId, showBar ? state.bar.countries : [state.line.country]);
-        syncChips(sourceWrapId, showBar ? state.bar.sources : [state.line.source]);
-        syncChips(windowWrapId, showBar ? state.bar.windows : [state.line.window]);
-      }
-
-      function syncChips(wrapId, selectedArr) {
-        const wrap = document.getElementById(wrapId);
-        if (!wrap) return;
-        const set = new Set((selectedArr || []).map(v => String(v)));
-        wrap.querySelectorAll('button.chip[data-value]').forEach(btn => {
-          const v = String(btn.dataset.value);
-          btn.setAttribute('aria-pressed', set.has(v) ? 'true' : 'false');
-        });
-      }
-
-      function buildChips(wrapId, items, onPick) {
-        const wrap = document.getElementById(wrapId);
-        if (!wrap) return;
-
-        wrap.innerHTML = items.map(it => `<button type="button" class="chip" data-value="${it.key || it}">${it.label || it}</button>`).join('');
-        wrap.querySelectorAll('button.chip[data-value]').forEach(btn => {
-          btn.addEventListener('click', () => onPick(String(btn.dataset.value)));
-        });
-      }
-
-      function toggleInArray(arr, v) {
-        const i = arr.indexOf(v);
-        if (i >= 0) arr.splice(i, 1);
-        else arr.push(v);
-      }
-
-      function getSelectionsForTable() {
-        if (state.chart === 'line') {
-          return {
-            countries: [state.line.country],
-            sources: [state.line.source],
-            windows: [state.line.window],
-          };
-        }
-        ensureNonEmptyBar();
-        return {
-          countries: orderedSubset(COUNTRIES, state.bar.countries),
-          sources: ['organic', 'paid'].filter(s => state.bar.sources.indexOf(s) >= 0),
-          windows: ['D0', 'D7'].filter(w => state.bar.windows.indexOf(w) >= 0),
-        };
-      }
+      const uid = `ovp-${MODULE_ID}-${Math.random().toString(16).slice(2)}`;
+      const monthId = `${uid}-month`;
+      const countriesId = `${uid}-countries`;
+      const sourcesId = `${uid}-sources`;
+      const windowsId = `${uid}-windows`;
+      const chartTypeId = `${uid}-chartType`;
+      const hintId = `${uid}-hint`;
+      const chartId = `${uid}-chart`;
+      const tableTitleId = `${uid}-tableTitle`;
+      const tableId = `${uid}-table`;
+      const insightsId = `${uid}-insights`;
 
       mountEl.innerHTML = `
         <div class="ovp-m5">
           <div class="row">
             <div class="fg">
-              <label>月份</label>
-              <select id="${monthId}">
-                ${months.map(m => `<option value="${m}">${m}</option>`).join('')}
-              </select>
+              <label for="${monthId}">月份</label>
+              <select id="${monthId}"></select>
             </div>
 
-            <div class="fg" style="min-width:260px">
-              <label>国家</label>
-              <div id="${countryWrapId}" class="chips"></div>
+            <div class="fg" style="min-width:240px">
+              <label>国家（多选）</label>
+              <div class="chips" id="${countriesId}"></div>
             </div>
 
-            <div class="fg" style="min-width:220px">
-              <label>买量 / 自然量</label>
-              <div id="${sourceWrapId}" class="chips"></div>
+            <div class="fg" style="min-width:210px">
+              <label>买量 / 自然量（多选）</label>
+              <div class="chips" id="${sourcesId}"></div>
             </div>
 
-            <div class="fg" style="min-width:260px">
+            <div class="fg">
               <label>图表</label>
-              <div id="${chartSegId}" class="seg" role="group" aria-label="图表类型切换">
-                ${CHARTS.map((c, idx) => `<button type="button" data-type="${c.key}" aria-pressed="${idx === 0 ? 'true' : 'false'}">${c.label}</button>`).join('')}
+              <div class="seg" id="${chartTypeId}">
+                <button type="button" data-v="bar" aria-pressed="true">月度柱状图</button>
+                <button type="button" data-v="line" aria-pressed="false">日级折线图</button>
+              </div>
+              <div class="hint" id="${hintId}" style="display:none">
+                折线图模式：国家/来源/D0-D7 自动切为单选（堆积：仅体育=黄、仅游戏=蓝、双投=绿）。
               </div>
             </div>
 
-            <div class="fg" style="min-width:220px">
-              <label>D0 / D7</label>
-              <div id="${windowWrapId}" class="chips"></div>
+            <div class="fg" style="min-width:200px">
+              <label>D0 / D7（多选）</label>
+              <div class="chips" id="${windowsId}"></div>
             </div>
           </div>
 
-          <div class="subline">
-            <div class="k">
-              <span class="dot" style="background:${cssVar('--ovp-yellow', '#F6C344')}"></span>自然量
-              <span class="dot" style="background:${cssVar('--ovp-blue', '#2563eb')}"></span>买量
-              <span class="dot" style="background:${cssVar('--accent-green', '#16a34a')}"></span>两者皆有
-            </div>
-            <div class="k">
-              柱状：底部=仅游戏，中部=两者皆有，顶部=仅体育；斜线= D7｜折线：自动锁单选
-            </div>
+          <div class="hint" style="margin-top:-4px;">
+            柱状图：每根柱子内部为堆叠（仅游戏=浅色、仅体育=深色、双投=浅绿）；斜纹= D7。
           </div>
 
-          <div id="${chartId}" class="chart"></div>
+          <div class="chart" id="${chartId}"></div>
 
+          <div class="table-title" id="${tableTitleId}"></div>
           <div class="table-wrap">
             <table id="${tableId}"></table>
           </div>
 
-          <div id="${analysisId}"></div>
+          <div id="${insightsId}"></div>
         </div>
       `;
 
-      const monthSel = document.getElementById(monthId);
-      const chartEl = document.getElementById(chartId);
-      const tableEl = document.getElementById(tableId);
-      const analysisEl = document.getElementById(analysisId);
-      const segEl = document.getElementById(chartSegId);
+      const monthSel = mountEl.querySelector(`#${monthId}`);
+      const countriesWrap = mountEl.querySelector(`#${countriesId}`);
+      const sourcesWrap = mountEl.querySelector(`#${sourcesId}`);
+      const windowsWrap = mountEl.querySelector(`#${windowsId}`);
+      const chartTypeWrap = mountEl.querySelector(`#${chartTypeId}`);
+      const hintEl = mountEl.querySelector(`#${hintId}`);
+      const chartEl = mountEl.querySelector(`#${chartId}`);
+      const tableTitleEl = mountEl.querySelector(`#${tableTitleId}`);
+      const tableEl = mountEl.querySelector(`#${tableId}`);
+      const insightsEl = mountEl.querySelector(`#${insightsId}`);
 
-      buildChips(countryWrapId, COUNTRIES.map(c => ({ key: c, label: c })), (v) => {
-        if (state.chart === 'line') {
-          state.line.country = v;
-        } else {
-          toggleInArray(state.bar.countries, v);
-          ensureNonEmptyBar();
-        }
-        syncControls();
-        updateView();
-      });
-
-      buildChips(sourceWrapId, SOURCES, (v) => {
-        if (state.chart === 'line') {
-          state.line.source = v;
-        } else {
-          toggleInArray(state.bar.sources, v);
-          ensureNonEmptyBar();
-        }
-        syncControls();
-        updateView();
-      });
-
-      buildChips(windowWrapId, WINDOWS, (v) => {
-        if (state.chart === 'line') {
-          state.line.window = v;
-        } else {
-          toggleInArray(state.bar.windows, v);
-          ensureNonEmptyBar();
-        }
-        syncControls();
-        updateView();
-      });
-
-      if (monthSel) {
-        monthSel.addEventListener('change', () => {
-          state.month = String(monthSel.value || latestMonth);
-          syncControls();
-          updateView();
-        });
-      }
-
-      if (segEl) {
-        segEl.querySelectorAll('button[data-type]').forEach(btn => {
-          btn.addEventListener('click', () => {
-            const next = String(btn.dataset.type || 'bar');
-            if (next === state.chart) return;
-
-            state.chart = next;
-
-            if (state.chart === 'line') {
-              ensureNonEmptyBar();
-              state.line.country = orderedSubset(COUNTRIES, state.bar.countries)[0] || COUNTRIES[0];
-              state.line.source = (state.bar.sources[0] || 'organic');
-              state.line.window = (state.bar.windows[0] || 'D0');
-            }
-
-            syncControls();
-            updateView();
-          });
-        });
-      }
+      monthSel.innerHTML = months
+        .map((m) => `<option value="${m}">${m}</option>`)
+        .join("");
+      monthSel.value = state.month;
 
       let chart = null;
-      let chartReady = false;
 
-      function renderAnalysis() {
-        if (!analysisEl) return;
-        analysisEl.innerHTML = '';
-        if (window.OVP && OVP.insights && typeof OVP.insights.render === 'function') {
-          OVP.insights.render(analysisEl, MODULE_ID, state.month, { title: '数据分析' });
-        } else {
-          analysisEl.innerHTML = `<div class="empty">未检测到 insights-copy.js（无法渲染数据分析文案）。</div>`;
+      function setChartType(nextType) {
+        state.chartType = nextType;
+
+        for (const btn of chartTypeWrap.querySelectorAll("button[data-v]")) {
+          const on = btn.getAttribute("data-v") === nextType;
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
         }
+
+        if (state.chartType === "line") {
+          hintEl.style.display = "";
+
+          const oneCountry =
+            orderCountries(state.countries)[0] || COUNTRY_ORDER[0] || "GH";
+          const oneSource = state.sources[0] || "organic";
+          const oneWindow = state.windows[0] || "D0";
+
+          state.countries = [oneCountry];
+          state.sources = [oneSource];
+          state.windows = [oneWindow];
+        } else {
+          hintEl.style.display = "none";
+          if (!state.countries.length) state.countries = COUNTRY_ORDER.filter(Boolean);
+          if (!state.sources.length) state.sources = ["organic", "paid"];
+          if (!state.windows.length) state.windows = ["D0", "D7"];
+        }
+
+        renderAll();
+      }
+
+      chartTypeWrap.addEventListener("click", (e) => {
+        const btn = e.target && e.target.closest ? e.target.closest("button[data-v]") : null;
+        if (!btn) return;
+        const v = btn.getAttribute("data-v");
+        if (!v || v === state.chartType) return;
+        setChartType(v);
+      });
+
+      monthSel.addEventListener("change", () => {
+        state.month = monthSel.value;
+        renderAll();
+      });
+
+      function enforceNonEmptyMulti() {
+        if (state.chartType === "line") return;
+        if (!state.countries.length) state.countries = COUNTRY_ORDER.filter(Boolean);
+        if (!state.sources.length) state.sources = ["organic", "paid"];
+        if (!state.windows.length) state.windows = ["D0", "D7"];
+      }
+
+      function renderControls() {
+        const isLine = state.chartType === "line";
+
+        renderCountryChips(
+          countriesWrap,
+          COUNTRY_ORDER,
+          state.countries,
+          (next) => {
+            state.countries = orderCountries(next);
+            if (isLine) state.countries = [state.countries[0]];
+            enforceNonEmptyMulti();
+            renderAll();
+          },
+          isLine
+        );
+
+        renderChipGroup(
+          sourcesWrap,
+          SOURCE_OPTIONS,
+          state.sources,
+          (next) => {
+            state.sources = Array.isArray(next) ? next : [next];
+            if (isLine) state.sources = [state.sources[0]];
+            enforceNonEmptyMulti();
+            renderAll();
+          },
+          isLine
+        );
+
+        renderChipGroup(
+          windowsWrap,
+          WINDOW_OPTIONS,
+          state.windows,
+          (next) => {
+            state.windows = Array.isArray(next) ? next : [next];
+            if (isLine) state.windows = [state.windows[0]];
+            enforceNonEmptyMulti();
+            renderAll();
+          },
+          isLine
+        );
       }
 
       function renderTable() {
-        if (!tableEl) return;
+        const monthKey = state.month;
+        const monthText = monthShort(monthKey);
 
-        const sel = getSelectionsForTable();
-        const countries = sel.countries;
-        const sources = sel.sources;
-        const windows = sel.windows;
+        const selectedCountries = orderCountries(state.countries);
+        const selectedSources = uniqOrdered(state.sources.length ? state.sources : ["organic", "paid"]);
+        const selectedWindows = uniqOrdered(state.windows.length ? state.windows : ["D0", "D7"]);
 
-        const combos = [];
-        for (const s of sources) for (const w of windows) combos.push({ w, s });
+        const countryListText = selectedCountries.length ? selectedCountries.join(", ") : "—";
+        const sourceText =
+          selectedSources
+            .map((k) => (k === "organic" ? "自然量" : "买量"))
+            .join(" + ") || "—";
+        const windowText = selectedWindows.join(" + ") || "—";
 
-        const ths = ['<th>国家</th>'];
-        for (const cb of combos) {
-          const wLabel = labelWindow(cb.w);
-          const sLabel = labelSource(cb.s);
-          ths.push(`<th>${wLabel}${sLabel}体育玩家占比</th>`);
-          ths.push(`<th>${wLabel}${sLabel}游戏玩家占比</th>`);
-        }
+        tableTitleEl.textContent = `数据表（${monthKey} · 国家 ${countryListText} · ${sourceText} · ${windowText}）`;
 
-        const rows = [];
-        for (const c of countries) {
-          const tds = [`<td>${c}</td>`];
-          for (const cb of combos) {
-            const agg = (cb.s === 'paid') ? getMonthAgg(paidAgg.monthMap, state.month, c) : getMonthAgg(organicAgg.monthMap, state.month, c);
-            const tri = getWindowTriplet(agg, cb.w);
-            if (!tri || !Number.isFinite(Number(tri.total)) || Number(tri.total) <= 0) {
-              tds.push('<td>—</td><td>—</td>');
-              continue;
-            }
-            const sportsShare = Number(tri.sports) / Number(tri.total);
-            const gamesShare = Number(tri.games) / Number(tri.total);
-            tds.push(`<td>${u.fmtPct(sportsShare, 2)}</td>`);
-            tds.push(`<td>${u.fmtPct(gamesShare, 2)}</td>`);
+        const orgAgg = aggMonthByCountry(organicRaw, monthKey);
+        const paidAgg = aggMonthByCountry(paidRaw, monthKey);
+
+        const columns = [];
+        for (const src of ["organic", "paid"]) {
+          if (!selectedSources.includes(src)) continue;
+          for (const w of ["D0", "D7"]) {
+            if (!selectedWindows.includes(w)) continue;
+            columns.push({ src, w, label: `${monthText}${src === "organic" ? "自然量" : "买量"}${w}` });
           }
-          rows.push(`<tr>${tds.join('')}</tr>`);
         }
 
-        const cols = 1 + combos.length * 2;
-        const minW = Math.max(720, cols * 140);
+        // 根据列数动态给 table 一个最小宽度，便于横向滚动
+        tableEl.style.minWidth = `${86 + columns.length * 220}px`;
 
-        tableEl.style.minWidth = `${minW}px`;
-        tableEl.innerHTML = `
-          <thead><tr>${ths.join('')}</tr></thead>
-          <tbody>${rows.join('')}</tbody>
+        const thead = `
+          <thead>
+            <tr>
+              <th style="min-width:86px">国家</th>
+              ${columns.map((c) => `<th style="min-width:210px">${c.label}</th>`).join("")}
+            </tr>
+          </thead>
         `;
+
+        const rowsHtml = selectedCountries
+          .map((cc) => {
+            const cells = columns
+              .map((col) => {
+                const base = col.src === "organic" ? orgAgg : paidAgg;
+                const data =
+                  base[cc] && base[cc][col.w]
+                    ? base[cc][col.w]
+                    : { onlyGames: 0, both: 0, onlySports: 0, total: 0 };
+
+                const total = data.total || 0;
+                const g = data.onlyGames || 0;
+                const b = data.both || 0;
+                const s = data.onlySports || 0;
+
+                const pg = total > 0 ? g / total : 0;
+                const pb = total > 0 ? b / total : 0;
+                const ps = total > 0 ? s / total : 0;
+
+                return `
+                  <td>
+                    <div class="mix-cell">
+                      <div class="line"><span class="k">仅游戏：</span><span class="v">${fmtInt(utils, g)}</span><span class="p">(${fmtPct(utils, pg, 1)})</span></div>
+                      <div class="line"><span class="k">双投：</span><span class="v">${fmtInt(utils, b)}</span><span class="p">(${fmtPct(utils, pb, 1)})</span></div>
+                      <div class="line"><span class="k">仅体育：</span><span class="v">${fmtInt(utils, s)}</span><span class="p">(${fmtPct(utils, ps, 1)})</span></div>
+                      <div class="line total"><span class="k">总计：</span><span class="v">${fmtInt(utils, total)}</span></div>
+                    </div>
+                  </td>
+                `;
+              })
+              .join("");
+
+            return `<tr><td><b>${cc}</b></td>${cells}</tr>`;
+          })
+          .join("");
+
+        tableEl.innerHTML = `${thead}<tbody>${rowsHtml}</tbody>`;
       }
 
-      function renderChartBarOption() {
-        const sel = getSelectionsForTable();
-        const countries = sel.countries;
-        const sources = sel.sources;
-        const windows = sel.windows;
-
-        const border = cssVar('--border', cssVar('--border-subtle', 'rgba(148,163,184,.45)'));
-        const muted = cssVar('--muted', cssVar('--text-sub', '#6b7280'));
-        const text = cssVar('--text', cssVar('--text-main', '#0f172a'));
-
-        const organicBase = cssVar('--ovp-yellow', '#F6C344');
-        const paidBase = cssVar('--ovp-blue', '#2563eb');
-        const bothGreen = hexToRgba(cssVar('--accent-green', '#16a34a'), 0.30);
-
-        const decal = {
-          symbol: 'rect',
-          dashArrayX: [2, 2],
-          dashArrayY: [2, 2],
-          rotation: Math.PI / 4,
-          color: 'rgba(15,23,42,0.20)',
-        };
-
-        const series = [];
-        const orderedStacks = [];
-        for (const s of ['organic', 'paid']) {
-          if (sources.indexOf(s) < 0) continue;
-          for (const w of ['D0', 'D7']) {
-            if (windows.indexOf(w) < 0) continue;
-            orderedStacks.push({ s, w });
-          }
+      function renderInsights() {
+        if (window.OVP && OVP.insights && typeof OVP.insights.render === "function") {
+          OVP.insights.render(insightsEl, MODULE_ID, state.month, { title: "数据分析" });
+        } else {
+          insightsEl.innerHTML = `
+            <div class="ovp-alert" style="margin-top:10px;">
+              insights-copy.js 未加载或未初始化（OVP.insights.render 不存在）。
+            </div>
+          `;
         }
-
-        for (const st of orderedStacks) {
-          const base = st.s === 'paid' ? paidBase : organicBase;
-          const light = hexToRgba(base, 0.35);
-          const dark = base;
-
-          const stackName = `${st.s}_${st.w}`;
-
-          const mkData = (seg) => {
-            const arr = [];
-            for (const c of countries) {
-              const agg = (st.s === 'paid') ? getMonthAgg(paidAgg.monthMap, state.month, c) : getMonthAgg(organicAgg.monthMap, state.month, c);
-              const tri = getWindowTriplet(agg, st.w);
-              if (!tri) { arr.push(null); continue; }
-              const segs = computeSegments(tri.total, tri.sports, tri.games);
-              if (seg === 'onlyGames') arr.push(segs.onlyGames);
-              else if (seg === 'both') arr.push(segs.both);
-              else arr.push(segs.onlySports);
-            }
-            return arr;
-          };
-
-          series.push({
-            name: `${labelSource(st.s)} ${labelWindow(st.w)} 仅游戏`,
-            type: 'bar',
-            stack: stackName,
-            barWidth: 14,
-            itemStyle: { color: light, decal: st.w === 'D7' ? decal : null },
-            emphasis: { focus: 'series' },
-            data: mkData('onlyGames'),
-          });
-
-          series.push({
-            name: `${labelSource(st.s)} ${labelWindow(st.w)} 两者皆有`,
-            type: 'bar',
-            stack: stackName,
-            barWidth: 14,
-            itemStyle: { color: bothGreen, decal: st.w === 'D7' ? decal : null },
-            emphasis: { focus: 'series' },
-            data: mkData('both'),
-          });
-
-          series.push({
-            name: `${labelSource(st.s)} ${labelWindow(st.w)} 仅体育`,
-            type: 'bar',
-            stack: stackName,
-            barWidth: 14,
-            itemStyle: { color: dark, decal: st.w === 'D7' ? decal : null },
-            emphasis: { focus: 'series' },
-            data: mkData('onlySports'),
-          });
-        }
-
-        return {
-          tooltip: {
-            trigger: 'axis',
-            axisPointer: { type: 'shadow' },
-            backgroundColor: 'rgba(255,255,255,.96)',
-            borderColor: border,
-            borderWidth: 1,
-            textStyle: { color: text },
-          },
-          legend: { show: false },
-          grid: { left: 20, right: 18, top: 14, bottom: 40, containLabel: true },
-          xAxis: {
-            type: 'category',
-            data: countries,
-            axisLabel: { color: muted },
-            axisLine: { lineStyle: { color: border } },
-            axisTick: { lineStyle: { color: border } },
-          },
-          yAxis: {
-            type: 'value',
-            name: '投注人数',
-            nameTextStyle: { color: muted },
-            axisLabel: { color: muted },
-            axisLine: { show: false },
-            splitLine: { lineStyle: { color: 'rgba(148,163,184,.22)' } },
-          },
-          series,
-        };
-      }
-
-      function renderChartLineOption() {
-        const border = cssVar('--border', cssVar('--border-subtle', 'rgba(148,163,184,.45)'));
-        const muted = cssVar('--muted', cssVar('--text-sub', '#6b7280'));
-        const text = cssVar('--text', cssVar('--text-main', '#0f172a'));
-
-        const sportsColor = cssVar('--ovp-yellow', '#F6C344');
-        const gamesColor = cssVar('--ovp-blue', '#2563eb');
-        const bothColor = cssVar('--accent-green', '#16a34a');
-
-        const source = state.line.source;
-        const country = state.line.country;
-        const win = state.line.window;
-
-        const groupKey = `${state.month}|${country}`;
-        const dayGroup = (source === 'paid') ? paidAgg.dayGroupMap.get(groupKey) : organicAgg.dayGroupMap.get(groupKey);
-
-        const days = dayGroup ? Array.from(dayGroup.keys()).sort() : [];
-        const x = days.map(d => d.slice(5)); // MM-DD
-
-        const onlySports = [];
-        const onlyGames = [];
-        const both = [];
-
-        for (const d of days) {
-          const agg = dayGroup.get(d);
-          const tri = getWindowTriplet(agg, win);
-          const seg = tri ? computeSegments(tri.total, tri.sports, tri.games) : null;
-          onlySports.push(seg ? seg.onlySports : null);
-          onlyGames.push(seg ? seg.onlyGames : null);
-          both.push(seg ? seg.both : null);
-        }
-
-        return {
-          tooltip: {
-            trigger: 'axis',
-            axisPointer: { type: 'line' },
-            backgroundColor: 'rgba(255,255,255,.96)',
-            borderColor: border,
-            borderWidth: 1,
-            textStyle: { color: text },
-          },
-          legend: {
-            top: 6,
-            left: 8,
-            textStyle: { color: muted },
-            data: ['仅体育', '仅游戏', '体育+游戏'],
-          },
-          grid: { left: 20, right: 18, top: 46, bottom: 34, containLabel: true },
-          xAxis: {
-            type: 'category',
-            data: x,
-            axisLabel: { color: muted },
-            axisLine: { lineStyle: { color: border } },
-            axisTick: { lineStyle: { color: border } },
-          },
-          yAxis: {
-            type: 'value',
-            name: '投注人数',
-            nameTextStyle: { color: muted },
-            axisLabel: { color: muted },
-            splitLine: { lineStyle: { color: 'rgba(148,163,184,.22)' } },
-          },
-          series: [
-            {
-              name: '仅体育',
-              type: 'line',
-              stack: 'mix',
-              smooth: true,
-              symbol: 'none',
-              lineStyle: { width: 2, color: sportsColor },
-              itemStyle: { color: sportsColor },
-              areaStyle: { opacity: 0.22 },
-              data: onlySports,
-            },
-            {
-              name: '仅游戏',
-              type: 'line',
-              stack: 'mix',
-              smooth: true,
-              symbol: 'none',
-              lineStyle: { width: 2, color: gamesColor },
-              itemStyle: { color: gamesColor },
-              areaStyle: { opacity: 0.22 },
-              data: onlyGames,
-            },
-            {
-              name: '体育+游戏',
-              type: 'line',
-              stack: 'mix',
-              smooth: true,
-              symbol: 'none',
-              lineStyle: { width: 2, color: bothColor },
-              itemStyle: { color: bothColor },
-              areaStyle: { opacity: 0.22 },
-              data: both,
-            },
-          ],
-        };
       }
 
       function renderChart() {
-        if (!chart || !chartReady) return;
+        if (!chartEl) return;
 
-        const sel = getSelectionsForTable();
-        if (!sel.countries.length) {
-          chart.clear();
-          chart.setOption({ title: { text: '暂无数据', left: 'center', top: 'middle' } });
+        const monthKey = state.month;
+        const selectedCountries = orderCountries(state.countries);
+        if (!selectedCountries.length) {
+          chartEl.innerHTML = `<div class="empty">未选择国家。</div>`;
           return;
         }
 
-        const option = (state.chart === 'line') ? renderChartLineOption() : renderChartBarOption();
-        chart.clear();
-        chart.setOption(option, true);
+        return loadECharts()
+          .then((echarts) => {
+            if (!chart) {
+              chart = echarts.init(chartEl);
+              window.addEventListener("resize", () => {
+                try { chart && chart.resize(); } catch(_e) {}
+              });
+            }
+
+            const textSub = cssVar("--text-sub", cssVar("--muted", "#6b7280"));
+            const border = cssVar("--border", "rgba(148,163,184,.35)");
+            const yellow = cssVar("--ovp-yellow", "#F6C344");
+            const blue = cssVar("--ovp-blue", "#2563eb");
+            const green = cssVar("--accent-green", "#22c55e");
+
+            const lightYellow = "#FBE7B0";
+            const lightBlue = "#93c5fd";
+            const bothGreen = "#86efac";
+
+            if (state.chartType === "line") {
+              const country = selectedCountries[0];
+              const source = state.sources && state.sources[0] ? state.sources[0] : "organic";
+              const w = state.windows && state.windows[0] ? state.windows[0] : "D0";
+
+              const raw = source === "organic" ? organicRaw : paidRaw;
+              const daily = aggDaily(raw, monthKey, country);
+
+              const x = daily.dates.map((d) => d.slice(8, 10));
+
+              const series = [
+                {
+                  name: "仅体育",
+                  type: "line",
+                  stack: "total",
+                  areaStyle: { opacity: 0.28 },
+                  symbol: "none",
+                  emphasis: { focus: "series" },
+                  lineStyle: { width: 2 },
+                  itemStyle: { color: yellow },
+                  data: daily[w].onlySports,
+                },
+                {
+                  name: "仅游戏",
+                  type: "line",
+                  stack: "total",
+                  areaStyle: { opacity: 0.28 },
+                  symbol: "none",
+                  emphasis: { focus: "series" },
+                  lineStyle: { width: 2 },
+                  itemStyle: { color: blue },
+                  data: daily[w].onlyGames,
+                },
+                {
+                  name: "双投",
+                  type: "line",
+                  stack: "total",
+                  areaStyle: { opacity: 0.28 },
+                  symbol: "none",
+                  emphasis: { focus: "series" },
+                  lineStyle: { width: 2 },
+                  itemStyle: { color: green },
+                  data: daily[w].both,
+                },
+              ];
+
+              const option = {
+                animationDuration: 300,
+                tooltip: { trigger: "axis" },
+                legend: { top: 6, textStyle: { color: textSub } },
+                grid: { left: 46, right: 20, top: 42, bottom: 34, containLabel: true },
+                xAxis: {
+                  type: "category",
+                  boundaryGap: false,
+                  data: x,
+                  axisLabel: { color: textSub },
+                  axisLine: { lineStyle: { color: border } },
+                },
+                yAxis: {
+                  type: "value",
+                  axisLabel: { color: textSub },
+                  axisLine: { lineStyle: { color: border } },
+                  splitLine: { lineStyle: { color: border } },
+                },
+                title: {
+                  text: `${monthKey} · ${country} · ${source === "organic" ? "自然量" : "买量"} · ${w}（日级玩家结构）`,
+                  left: 10,
+                  top: 6,
+                  textStyle: { fontSize: 12, fontWeight: 600, color: textSub },
+                },
+                series,
+              };
+
+              chart.clear();
+              chart.setOption(option, true);
+              return;
+            }
+
+            const selectedSources = uniqOrdered(state.sources.length ? state.sources : ["organic", "paid"]);
+            const selectedWindows = uniqOrdered(state.windows.length ? state.windows : ["D0", "D7"]);
+
+            const orgAgg = aggMonthByCountry(organicRaw, monthKey);
+            const paidAgg = aggMonthByCountry(paidRaw, monthKey);
+
+            const series = [];
+            const barWidth = 14;
+
+            function pushStack(srcKey, wKey, partKey, name, color, useDecal) {
+              const base = srcKey === "organic" ? orgAgg : paidAgg;
+              const data = selectedCountries.map((cc) => {
+                const d = base[cc] && base[cc][wKey] ? base[cc][wKey] : null;
+                if (!d) return 0;
+                return safeNumber(d[partKey]);
+              });
+
+              series.push({
+                name,
+                type: "bar",
+                stack: `${srcKey}-${wKey}`,
+                barWidth,
+                emphasis: { focus: "series" },
+                itemStyle: {
+                  color,
+                  decal: useDecal ? hatchDecal() : null,
+                },
+                data,
+              });
+            }
+
+            for (const srcKey of ["organic", "paid"]) {
+              if (!selectedSources.includes(srcKey)) continue;
+
+              for (const wKey of ["D0", "D7"]) {
+                if (!selectedWindows.includes(wKey)) continue;
+
+                const useDecal = wKey === "D7";
+                const isOrganic = srcKey === "organic";
+                const cLight = isOrganic ? lightYellow : lightBlue;
+                const cDeep = isOrganic ? yellow : blue;
+
+                pushStack(srcKey, wKey, "onlyGames", `${srcKey}-${wKey}-仅游戏`, cLight, useDecal);
+                pushStack(srcKey, wKey, "both", `${srcKey}-${wKey}-双投`, bothGreen, useDecal);
+                pushStack(srcKey, wKey, "onlySports", `${srcKey}-${wKey}-仅体育`, cDeep, useDecal);
+              }
+            }
+
+            const option = {
+              animationDuration: 300,
+              tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+              grid: { left: 46, right: 18, top: 38, bottom: 34, containLabel: true },
+              xAxis: {
+                type: "category",
+                data: selectedCountries,
+                axisLabel: { color: textSub },
+                axisLine: { lineStyle: { color: border } },
+              },
+              yAxis: {
+                type: "value",
+                axisLabel: { color: textSub },
+                axisLine: { lineStyle: { color: border } },
+                splitLine: { lineStyle: { color: border } },
+              },
+              title: {
+                text: `${monthKey} · 月度总投注人数结构（仅游戏/双投/仅体育；斜纹=D7）`,
+                left: 10,
+                top: 6,
+                textStyle: { fontSize: 12, fontWeight: 600, color: textSub },
+              },
+              series,
+            };
+
+            chart.clear();
+            chart.setOption(option, true);
+          })
+          .catch((e) => {
+            chartEl.innerHTML = `<div class="empty">图表库加载失败：${(e && e.message) ? e.message : "echarts not available"}</div>`;
+          });
       }
 
-      function updateView() {
+      function renderAll() {
+        renderControls();
+        renderChart();
         renderTable();
-        renderAnalysis();
-        if (chartReady) renderChart();
+        renderInsights();
       }
 
-      if (chartEl) chartEl.innerHTML = `<div class="empty">图表加载中…</div>`;
-
-      ensureECharts()
-        .then((echarts) => {
-          if (!chartEl) return;
-          chart = echarts.init(chartEl, null, { renderer: 'canvas' });
-          chartReady = true;
-
-          const onResize = () => { try { chart && chart.resize(); } catch (_e) {} };
-          window.addEventListener('resize', onResize);
-
-          syncControls();
-          updateView();
-        })
-        .catch(() => {
-          if (chartEl) chartEl.innerHTML = `<div class="empty">图表库加载失败：echarts not available</div>`;
-          syncControls();
-          updateView();
-        });
-
-      syncControls();
-      updateView();
-    }
+      renderAll();
+    },
   });
 })();
