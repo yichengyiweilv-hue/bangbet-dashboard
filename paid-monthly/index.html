@@ -571,36 +571,12 @@
 
         <div class="hero-side">
           <div>当前版本：v1.0 · 所有指标统一从 RAW_PAID_BY_MONTH 聚合。</div>
-          <div>每月新增数据：只需在 RAW_PAID_BY_MONTH 中新增一个月份数组，无需改图表逻辑。</div>
+          
 
-          <div class="hero-pill">
-            提示：全局筛选只影响本页所有模块；你想做“每张图独立筛选”的话，后面再拆 state 即可。
-          </div>
 
           <div class="hero-filter-title">全局筛选</div>
 
-          <div class="hero-filter-row">
-            <div class="label">国家</div>
-            <div class="chart-mini-chips" id="filter-countries"></div>
-          </div>
-
-          <div class="hero-filter-row">
-            <div class="label">媒体</div>
-            <div class="chart-mini-chips" id="filter-medias"></div>
-          </div>
-
-          <div class="hero-filter-row">
-            <div class="label">形态</div>
-            <div class="chart-mini-chips" id="filter-productTypes"></div>
-          </div>
-
-          <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px;">
-            <button class="btn" type="button" id="btn-reset-filters">全选 / 重置</button>
-          </div>
-        </div>
-      </section>
-      
-    
+          
 <div class="chart-controls" id="paid-global-filters">
   <div class="chart-mini-filter">
     <span class="chart-mini-label">全局国家：</span>
@@ -615,6 +591,12 @@
     <div class="chart-mini-chips" id="paid-global-products"></div>
   </div>
 </div>
+          
+        </div>
+      </section>
+      
+    
+
       <main class="content">
         <!-- 1) 买量注册数 -->
         <section class="chart-card" id="card-paid-registrations">
