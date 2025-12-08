@@ -43,7 +43,7 @@
   const D7_DECAL = {
     symbol: "rect",
     symbolSize: 0.3,
-    dashArrayX: [8, 4],
+    dashArrayX: [4, 2],
     dashArrayY: [1, 0],
     rotation: Math.PI / 4,
     color: "rgba(255,255,255,0.35)",
