@@ -797,18 +797,44 @@
         c.setOption(option, true);
       }
 
-      // Insight
-      const insightMonth = chooseInsightMonth(selMonths);
-      if (insightMetaEl) insightMetaEl.textContent = insightMonth ? `月份：${insightMonth}` : '月份：—';
-      if (OVP.ui && typeof OVP.ui.renderInsight === 'function'){
-        OVP.ui.renderInsight({ moduleId: MODULE_ID, month: insightMonth, el: insightEl });
-      } else if (insightEl){
-        const text = (OVP.getInsight && typeof OVP.getInsight === 'function') ? (OVP.getInsight(MODULE_ID, insightMonth) || '') : '';
-        const t = String(text || '').trim();
-        insightEl.textContent = t || '文案待填写：./insights.js';
-        insightEl.classList.toggle('is-empty', !t);
+            // Insight：展示每一个所选月份的文案（多月拼接）
+      if (insightMetaEl){
+        insightMetaEl.textContent = selMonths.length
+          ? `选中月份：${selMonths.map(monthToShortLabel).join('、')}`
+          : '选中月份：—';
       }
-    }
+
+      if (insightEl){
+        const getter = (OVP.getInsight && typeof OVP.getInsight === 'function') ? OVP.getInsight : null;
+
+        // 没有取文案的方法，或者没选月份，就保持默认提示
+        if (!getter || !selMonths.length){
+          insightEl.textContent = '文案待填写：./insights.js';
+          insightEl.classList.add('is-empty');
+        } else {
+          // 对已选月份排序，从小到大（比如 2025-09, 2025-10）
+          const ms = sortMonthsSafe(utils, selMonths);
+          const parts = [];
+
+          for (const m of ms){
+            // OVP.getInsight 会自动按 "YYYY-MM" / __default__ 从 INSIGHTS_ORGANIC_MONTHLY 取文案
+            const raw = getter(MODULE_ID, m) || '';
+            const text = String(raw || '').trim();
+            if (!text) continue;
+
+            const label = monthToShortLabel(m); // "2025-10" -> "10月"
+            parts.push(`${label}：\n${text}`);
+          }
+
+          const finalText = parts.length
+            ? parts.join('\n\n--------------------------------\n\n')
+            : '文案待填写：./insights.js';
+
+          insightEl.textContent = finalText;
+          insightEl.classList.toggle('is-empty', !parts.length);
+        }
+      }
+
 
     // --- Event handling ---
     filtersEl.addEventListener('change', function(e){
