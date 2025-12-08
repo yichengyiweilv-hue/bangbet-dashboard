@@ -54,23 +54,62 @@
     padding: 0 24px 22px;
   }
 
-  .ovp-page-title{
-    display:flex;
-    align-items:flex-end;
-    justify-content:space-between;
-    gap:12px;
-    margin: 0 0 12px;
-  }
-  .ovp-page-title h1{
-    margin:0;
-    font-size:18px;
-    letter-spacing:.2px;
-    color:var(--text);
-  }
-  .ovp-page-title .ovp-meta{
-    font-size:11px;
-    color:var(--muted);
-  }
+  /* 页头：标题 + 返回目录按钮，吸顶固定在最上方 */
+.ovp-page-title{
+  position: sticky;
+  top: 0;
+  z-index: 30;
+
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+
+  padding: 10px 0 12px;
+  margin: 0 0 12px;
+
+  background: rgba(243,245,249,0.96);
+  backdrop-filter: blur(8px);
+}
+.ovp-page-title h1{
+  margin:0;
+  font-size:18px;
+  letter-spacing:.2px;
+  color:var(--text);
+}
+.ovp-page-title .ovp-meta{
+  font-size:11px;
+  color:var(--muted);
+}
+
+/* 标题 + 返回按钮这一行的布局：按钮紧跟标题，留一点间距 */
+.ovp-page-title-main{
+  display:flex;
+  align-items:baseline;
+  gap:8px;              /* 标题和按钮之间的小间距 */
+  flex-wrap:wrap;
+}
+
+/* “返回目录”按钮样式 */
+.ovp-back-link{
+  font-size:11px;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid rgba(148,163,184,.55);
+  background:#ffffff;
+  color:var(--text);
+  text-decoration:none;
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.ovp-back-link:hover{
+  border-color:rgba(37,99,235,.55);
+  color:#2563eb;
+}
+
   .ovp-note{
     margin:0 0 18px;
     color:var(--muted);
@@ -228,9 +267,14 @@
   <!-- Will be replaced by organic-monthly header if available -->
   <div id="header-slot"></div>
 
-  <div class="ovp-shell">
+   <div class="ovp-shell">
     <div class="ovp-page-title">
-      <h1>自然量 vs 买量 · 月度对比看板</h1>
+      <div class="ovp-page-title-main">
+        <h1>自然量 vs 买量 · 月度对比看板</h1>
+        <a class="ovp-back-link" href="../index.html">
+          ← 返回目录
+        </a>
+      </div>
       <div class="ovp-meta" id="ovp-meta">数据加载中…</div>
     </div>
 
