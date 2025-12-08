@@ -454,11 +454,38 @@
         }
       }
 
-      function updateInsight(month){
-        const m = month || lm;
-        if (insightTitleEl) insightTitleEl.textContent = `数据分析（${m}）`;
-        OVP.ui.renderInsight({ moduleId, month: m, el: insightEl });
-      }
+      function updateInsight(monthsSel){
+  // 兼容：传进来可能是 string，也可能是 array
+  const msRaw = Array.isArray(monthsSel) ? monthsSel : [monthsSel];
+  const ms = msRaw.filter(Boolean).map(String);
+  const useMonths = ms.length ? ms : [String(lm)];
+
+  // 标题：单月显示一个月，多月把全部月份列出来
+  if (insightTitleEl){
+    insightTitleEl.textContent = useMonths.length === 1
+      ? `数据分析（${useMonths[0]}）`
+      : `数据分析（${useMonths.join('、')}）`;
+  }
+
+  if (!insightEl) return;
+
+  // 逐月取文案：优先该月定制，其次 __default__（OVP.getInsight 的逻辑就是这么干的）
+  // :contentReference[oaicite:5]{index=5}
+  let hasAny = false;
+  const blocks = useMonths.map((m)=>{
+    const txt = ((OVP.getInsight ? OVP.getInsight(moduleId, m) : '') || '').trim();
+    if (txt){
+      hasAny = true;
+      return `【${m}】\n${txt}`;
+    }
+    return `【${m}】\n文案待填写：./insights.js`;
+  });
+
+  insightEl.textContent = blocks.join('\n\n');
+  // 有任意一个月有文案 -> 正常色；全都没文案 -> 维持灰色占位
+  insightEl.classList.toggle('is-empty', !hasAny);
+}
+
 
       function renderTable(monthsSel, countriesSel, winsSel){
         const cols = [];
@@ -778,8 +805,10 @@
         // Table: always follows filter selections (line mode will be single column)
         renderTable(monthsSel, countriesSel, winsSel);
 
-        // Insight: show latest selected month
-        updateInsight(monthsSel[monthsSel.length - 1]);
+        // Insight: show all selected month
+        
+updateInsight(monthsSel);
+
       }
 
       function onFilterChange(e){
