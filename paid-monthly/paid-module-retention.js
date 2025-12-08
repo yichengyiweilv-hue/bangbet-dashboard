@@ -133,7 +133,8 @@
       return {
         symbol: "rect",
         symbolSize: 1,
-        dashArrayX: [2, 2],
+        color: 'rgba(255,255,255,0.4)',
+        dashArrayX: [4, 2],
         dashArrayY: [6, 0],
         rotation: Math.PI / 4,
       };
