@@ -1,656 +1,707 @@
-// organic-monthly/module-payrate.js
+// ===========================
 // 模块 2：D0 / D7 付费率
-// 口径：D0_unique_purchase / registration；D7_unique_purchase / registration
+// 文件：organic-monthly/module-payrate.js
+// 口径：D0_unique_purchase/registration、D7_unique_purchase/registration
+// ===========================
 
 (function () {
   'use strict';
 
-  const MODULE_ID = 'payrate';
-  const TITLE = 'D0 / D7 付费率';
-  const SUBTITLE = '自然量注册 cohort 的 D0/D7 付费率（D0_unique_purchase/registration；D7_unique_purchase/registration）';
+  var MODULE_ID = 'payrate';
+  var COUNTRY_ORDER = ['GH', 'KE', 'NG', 'TZ', 'UG'];
+  var METRIC_KEYS = ['D0', 'D7'];
 
-  const COUNTRY_ORDER = ['GH', 'KE', 'NG', 'TZ', 'UG'];
-  const METRIC_DEFS = [
-    { key: 'D0', field: 'D0_unique_purchase', label: 'D0' },
-    { key: 'D7', field: 'D7_unique_purchase', label: 'D7' },
-  ];
+  function $(root, sel) { return root.querySelector(sel); }
+  function $all(root, sel) { return Array.prototype.slice.call(root.querySelectorAll(sel)); }
 
-  function uniq(arr) {
-    return Array.from(new Set((Array.isArray(arr) ? arr : []).map(String)));
-  }
-
-  function safeNum(v) {
-    const n = Number(v);
+  function toNum(v) {
+    var n = Number(v);
     return Number.isFinite(n) ? n : 0;
   }
 
-  function monthLabel(ym) {
-    // "2025-09" -> "9月"
-    const m = String(ym || '').slice(5, 7);
-    const mi = Number(m);
-    return Number.isFinite(mi) && mi > 0 ? `${mi}月` : String(ym || '');
+  function toSafeId(str) {
+    return String(str).replace(/[^a-zA-Z0-9_-]/g, '_');
   }
 
-  function ensureStyle() {
-    if (document.getElementById('ovp-style-payrate')) return;
-    const style = document.createElement('style');
-    style.id = 'ovp-style-payrate';
-    style.textContent = `
-      .ovp-payrate{ display:flex; flex-direction:column; gap:12px; }
-      .ovp-payrate-filters{
-        display:flex; flex-wrap:wrap; gap:12px;
-        padding:12px;
-        border:1px solid rgba(148, 163, 184, 0.60);
-        border-radius:12px;
-        background: rgba(249, 250, 251, 0.85);
-      }
-      .ovp-payrate-group{ min-width: 220px; flex: 1 1 240px; }
-      .ovp-payrate-group-title{
-        font-size:11px; color: var(--muted);
-        margin:0 0 8px;
-        display:flex; align-items:center; justify-content:space-between; gap:8px;
-      }
-      .ovp-payrate-options{ display:flex; flex-wrap:wrap; gap:8px; }
-      .ovp-payrate-pill{
-        display:inline-flex; align-items:center; gap:6px;
-        padding:6px 10px;
-        border:1px solid rgba(148, 163, 184, 0.60);
-        border-radius:999px;
-        background: rgba(255,255,255,0.95);
-        font-size:12px;
-        color: var(--text);
-        cursor:pointer;
-        user-select:none;
-      }
-      .ovp-payrate-pill input{ transform: translateY(0.5px); accent-color: #2563eb; }
-      .ovp-payrate-pill.is-disabled{ opacity:0.55; cursor:not-allowed; }
-      .ovp-payrate-help{ font-size:11px; color: var(--muted); line-height:1.55; margin-top:6px; }
-      .ovp-payrate-table-wrap{
-        border:1px solid rgba(148, 163, 184, 0.60);
-        border-radius:12px;
-        background: rgba(249, 250, 251, 0.90);
-        overflow:auto;
-      }
-      table.ovp-payrate-table{
-        width:100%;
-        border-collapse:separate;
-        border-spacing:0;
-        font-size:12px;
-        min-width: 760px;
-      }
-      table.ovp-payrate-table thead th{
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        background: rgba(255,255,255,0.98);
-        color: var(--text);
-        text-align:right;
-        padding:10px 10px;
-        border-bottom:1px solid rgba(148, 163, 184, 0.60);
-        white-space:nowrap;
-      }
-      table.ovp-payrate-table thead th:first-child,
-      table.ovp-payrate-table tbody td:first-child{
-        position: sticky;
-        left: 0;
-        z-index: 3;
-        background: rgba(255,255,255,0.98);
-        text-align:left;
-      }
-      table.ovp-payrate-table tbody td{
-        padding:9px 10px;
-        border-bottom:1px solid rgba(148, 163, 184, 0.30);
-        text-align:right;
-        white-space:nowrap;
-        color: var(--text);
-      }
-      table.ovp-payrate-table tbody tr:last-child td{ border-bottom:none; }
-      .ovp-payrate-empty{
-        padding:12px;
-        color: var(--muted);
-        font-size:11px;
-        line-height:1.6;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  function buildCheckboxPills({ name, options, selectedSet, type = 'checkbox' }) {
-    // options: [{value,label}]
-    return options
-      .map((opt) => {
-        const id = `${name}-${String(opt.value).replace(/[^\w-]/g, '_')}`;
-        const checked = selectedSet.has(String(opt.value)) ? 'checked' : '';
-        return `
-          <label class="ovp-payrate-pill" for="${id}">
-            <input id="${id}" type="${type}" name="${name}" value="${String(opt.value)}" ${checked} />
-            <span>${opt.label}</span>
-          </label>
-        `;
-      })
-      .join('');
-  }
-
-  function calcMonthlyRates(rawByMonth, month, countries) {
-    // returns: { country: { reg, D0_purchase, D7_purchase, D0_rate, D7_rate } }
-    const rows = Array.isArray(rawByMonth && rawByMonth[month]) ? rawByMonth[month] : [];
-    const out = {};
-    for (const c of countries) {
-      out[c] = { reg: 0, D0_purchase: 0, D7_purchase: 0, D0_rate: null, D7_rate: null };
-    }
-    for (const r of rows) {
-      const c = String(r && r.country);
-      if (!out[c]) continue;
-      out[c].reg += safeNum(r.registration);
-      out[c].D0_purchase += safeNum(r.D0_unique_purchase);
-      out[c].D7_purchase += safeNum(r.D7_unique_purchase);
-    }
-    for (const c of Object.keys(out)) {
-      const reg = out[c].reg;
-      out[c].D0_rate = reg > 0 ? out[c].D0_purchase / reg : null;
-      out[c].D7_rate = reg > 0 ? out[c].D7_purchase / reg : null;
-    }
-    return out;
-  }
-
-  function buildDailyAgg(rawByMonth, months, countries) {
-    // returns: { [country]: { [date]: {reg,d0,d7} } }, allDatesSorted[]
-    const monthsSorted = (window.OVP && OVP.utils && typeof OVP.utils.sortMonths === 'function')
-      ? OVP.utils.sortMonths(months)
-      : (Array.isArray(months) ? months.slice().sort() : []);
-
-    const allowed = new Set(countries.map(String));
-    const byC = {};
-    const dateSet = new Set();
-
-    for (const c of countries) byC[c] = {};
-
-    for (const m of monthsSorted) {
-      const rows = Array.isArray(rawByMonth && rawByMonth[m]) ? rawByMonth[m] : [];
-      for (const r of rows) {
-        const c = String(r && r.country);
-        if (!allowed.has(c)) continue;
-        const d = String(r && r.date);
-        if (!d) continue;
-
-        dateSet.add(d);
-        const bucket = byC[c][d] || (byC[c][d] = { reg: 0, d0: 0, d7: 0 });
-        bucket.reg += safeNum(r.registration);
-        bucket.d0 += safeNum(r.D0_unique_purchase);
-        bucket.d7 += safeNum(r.D7_unique_purchase);
-      }
-    }
-
-    const dates = Array.from(dateSet).sort(); // YYYY-MM-DD lexical == chronological
-    return { byC, dates };
-  }
-
-  function pickColors() {
-    // 5 国家的固定配色（同国家 D0/D7 共用）
-    return {
-      GH: '#2563eb', // blue
-      KE: '#16a34a', // green
-      NG: '#f97316', // orange
-      TZ: '#7c3aed', // purple
-      UG: '#0ea5e9', // sky
-    };
-  }
-
-  function getThemeColor(varName, fallback) {
+  function getCssVar(name, fallback) {
     try {
-      const v = getComputedStyle(document.documentElement).getPropertyValue(varName);
-      return (v || '').trim() || fallback;
+      var v = getComputedStyle(document.documentElement).getPropertyValue(name);
+      v = (v || '').trim();
+      return v || fallback;
     } catch (_e) {
       return fallback;
     }
   }
 
-  function fmtPct(utils, v) {
-    if (!utils || typeof utils.fmtPct !== 'function') {
-      return (v === null || v === undefined || !Number.isFinite(Number(v))) ? '—' : `${(Number(v) * 100).toFixed(2)}%`;
+  function injectStylesOnce() {
+    var STYLE_ID = 'ovp-style-' + MODULE_ID;
+    if (document.getElementById(STYLE_ID)) return;
+
+    var style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = [
+      '/* payrate module only */',
+      '.ovp-pr-filters{',
+      '  border:1px solid rgba(148, 163, 184, 0.60);',
+      '  border-radius:12px;',
+      '  padding:10px 12px;',
+      '  background: rgba(255,255,255,0.70);',
+      '  display:flex;',
+      '  flex-wrap:wrap;',
+      '  gap:12px;',
+      '}',
+      '.ovp-pr-group{ min-width: 220px; flex: 1 1 240px; }',
+      '.ovp-pr-label{ font-size:11px; color:var(--muted); margin-bottom:6px; }',
+      '.ovp-pr-options{ display:flex; flex-wrap:wrap; gap:8px; }',
+      '.ovp-pr-opt{',
+      '  display:inline-flex;',
+      '  align-items:center;',
+      '  gap:6px;',
+      '  padding:4px 10px;',
+      '  border:1px solid rgba(148, 163, 184, 0.55);',
+      '  border-radius:999px;',
+      '  background: rgba(249, 250, 251, 0.95);',
+      '  color:var(--text);',
+      '  font-size:12px;',
+      '  line-height:1.4;',
+      '  cursor:pointer;',
+      '  user-select:none;',
+      '}',
+      '.ovp-pr-opt input{ margin:0; accent-color: ' + getCssVar('--ovp-blue', '#2563eb') + '; }',
+      '.ovp-pr-opt.is-disabled{ opacity:0.55; cursor:not-allowed; }',
+      '',
+      '.ovp-pr-table-wrap{',
+      '  border:1px solid rgba(148, 163, 184, 0.60);',
+      '  border-radius:12px;',
+      '  overflow:auto;',
+      '  background:#ffffff;',
+      '}',
+      '.ovp-pr-table{ width:100%; border-collapse:separate; border-spacing:0; min-width: 720px; }',
+      '.ovp-pr-table thead th{',
+      '  position:sticky;',
+      '  top:0;',
+      '  background: rgba(249, 250, 251, 0.98);',
+      '  border-bottom:1px solid rgba(148, 163, 184, 0.60);',
+      '  padding:10px 10px;',
+      '  font-size:11px;',
+      '  color:var(--muted);',
+      '  text-align:right;',
+      '  white-space:nowrap;',
+      '}',
+      '.ovp-pr-table thead th:first-child{ text-align:left; }',
+      '.ovp-pr-table tbody td{',
+      '  padding:10px 10px;',
+      '  border-bottom:1px solid rgba(148, 163, 184, 0.30);',
+      '  font-size:12px;',
+      '  text-align:right;',
+      '  white-space:nowrap;',
+      '}',
+      '.ovp-pr-table tbody td:first-child{ text-align:left; color:var(--text); font-weight:600; }',
+      '.ovp-pr-table tbody tr:nth-child(even) td{ background: rgba(249, 250, 251, 0.55); }',
+      '.ovp-pr-kpi{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }',
+      '.ovp-pr-kpi .tag{',
+      '  font-size:11px;',
+      '  color:var(--muted);',
+      '  padding:3px 8px;',
+      '  border:1px solid rgba(148, 163, 184, 0.55);',
+      '  border-radius:999px;',
+      '  background: rgba(249, 250, 251, 0.95);',
+      '}',
+      ''
+    ].join('\n');
+
+    document.head.appendChild(style);
+  }
+
+  function getMonthRows(rawByMonth, month) {
+    if (!rawByMonth || !month) return [];
+    var rows = rawByMonth[month];
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  function getRowsByMonths(rawByMonth, months) {
+    var out = [];
+    (months || []).forEach(function (m) {
+      var rows = getMonthRows(rawByMonth, m);
+      for (var i = 0; i < rows.length; i++) out.push(rows[i]);
+    });
+    return out;
+  }
+
+  function aggregateByCountry(rows, countryAllowSet) {
+    var agg = {};
+    COUNTRY_ORDER.forEach(function (c) {
+      if (!countryAllowSet || countryAllowSet.has(c)) {
+        agg[c] = { reg: 0, d0: 0, d7: 0, d1ret: 0, d7ret: 0 };
+      }
+    });
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i] || {};
+      var ctry = String(r.country || '');
+      if (!agg[ctry]) continue;
+
+      agg[ctry].reg += toNum(r.registration);
+      agg[ctry].d0 += toNum(r.D0_unique_purchase);
+      agg[ctry].d7 += toNum(r.D7_unique_purchase);
+      agg[ctry].d1ret += toNum(r.D1_retained_users);
+      agg[ctry].d7ret += toNum(r.D7_retained_users);
     }
-    return utils.fmtPct(v, 2);
+    return agg;
+  }
+
+  function buildDailySeries(rows, country) {
+    var map = new Map(); // ts -> {reg,d0,d7}
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i] || {};
+      if (String(r.country || '') !== country) continue;
+      var dateStr = String(r.date || '').trim();
+      if (!dateStr) continue;
+
+      var ts = Date.parse(dateStr + 'T00:00:00Z');
+      if (!Number.isFinite(ts)) continue;
+
+      var cur = map.get(ts);
+      if (!cur) cur = { reg: 0, d0: 0, d7: 0 };
+
+      cur.reg += toNum(r.registration);
+      cur.d0 += toNum(r.D0_unique_purchase);
+      cur.d7 += toNum(r.D7_unique_purchase);
+
+      map.set(ts, cur);
+    }
+
+    var tss = Array.from(map.keys()).sort(function (a, b) { return a - b; });
+    var d0Points = [];
+    var d7Points = [];
+
+    for (var j = 0; j < tss.length; j++) {
+      var ts2 = tss[j];
+      var v = map.get(ts2) || { reg: 0, d0: 0, d7: 0 };
+      var reg = v.reg;
+
+      var d0Rate = reg > 0 ? (v.d0 / reg) : null;
+      var d7Rate = reg > 0 ? (v.d7 / reg) : null;
+
+      d0Points.push([ts2, d0Rate]);
+      d7Points.push([ts2, d7Rate]);
+    }
+
+    return { d0Points: d0Points, d7Points: d7Points, days: tss.length };
+  }
+
+  function fmtMonthLabel(m) {
+    return String(m || '').trim();
+  }
+
+  function computeScopeLabel(monthsSel) {
+    var ms = (monthsSel || []).slice().sort();
+    if (!ms.length) return '—';
+    if (ms.length === 1) return ms[0];
+    return ms[0] + ' ~ ' + ms[ms.length - 1];
+  }
+
+  function renderTable(tableWrapEl, ctx, state) {
+    var rawByMonth = ctx.rawByMonth || {};
+    var utils = ctx.utils || (window.OVP && window.OVP.utils) || {};
+
+    var monthsSel = (state.months || []).slice();
+    monthsSel = (utils.sortMonths ? utils.sortMonths(monthsSel) : monthsSel.sort());
+
+    var countriesSel = (state.countries || []).slice();
+    var countryAllowSet = new Set(countriesSel);
+    var countriesOrdered = COUNTRY_ORDER.filter(function (c) { return countryAllowSet.has(c); });
+
+    // columns: for each month -> D1 & D7 retention
+    var cols = [];
+    for (var i = 0; i < monthsSel.length; i++) {
+      var m = monthsSel[i];
+      cols.push({ month: m, k: 'd1', label: fmtMonthLabel(m) + ' 自然量次留' });
+      cols.push({ month: m, k: 'd7', label: fmtMonthLabel(m) + ' 自然量七留' });
+    }
+
+    var thead = '<thead><tr><th>国家</th>' +
+      cols.map(function (c) { return '<th>' + c.label + '</th>'; }).join('') +
+      '</tr></thead>';
+
+    var tbodyRows = [];
+
+    for (var r = 0; r < countriesOrdered.length; r++) {
+      var ctry = countriesOrdered[r];
+      var tds = ['<td>' + ctry + '</td>'];
+
+      for (var ci = 0; ci < cols.length; ci++) {
+        var col = cols[ci];
+        var rows = getMonthRows(rawByMonth, col.month);
+        var agg = aggregateByCountry(rows, new Set([ctry]));
+        var s = agg[ctry] || { reg: 0, d1ret: 0, d7ret: 0 };
+
+        var val = null;
+        if (s.reg > 0) {
+          if (col.k === 'd1') val = s.d1ret / s.reg;
+          if (col.k === 'd7') val = s.d7ret / s.reg;
+        }
+
+        var cell = (utils.fmtPct ? utils.fmtPct(val, 2) : (val === null ? '—' : (val * 100).toFixed(2) + '%'));
+        tds.push('<td>' + cell + '</td>');
+      }
+
+      tbodyRows.push('<tr>' + tds.join('') + '</tr>');
+    }
+
+    var tbody = '<tbody>' + tbodyRows.join('') + '</tbody>';
+    tableWrapEl.innerHTML = '' +
+      '<div class="ovp-pr-table-wrap">' +
+      '<table class="ovp-pr-table">' + thead + tbody + '</table>' +
+      '</div>';
+  }
+
+  function makeBarOption(ctx, state) {
+    var rawByMonth = ctx.rawByMonth || {};
+    var utils = ctx.utils || (window.OVP && window.OVP.utils) || {};
+
+    var monthsSel = (state.months || []).slice();
+    monthsSel = (utils.sortMonths ? utils.sortMonths(monthsSel) : monthsSel.sort());
+    var rows = getRowsByMonths(rawByMonth, monthsSel);
+
+    var countriesSel = (state.countries || []).slice();
+    var countryAllowSet = new Set(countriesSel);
+    var countries = COUNTRY_ORDER.filter(function (c) { return countryAllowSet.has(c); });
+
+    var agg = aggregateByCountry(rows, countryAllowSet);
+
+    var baseColor = getCssVar('--ovp-blue', '#2563eb');
+    var series = [];
+    var metricSel = (state.metrics || []).slice();
+
+    function rateFor(ctry, key) {
+      var s = agg[ctry] || { reg: 0, d0: 0, d7: 0 };
+      if (s.reg <= 0) return null;
+      return key === 'D0' ? (s.d0 / s.reg) : (s.d7 / s.reg);
+    }
+
+    function countsFor(ctry) {
+      var s = agg[ctry] || { reg: 0, d0: 0, d7: 0 };
+      return { reg: s.reg, d0: s.d0, d7: s.d7 };
+    }
+
+    var seriesOrder = [];
+    METRIC_KEYS.forEach(function (k) { if (metricSel.indexOf(k) >= 0) seriesOrder.push(k); });
+
+    for (var si = 0; si < seriesOrder.length; si++) {
+      var k = seriesOrder[si];
+      var data = countries.map(function (ctry) { return rateFor(ctry, k); });
+
+      var sOpt = {
+        name: k,
+        type: 'bar',
+        data: data,
+        barMaxWidth: 34,
+        itemStyle: { color: baseColor }
+      };
+
+      if (k === 'D7') {
+        sOpt.decal = {
+          symbol: 'rect',
+          symbolSize: 1,
+          rotation: Math.PI / 4,
+          dashArrayX: [2, 1],
+          dashArrayY: [2, 1],
+          color: 'rgba(255,255,255,0.45)'
+        };
+      }
+
+      series.push(sOpt);
+    }
+
+    return {
+      grid: { left: 56, right: 22, top: 40, bottom: 52 },
+      legend: { top: 6, left: 10, icon: 'roundRect' },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: function (params) {
+          if (!params || !params.length) return '';
+          var ctry = params[0].axisValue || '';
+          var cnt = countsFor(ctry);
+
+          var lines = [];
+          lines.push('<div style="font-weight:600;margin-bottom:4px;">' + ctry + '</div>');
+          lines.push('<div style="color:#6b7280;font-size:11px;margin-bottom:6px;">注册数：' + (utils.fmtInt ? utils.fmtInt(cnt.reg) : String(cnt.reg)) + '</div>');
+
+          for (var i = 0; i < params.length; i++) {
+            var p = params[i];
+            var k = p.seriesName;
+            var rate = p.data;
+            var payers = (k === 'D0') ? cnt.d0 : cnt.d7;
+
+            var rateTxt = (utils.fmtPct ? utils.fmtPct(rate, 2) : (rate === null ? '—' : (rate * 100).toFixed(2) + '%'));
+            lines.push(
+              '<div style="display:flex;justify-content:space-between;gap:10px;">' +
+                '<span>' + k + ' 付费率</span>' +
+                '<span>' + rateTxt + '</span>' +
+              '</div>' +
+              '<div style="color:#6b7280;font-size:11px;margin-bottom:4px;">付费人数：' + (utils.fmtInt ? utils.fmtInt(payers) : String(payers)) + '</div>'
+            );
+          }
+          return lines.join('');
+        }
+      },
+      xAxis: {
+        type: 'category',
+        data: countries,
+        axisTick: { alignWithLabel: true }
+      },
+      yAxis: {
+        type: 'value',
+        min: 0,
+        axisLabel: {
+          formatter: function (v) { return (Number(v) * 100).toFixed(0) + '%'; }
+        },
+        splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.25)' } }
+      },
+      series: series
+    };
+  }
+
+  function makeLineOption(ctx, state) {
+    var rawByMonth = ctx.rawByMonth || {};
+    var utils = ctx.utils || (window.OVP && window.OVP.utils) || {};
+
+    var monthsSel = (state.months || []).slice();
+    monthsSel = (utils.sortMonths ? utils.sortMonths(monthsSel) : monthsSel.sort());
+    var rows = getRowsByMonths(rawByMonth, monthsSel);
+
+    var countriesSel = (state.countries || []).slice();
+    var countryAllowSet = new Set(countriesSel);
+    var countries = COUNTRY_ORDER.filter(function (c) { return countryAllowSet.has(c); });
+
+    var metricSel = (state.metrics || []).slice();
+    var wantD0 = metricSel.indexOf('D0') >= 0;
+    var wantD7 = metricSel.indexOf('D7') >= 0;
+
+    var colors = [
+      getCssVar('--ovp-blue', '#2563eb'),
+      getCssVar('--ovp-yellow', '#F6C344'),
+      '#10b981',
+      '#f97316',
+      '#a855f7'
+    ];
+    var colorByCountry = {};
+    for (var i = 0; i < COUNTRY_ORDER.length; i++) {
+      colorByCountry[COUNTRY_ORDER[i]] = colors[i % colors.length];
+    }
+
+    var series = [];
+    var legendData = countries.slice();
+
+    for (var ci = 0; ci < countries.length; ci++) {
+      var ctry = countries[ci];
+      var ds = buildDailySeries(rows, ctry);
+
+      if (wantD0) {
+        series.push({
+          id: ctry + '-D0',
+          name: ctry,
+          type: 'line',
+          showSymbol: false,
+          connectNulls: true,
+          smooth: false,
+          data: ds.d0Points,
+          itemStyle: { color: colorByCountry[ctry] },
+          lineStyle: { width: 2, type: 'dashed' }
+        });
+      }
+
+      if (wantD7) {
+        series.push({
+          id: ctry + '-D7',
+          name: ctry,
+          type: 'line',
+          showSymbol: false,
+          connectNulls: true,
+          smooth: false,
+          data: ds.d7Points,
+          itemStyle: { color: colorByCountry[ctry] },
+          lineStyle: { width: 2, type: 'solid' }
+        });
+      }
+    }
+
+    return {
+      grid: { left: 56, right: 22, top: 44, bottom: 52 },
+      legend: { top: 6, left: 10, data: legendData, type: 'scroll' },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'line' },
+        formatter: function (params) {
+          if (!params || !params.length) return '';
+          var ts = params[0].value ? params[0].value[0] : params[0].axisValue;
+          var d = new Date(ts);
+          var yyyy = d.getUTCFullYear();
+          var mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+          var dd = String(d.getUTCDate()).padStart(2, '0');
+          var dateLabel = yyyy + '-' + mm + '-' + dd;
+
+          var bucket = {};
+          for (var i = 0; i < params.length; i++) {
+            var p = params[i];
+            var c = p.seriesName;
+            if (!bucket[c]) bucket[c] = {};
+            var id = String(p.seriesId || '');
+            var k = id.indexOf('-D0') >= 0 ? 'D0' : (id.indexOf('-D7') >= 0 ? 'D7' : '');
+            var v = p.value && p.value.length ? p.value[1] : p.data;
+            bucket[c][k] = v;
+          }
+
+          var lines = [];
+          lines.push('<div style="font-weight:600;margin-bottom:4px;">' + dateLabel + '</div>');
+          lines.push('<div style="color:#6b7280;font-size:11px;margin-bottom:6px;">虚线=D0，实线=D7</div>');
+
+          for (var j = 0; j < COUNTRY_ORDER.length; j++) {
+            var ctry = COUNTRY_ORDER[j];
+            if (!bucket[ctry]) continue;
+
+            var d0 = bucket[ctry].D0;
+            var d7 = bucket[ctry].D7;
+            var parts = [];
+            if (wantD0) parts.push('D0 ' + (utils.fmtPct ? utils.fmtPct(d0, 2) : (d0 === null ? '—' : (d0 * 100).toFixed(2) + '%')));
+            if (wantD7) parts.push('D7 ' + (utils.fmtPct ? utils.fmtPct(d7, 2) : (d7 === null ? '—' : (d7 * 100).toFixed(2) + '%')));
+
+            lines.push(
+              '<div style="display:flex;justify-content:space-between;gap:10px;">' +
+                '<span style="font-weight:600;color:' + colorByCountry[ctry] + ';">' + ctry + '</span>' +
+                '<span>' + parts.join(' · ') + '</span>' +
+              '</div>'
+            );
+          }
+
+          return lines.join('');
+        }
+      },
+      xAxis: {
+        type: 'time',
+        axisLabel: {
+          formatter: function (v) {
+            var d = new Date(v);
+            var mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+            var dd = String(d.getUTCDate()).padStart(2, '0');
+            return mm + '-' + dd;
+          }
+        }
+      },
+      yAxis: {
+        type: 'value',
+        min: 0,
+        axisLabel: {
+          formatter: function (v) { return (Number(v) * 100).toFixed(0) + '%'; }
+        },
+        splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.25)' } }
+      },
+      series: series
+    };
   }
 
   function renderModule(ctx) {
-    ensureStyle();
+    var mountEl = ctx.mountEl;
+    var utils = ctx.utils || (window.OVP && window.OVP.utils) || {};
+    var monthsAll = Array.isArray(ctx.months) ? ctx.months.slice() : [];
+    monthsAll = (utils.sortMonths ? utils.sortMonths(monthsAll) : monthsAll.sort());
+    var latestMonth = ctx.latestMonth || (monthsAll.length ? monthsAll[monthsAll.length - 1] : null);
 
-    const mountEl = ctx && ctx.mountEl;
-    const rawByMonth = (ctx && ctx.rawByMonth) || {};
-    const monthsAll = Array.isArray(ctx && ctx.months) ? ctx.months.slice() : [];
-    const latestMonth = (ctx && ctx.latestMonth) || (monthsAll.length ? monthsAll[monthsAll.length - 1] : null);
-    const utils = ctx && ctx.utils;
-
-    const countriesAll = COUNTRY_ORDER.filter((c) => true); // 固定国家顺序
+    injectStylesOnce();
 
     if (!mountEl) return;
+    if (!window.echarts) {
+      mountEl.innerHTML = '<div class="ovp-alert">ECharts 未加载：请检查 index.html 是否正确引入。</div>';
+      return;
+    }
 
-    const monthOptions = (monthsAll.length ? monthsAll : (latestMonth ? [latestMonth] : []))
-      .map((m) => ({ value: m, label: monthLabel(m) }));
-
-    const countryOptions = countriesAll.map((c) => ({ value: c, label: c }));
-    const metricOptions = METRIC_DEFS.map((m) => ({ value: m.key, label: m.key }));
-    const viewOptions = [
-      { value: 'bar', label: '月度柱状图' },
-      { value: 'line', label: '日级折线图' },
-    ];
-
-    // Default state
-    const state = {
-      months: latestMonth ? [String(latestMonth)] : (monthsAll.length ? [String(monthsAll[monthsAll.length - 1])] : []),
-      countries: countriesAll.slice(),
-      metrics: ['D0', 'D7'],
-      view: 'bar',
+    var state = {
+      months: latestMonth ? [latestMonth] : (monthsAll.length ? [monthsAll[monthsAll.length - 1]] : []),
+      countries: COUNTRY_ORDER.slice(),
+      metrics: METRIC_KEYS.slice(),
+      chartType: 'bar'
     };
 
-    const moduleUid = `ovp-${MODULE_ID}-${Math.random().toString(16).slice(2)}`;
+    var chartId = 'chart-' + MODULE_ID + '-' + Math.random().toString(16).slice(2);
+    var noteId = 'chart-note-' + MODULE_ID + '-' + Math.random().toString(16).slice(2);
+    var insightId = 'insight-' + MODULE_ID + '-' + Math.random().toString(16).slice(2);
+    var tableId = 'table-' + MODULE_ID + '-' + Math.random().toString(16).slice(2);
+    var filtersId = 'filters-' + MODULE_ID + '-' + Math.random().toString(16).slice(2);
 
-    mountEl.innerHTML = `
-      <div class="ovp-payrate" id="${moduleUid}">
-        <div class="ovp-payrate-filters">
-          <div class="ovp-payrate-group">
-            <div class="ovp-payrate-group-title"><span>月份</span><span class="ovp-payrate-help" id="hint-month-${MODULE_ID}"></span></div>
-            <div class="ovp-payrate-options" id="filters-month-${MODULE_ID}">
-              ${buildCheckboxPills({ name: `${moduleUid}-month`, options: monthOptions, selectedSet: new Set(state.months), type: 'checkbox' })}
-            </div>
-          </div>
+    mountEl.innerHTML = '' +
+      '<div class="ovp-module-stack">' +
+        '<div class="ovp-pr-filters" id="' + filtersId + '"></div>' +
+        '<div>' +
+          '<div class="ovp-chart" id="' + chartId + '" style="height:360px;"></div>' +
+          '<div class="ovp-chart-note" id="' + noteId + '"></div>' +
+        '</div>' +
+        '<div id="' + tableId + '"></div>' +
+        '<div class="ovp-insight" id="' + insightId + '">文案待填写：./insights.js</div>' +
+      '</div>';
 
-          <div class="ovp-payrate-group">
-            <div class="ovp-payrate-group-title"><span>国家</span></div>
-            <div class="ovp-payrate-options" id="filters-country-${MODULE_ID}">
-              ${buildCheckboxPills({ name: `${moduleUid}-country`, options: countryOptions, selectedSet: new Set(state.countries), type: 'checkbox' })}
-            </div>
-          </div>
+    var filtersEl = $(mountEl, '#' + filtersId);
+    var chartEl = $(mountEl, '#' + chartId);
+    var noteEl = $(mountEl, '#' + noteId);
+    var tableWrapEl = $(mountEl, '#' + tableId);
+    var insightEl = $(mountEl, '#' + insightId);
 
-          <div class="ovp-payrate-group">
-            <div class="ovp-payrate-group-title"><span>图表</span></div>
-            <div class="ovp-payrate-options" id="filters-view-${MODULE_ID}">
-              ${buildCheckboxPills({ name: `${moduleUid}-view`, options: viewOptions, selectedSet: new Set([state.view]), type: 'radio' })}
-            </div>
-          </div>
+    function groupHtml(label, groupKey, options, selected, single) {
+      var selectedSet = new Set(Array.isArray(selected) ? selected : [selected]);
+      var opts = options.map(function (opt) {
+        var val = String(opt.value);
+        var id = 'ovp-' + MODULE_ID + '-' + groupKey + '-' + toSafeId(val);
+        var checked = selectedSet.has(val);
+        var dataSingleAttr = single ? ' data-single="1"' : '';
+        return '' +
+          '<label class="ovp-pr-opt" for="' + id + '">' +
+            '<input type="checkbox" id="' + id + '" data-group="' + groupKey + '" value="' + val + '"' + (checked ? ' checked' : '') + dataSingleAttr + ' />' +
+            '<span>' + opt.label + '</span>' +
+          '</label>';
+      }).join('');
 
-          <div class="ovp-payrate-group">
-            <div class="ovp-payrate-group-title"><span>口径</span></div>
-            <div class="ovp-payrate-options" id="filters-metric-${MODULE_ID}">
-              ${buildCheckboxPills({ name: `${moduleUid}-metric`, options: metricOptions, selectedSet: new Set(state.metrics), type: 'checkbox' })}
-            </div>
-            <div class="ovp-payrate-help">D0：首日付费人数/注册；D7：7 日内付费人数/注册</div>
-          </div>
-        </div>
-
-        <div class="ovp-chart" id="chart-${moduleUid}" style="height:360px;"></div>
-        <div class="ovp-chart-note" id="chart-note-${moduleUid}"></div>
-
-        <div class="ovp-payrate-table-wrap" id="table-wrap-${moduleUid}">
-          <div class="ovp-payrate-empty" id="table-empty-${moduleUid}" style="display:none;"></div>
-          <table class="ovp-payrate-table" id="table-${moduleUid}"></table>
-        </div>
-
-        <div class="ovp-insight is-empty" id="insight-${moduleUid}">文案待填写：./insights.js</div>
-      </div>
-    `;
-
-    const rootEl = mountEl.querySelector(`#${moduleUid}`);
-    const chartEl = mountEl.querySelector(`#chart-${moduleUid}`);
-    const chartNoteEl = mountEl.querySelector(`#chart-note-${moduleUid}`);
-    const tableEl = mountEl.querySelector(`#table-${moduleUid}`);
-    const tableEmptyEl = mountEl.querySelector(`#table-empty-${moduleUid}`);
-    const insightEl = mountEl.querySelector(`#insight-${moduleUid}`);
-    const hintMonthEl = mountEl.querySelector(`#hint-month-${MODULE_ID}`);
-
-    // ECharts init
-    const canChart = !!(window.echarts && chartEl);
-    const chart = canChart ? echarts.init(chartEl) : null;
-
-    const countryColors = pickColors();
-    const barBaseColor = getThemeColor('--ovp-blue', '#2563eb');
-
-    function readCheckedValues(selector) {
-      return Array.from(rootEl.querySelectorAll(selector))
-        .filter((el) => el && el.checked)
-        .map((el) => String(el.value));
+      return '' +
+        '<div class="ovp-pr-group">' +
+          '<div class="ovp-pr-label">' + label + '</div>' +
+          '<div class="ovp-pr-options">' + opts + '</div>' +
+        '</div>';
     }
 
-    function syncInputs(groupName, valuesSet) {
-      const nodes = rootEl.querySelectorAll(`input[name="${groupName}"]`);
-      for (const n of nodes) n.checked = valuesSet.has(String(n.value));
+    function renderFilters() {
+      var monthOpts = monthsAll.map(function (m) { return { value: m, label: m }; });
+      var countryOpts = COUNTRY_ORDER.map(function (c) { return { value: c, label: c }; });
+      var chartTypeOpts = [
+        { value: 'bar', label: '月度柱状图' },
+        { value: 'line', label: '日级折线图' }
+      ];
+      var metricOpts = [
+        { value: 'D0', label: 'D0' },
+        { value: 'D7', label: 'D7' }
+      ];
+
+      filtersEl.innerHTML = '' +
+        groupHtml('月份', 'months', monthOpts, state.months, false) +
+        groupHtml('国家', 'countries', countryOpts, state.countries, false) +
+        groupHtml('图形', 'chartType', chartTypeOpts, [state.chartType], true) +
+        groupHtml('数据', 'metrics', metricOpts, state.metrics, false);
     }
 
-    function renderInsight(selectedMonthsSorted) {
-      const src = (window.OVP && OVP.insights) ? OVP.insights : {};
-      const monthSpecific = [];
-      for (const m of selectedMonthsSorted) {
-        const t = (src[m] && src[m][MODULE_ID]) ? String(src[m][MODULE_ID]).trim() : '';
-        if (t) monthSpecific.push({ m, t });
+    function getCheckedValues(groupKey) {
+      return $all(filtersEl, 'input[data-group="' + groupKey + '"]').filter(function (i) { return i.checked; }).map(function (i) { return i.value; });
+    }
+
+    function syncGroup(groupKey, selectedValues) {
+      var selectedSet = new Set(Array.isArray(selectedValues) ? selectedValues : [selectedValues]);
+      $all(filtersEl, 'input[data-group="' + groupKey + '"]').forEach(function (i) {
+        i.checked = selectedSet.has(i.value);
+      });
+    }
+
+    function ensureAtLeastOne(groupKey, fallbackValues) {
+      var cur = getCheckedValues(groupKey);
+      if (cur.length) return cur;
+      var fb = Array.isArray(fallbackValues) ? fallbackValues.slice() : [fallbackValues];
+      syncGroup(groupKey, fb);
+      return fb;
+    }
+
+    renderFilters();
+
+    var chart = window.echarts.init(chartEl, null, { renderer: 'canvas' });
+
+    var ro = null;
+    if (window.ResizeObserver) {
+      ro = new ResizeObserver(function () { chart.resize(); });
+      ro.observe(chartEl);
+    } else {
+      window.addEventListener('resize', function () { chart.resize(); });
+    }
+
+    function update() {
+      var monthsSel = ensureAtLeastOne('months', state.months.length ? state.months : (latestMonth ? [latestMonth] : monthsAll.slice(0, 1)));
+      var countriesSel = ensureAtLeastOne('countries', state.countries.length ? state.countries : COUNTRY_ORDER.slice());
+      var metricsSel = ensureAtLeastOne('metrics', state.metrics.length ? state.metrics : METRIC_KEYS.slice());
+
+      var ct = getCheckedValues('chartType');
+      if (!ct.length) {
+        syncGroup('chartType', [state.chartType]);
+        ct = [state.chartType];
+      } else if (ct.length > 1) {
+        ct = [ct[ct.length - 1]];
+        syncGroup('chartType', ct);
       }
+      var chartType = ct[0];
 
-      let out = '';
-      if (monthSpecific.length) {
-        out = monthSpecific
-          .map(({ m, t }) => `${monthLabel(m)}：\n${t}`.trim())
-          .join('\n\n');
+      state.months = monthsSel;
+      state.countries = countriesSel;
+      state.metrics = metricsSel;
+      state.chartType = chartType;
+
+      var scope = computeScopeLabel(monthsSel);
+      var noteParts = [
+        '<div class="ovp-pr-kpi">',
+        '<span class="tag">月份：' + scope + '</span>',
+        '<span class="tag">国家：' + COUNTRY_ORDER.filter(function (c) { return countriesSel.indexOf(c) >= 0; }).join(',') + '</span>',
+        '<span class="tag">数据：' + metricsSel.join('/') + '</span>',
+        '<span class="tag">口径：付费率=D0/D7 unique_purchase ÷ registration</span>',
+        '</div>'
+      ];
+      noteEl.innerHTML = noteParts.join('');
+
+      var option = (chartType === 'line')
+        ? makeLineOption(ctx, state)
+        : makeBarOption(ctx, state);
+
+      chart.setOption(option, true);
+
+      renderTable(tableWrapEl, ctx, state);
+
+      var monthsSorted = (utils.sortMonths ? utils.sortMonths(monthsSel.slice()) : monthsSel.slice().sort());
+      var anchorMonth = monthsSorted.length ? monthsSorted[monthsSorted.length - 1] : latestMonth;
+
+      if (window.OVP && window.OVP.ui && typeof window.OVP.ui.renderInsight === 'function') {
+        window.OVP.ui.renderInsight({ moduleId: MODULE_ID, month: anchorMonth, el: insightEl });
       } else {
-        const def = (src.__default__ && src.__default__[MODULE_ID]) ? String(src.__default__[MODULE_ID]).trim() : '';
-        out = def;
-      }
-
-      if (!out) {
-        insightEl.textContent = '文案待填写：./insights.js';
-        insightEl.classList.add('is-empty');
-        return;
-      }
-
-      insightEl.textContent = out;
-      insightEl.classList.remove('is-empty');
-    }
-
-    function renderTable(selectedMonthsSorted, selectedCountriesOrdered, selectedMetricsOrdered) {
-      if (!selectedMonthsSorted.length) {
-        tableEl.innerHTML = '';
-        tableEmptyEl.style.display = '';
-        tableEmptyEl.textContent = '未选择月份：请至少勾选 1 个月份。';
-        return;
-      }
-      if (!selectedCountriesOrdered.length) {
-        tableEl.innerHTML = '';
-        tableEmptyEl.style.display = '';
-        tableEmptyEl.textContent = '未选择国家：请至少勾选 1 个国家。';
-        return;
-      }
-      if (!selectedMetricsOrdered.length) {
-        tableEl.innerHTML = '';
-        tableEmptyEl.style.display = '';
-        tableEmptyEl.textContent = '未选择口径：请至少勾选 D0 或 D7。';
-        return;
-      }
-
-      tableEmptyEl.style.display = 'none';
-
-      // Pre-calc per month once
-      const byMonth = {};
-      for (const m of selectedMonthsSorted) {
-        byMonth[m] = calcMonthlyRates(rawByMonth, m, countriesAll);
-      }
-
-      const ths = [];
-      ths.push('<th>国家</th>');
-      for (const m of selectedMonthsSorted) {
-        for (const k of selectedMetricsOrdered) {
-          ths.push(`<th>${monthLabel(m)}自然量${k} 付费率</th>`);
+        try {
+          var t = (window.OVP && typeof window.OVP.getInsight === 'function') ? window.OVP.getInsight(MODULE_ID, anchorMonth) : '';
+          insightEl.textContent = (t || '').trim() || '文案待填写：./insights.js';
+        } catch (_e) {
+          insightEl.textContent = '文案待填写：./insights.js';
         }
       }
-
-      const rowsHtml = [];
-      for (const c of selectedCountriesOrdered) {
-        const tds = [];
-        tds.push(`<td>${c}</td>`);
-        for (const m of selectedMonthsSorted) {
-          const agg = (byMonth[m] && byMonth[m][c]) ? byMonth[m][c] : null;
-          const d0 = agg ? agg.D0_rate : null;
-          const d7 = agg ? agg.D7_rate : null;
-          for (const k of selectedMetricsOrdered) {
-            const v = (k === 'D0') ? d0 : d7;
-            tds.push(`<td>${fmtPct(utils, v)}</td>`);
-          }
-        }
-        rowsHtml.push(`<tr>${tds.join('')}</tr>`);
-      }
-
-      tableEl.innerHTML = `
-        <thead><tr>${ths.join('')}</tr></thead>
-        <tbody>${rowsHtml.join('')}</tbody>
-      `;
     }
 
-    function renderBar(focusMonth, selectedCountriesOrdered, selectedMetricsOrdered) {
-      if (!chart) return;
+    filtersEl.addEventListener('change', function (e) {
+      var t = e.target;
+      if (!t || t.tagName !== 'INPUT') return;
 
-      const agg = calcMonthlyRates(rawByMonth, focusMonth, countriesAll);
+      var groupKey = t.getAttribute('data-group');
+      if (!groupKey) return;
 
-      const x = selectedCountriesOrdered;
-      const d0 = x.map((c) => (agg[c] ? agg[c].D0_rate : null));
-      const d7 = x.map((c) => (agg[c] ? agg[c].D7_rate : null));
-
-      const series = [];
-      const showD0 = selectedMetricsOrdered.includes('D0');
-      const showD7 = selectedMetricsOrdered.includes('D7');
-
-      if (showD0) {
-        series.push({
-          name: 'D0',
-          type: 'bar',
-          barMaxWidth: 36,
-          itemStyle: { color: barBaseColor },
-          emphasis: { focus: 'series' },
-          data: d0,
+      if (t.getAttribute('data-single') === '1') {
+        $all(filtersEl, 'input[data-group="' + groupKey + '"]').forEach(function (i) {
+          i.checked = (i === t);
         });
       }
 
-      if (showD7) {
-        series.push({
-          name: 'D7',
-          type: 'bar',
-          barMaxWidth: 36,
-          itemStyle: {
-            color: barBaseColor,
-            decal: {
-              symbol: 'rect',
-              symbolSize: 2,
-              dashArrayX: [1, 0],
-              dashArrayY: [2, 0],
-              rotation: Math.PI / 4,
-              color: 'rgba(255,255,255,0.55)',
-            },
-          },
-          emphasis: { focus: 'series' },
-          data: d7,
-        });
-      }
-
-      chart.setOption(
-        {
-          grid: { left: 44, right: 18, top: 44, bottom: 44, containLabel: true },
-          legend: { top: 10, left: 0, icon: 'roundRect' },
-          tooltip: {
-            trigger: 'axis',
-            axisPointer: { type: 'shadow' },
-            valueFormatter: (v) => (Number.isFinite(Number(v)) ? `${(Number(v) * 100).toFixed(2)}%` : '—'),
-          },
-          xAxis: {
-            type: 'category',
-            data: x,
-            axisTick: { alignWithLabel: true },
-            axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.75)' } },
-          },
-          yAxis: {
-            type: 'value',
-            axisLabel: { formatter: (v) => `${(Number(v) * 100).toFixed(0)}%` },
-            splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.25)' } },
-          },
-          series,
-        },
-        { notMerge: true, lazyUpdate: true }
-      );
-    }
-
-    function renderLine(selectedMonthsSorted, selectedCountriesOrdered, selectedMetricsOrdered) {
-      if (!chart) return;
-
-      const showD0 = selectedMetricsOrdered.includes('D0');
-      const showD7 = selectedMetricsOrdered.includes('D7');
-
-      const { byC, dates } = buildDailyAgg(rawByMonth, selectedMonthsSorted, selectedCountriesOrdered);
-
-      const series = [];
-      for (const c of selectedCountriesOrdered) {
-        const color = countryColors[c] || barBaseColor;
-        const dayMap = byC[c] || {};
-
-        if (showD0) {
-          const data = dates.map((d) => {
-            const b = dayMap[d];
-            if (!b || b.reg <= 0) return [d, null];
-            return [d, b.d0 / b.reg];
-          });
-          series.push({
-            name: `${c} D0`,
-            type: 'line',
-            showSymbol: false,
-            connectNulls: true,
-            itemStyle: { color },
-            lineStyle: { color, width: 2, type: 'dashed' },
-            data,
-          });
-        }
-
-        if (showD7) {
-          const data = dates.map((d) => {
-            const b = dayMap[d];
-            if (!b || b.reg <= 0) return [d, null];
-            return [d, b.d7 / b.reg];
-          });
-          series.push({
-            name: `${c} D7`,
-            type: 'line',
-            showSymbol: false,
-            connectNulls: true,
-            itemStyle: { color },
-            lineStyle: { color, width: 2, type: 'solid' },
-            data,
-          });
-        }
-      }
-
-      chart.setOption(
-        {
-          grid: { left: 54, right: 18, top: 44, bottom: 56, containLabel: true },
-          legend: { top: 10, left: 0, icon: 'roundRect' },
-          tooltip: {
-            trigger: 'axis',
-            axisPointer: { type: 'line' },
-            valueFormatter: (v) => (Number.isFinite(Number(v)) ? `${(Number(v) * 100).toFixed(2)}%` : '—'),
-          },
-          xAxis: {
-            type: 'time',
-            axisLabel: {
-              formatter: (value) => {
-                // value is timestamp
-                const d = new Date(value);
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                return `${mm}-${dd}`;
-              },
-            },
-            axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.75)' } },
-            splitLine: { show: false },
-          },
-          yAxis: {
-            type: 'value',
-            axisLabel: { formatter: (v) => `${(Number(v) * 100).toFixed(0)}%` },
-            splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.25)' } },
-          },
-          dataZoom: [
-            { type: 'inside', throttle: 50 },
-            { type: 'slider', height: 18, bottom: 18 },
-          ],
-          series,
-        },
-        { notMerge: true, lazyUpdate: true }
-      );
-    }
-
-    function rerender() {
-      const selectedMonths = readCheckedValues(`input[name="${moduleUid}-month"]`);
-      const selectedCountries = readCheckedValues(`input[name="${moduleUid}-country"]`);
-      const selectedMetrics = readCheckedValues(`input[name="${moduleUid}-metric"]`);
-      const selectedView = readCheckedValues(`input[name="${moduleUid}-view"]`);
-
-      // Enforce >=1 for months/countries/metrics
-      const monthsFixed = selectedMonths.length ? uniq(selectedMonths) : (state.months.length ? state.months.slice() : (latestMonth ? [String(latestMonth)] : []));
-      const countriesFixed = selectedCountries.length ? uniq(selectedCountries) : countriesAll.slice();
-      const metricsFixed = selectedMetrics.length ? uniq(selectedMetrics) : ['D0', 'D7'];
-      const viewFixed = selectedView.length ? String(selectedView[0]) : state.view;
-
-      // Sync UI if any auto-fix happened
-      syncInputs(`${moduleUid}-month`, new Set(monthsFixed));
-      syncInputs(`${moduleUid}-country`, new Set(countriesFixed));
-      syncInputs(`${moduleUid}-metric`, new Set(metricsFixed));
-      syncInputs(`${moduleUid}-view`, new Set([viewFixed]));
-
-      state.months = monthsFixed;
-      state.countries = countriesFixed;
-      state.metrics = metricsFixed;
-      state.view = viewFixed;
-
-      const monthsSorted = (utils && typeof utils.sortMonths === 'function') ? utils.sortMonths(monthsFixed) : monthsFixed.slice().sort();
-      const countriesOrdered = COUNTRY_ORDER.filter((c) => countriesFixed.includes(c));
-      const metricsOrdered = METRIC_DEFS.map((m) => m.key).filter((k) => metricsFixed.includes(k));
-
-      // Small hint: bar chart uses latest selected month
-      const focusMonth = monthsSorted.length ? monthsSorted[monthsSorted.length - 1] : latestMonth;
-      if (hintMonthEl) {
-        hintMonthEl.textContent = (state.view === 'bar' && focusMonth)
-          ? `柱状图展示：${monthLabel(focusMonth)}`
-          : '';
-      }
-
-      // Chart
-      if (!chart) {
-        chartEl.classList.add('is-empty');
-        chartEl.innerHTML = `
-          <div class="ovp-payrate-empty">
-            未检测到 echarts：请确认 index.html 已加载图表库。
-          </div>
-        `;
-      } else if (!focusMonth) {
-        chart.clear();
-        chartNoteEl.textContent = '未检测到可用月份 key：请检查 data.js 的 RAW_ORGANIC_BY_MONTH。';
-      } else if (state.view === 'bar') {
-        renderBar(focusMonth, countriesOrdered, metricsOrdered);
-        chartNoteEl.textContent = `柱状图口径：${monthLabel(focusMonth)} 月聚合付费率；D7 柱用斜线阴影区分。`;
-      } else {
-        renderLine(monthsSorted, countriesOrdered, metricsOrdered);
-        chartNoteEl.textContent = `折线图口径：所选月份的日级付费率；D0 为虚线、D7 为实线；同国家共用颜色。`;
-      }
-
-      // Table
-      renderTable(monthsSorted, countriesOrdered, metricsOrdered);
-
-      // Insight
-      renderInsight(monthsSorted);
-    }
-
-    // Wire events
-    rootEl.addEventListener('change', (e) => {
-      const t = e && e.target;
-      if (!t || !t.name) return;
-      if (
-        t.name === `${moduleUid}-month` ||
-        t.name === `${moduleUid}-country` ||
-        t.name === `${moduleUid}-metric` ||
-        t.name === `${moduleUid}-view`
-      ) {
-        rerender();
-      }
+      update();
     });
 
-    // Resize
-    if (chart) {
-      const onResize = () => chart.resize();
-      window.addEventListener('resize', onResize, { passive: true });
-    }
-
-    // First render
-    rerender();
+    update();
   }
 
-  // Register
-  if (window.OVP && typeof OVP.registerModule === 'function') {
-    OVP.registerModule({
-      id: MODULE_ID,
-      title: TITLE,
-      subtitle: SUBTITLE,
-      render: renderModule,
-    });
+  if (!window.OVP || typeof window.OVP.registerModule !== 'function') {
+    window.OVP = window.OVP || {};
+    window.OVP.modules = window.OVP.modules || [];
+    window.OVP.registerModule = window.OVP.registerModule || function (m) { window.OVP.modules.push(m); };
   }
+
+  window.OVP.registerModule({
+    id: MODULE_ID,
+    title: 'D0 / D7 付费率',
+    subtitle: '支持按月汇总柱状 / 按日折线；筛选器为勾选方式（非下拉）。',
+    render: renderModule
+  });
 })();
