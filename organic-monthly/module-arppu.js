@@ -609,6 +609,35 @@
       }
     }
 
+        // 多选月份：把每个月的文案拼接展示
+    function renderInsightsForMonths(monthsArr, yearsSet){
+      if (!insightEl) return;
+
+      const getter = (window.OVP && typeof OVP.getInsight === 'function') ? OVP.getInsight : null;
+      const ms = Array.isArray(monthsArr) ? monthsArr : [];
+
+      if (!getter || !ms.length){
+        insightEl.textContent = '文案待填写：./insights.js';
+        insightEl.classList.add('is-empty');
+        return;
+      }
+
+      const blocks = [];
+      let hasAny = false;
+
+      for (const m of ms){
+        const raw = getter(MODULE_ID, m) || '';
+        const text = String(raw || '').trim();
+        if (text) hasAny = true;
+
+        const title = `${monthLabel(m, yearsSet)}（${m}）`;
+        blocks.push(text ? `${title}\n${text}` : `${title}\n（该月暂无文案）`);
+      }
+
+      insightEl.textContent = blocks.join('\n\n--------------------------------\n\n');
+      insightEl.classList.toggle('is-empty', !hasAny);
+    }
+
     function update(){
       const sel = getSelections();
       const yearsSetSel = yearsOfMonths(sel.months);
@@ -626,7 +655,7 @@
         noteEl.textContent = '筛选条件为空：至少选 1 个月份、1 个国家、1 个口径（D0/D7）。';
         renderTable({ el: tableEl, months: sel.months, countries: sel.countries, metricsSelected: sel.metrics, monthlyAggByMonth, utils });
         insightNoteEl.textContent = '';
-        renderInsightFor(lastMonth);
+         renderInsightsForMonths(sel.months.length ? sel.months : [lastMonth], yearsSetSel);
         return;
       }
 
@@ -666,11 +695,12 @@
       // 3) Table
       renderTable({ el: tableEl, months: sel.months, countries: sel.countries, metricsSelected: sel.metrics, monthlyAggByMonth, utils });
 
-      // 4) Insight
-      insightNoteEl.textContent = lastMonth
-        ? `数据解读月份：${monthLabel(lastMonth, yearsSetSel)}（取已选月份中最新）`
+            // 4) Insight：展示每一个所选月份的文案（多月拼接）
+      insightNoteEl.textContent = sel.months.length
+        ? `数据解读月份：${sel.months.map(m=>monthLabel(m, yearsSetSel)).join('、')}`
         : '';
-      renderInsightFor(lastMonth);
+      renderInsightsForMonths(sel.months, yearsSetSel);
+
     }
 
     filtersEl.addEventListener('change', function(){
