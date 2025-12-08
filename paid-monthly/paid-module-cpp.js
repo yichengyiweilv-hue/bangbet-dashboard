@@ -607,9 +607,10 @@
                     decal: {
                       symbol: "rect",
                       symbolSize: 1,
-                      dashArrayX: [1, 0],
+                      dashArrayX: [4, 2],
                       dashArrayY: [2, 2],
                       rotation: Math.PI / 4,
+                      color: 'rgba(255,255,255,0.4)',
                     },
                   }
                 : null
