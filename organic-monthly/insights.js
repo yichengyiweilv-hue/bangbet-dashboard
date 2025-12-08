@@ -18,6 +18,16 @@
 // 注意：这只是文案文件，不参与计算。
 
 const INSIGHTS_ORGANIC_MONTHLY = {
+
+   __default__: {
+    registration: ``,
+    payrate: ``,
+    arppu: ``,
+    betflow: ``,
+    playerMix: ``,
+    retention: ``,
+  },
+  
   "2025-09": {
     registration: `参考10月分析`,
     payrate: `参考10月分析`,
