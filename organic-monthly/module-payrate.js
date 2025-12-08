@@ -797,17 +797,38 @@
         c.setOption(option, true);
       }
 
-      // Insight
-      const insightMonth = chooseInsightMonth(selMonths);
-      if (insightMetaEl) insightMetaEl.textContent = insightMonth ? `月份：${insightMonth}` : '月份：—';
-      if (OVP.ui && typeof OVP.ui.renderInsight === 'function'){
-        OVP.ui.renderInsight({ moduleId: MODULE_ID, month: insightMonth, el: insightEl });
-      } else if (insightEl){
-        const text = (OVP.getInsight && typeof OVP.getInsight === 'function') ? (OVP.getInsight(MODULE_ID, insightMonth) || '') : '';
-        const t = String(text || '').trim();
-        insightEl.textContent = t || '文案待填写：./insights.js';
-        insightEl.classList.toggle('is-empty', !t);
+            // Insight：展示每一个所选月份的文案（多月拼接）
+      if (insightMetaEl){
+        insightMetaEl.textContent = selMonths.length
+          ? `月份：${selMonths.map(monthToShortLabel).join('、')}`
+          : '月份：—';
       }
+
+      if (insightEl){
+        const getter = (OVP.getInsight && typeof OVP.getInsight === 'function') ? OVP.getInsight : null;
+
+        if (!getter || !selMonths.length){
+          insightEl.textContent = '文案待填写：./insights.js';
+          insightEl.classList.add('is-empty');
+        } else {
+          // selMonths 在上面已通过 sortMonthsSafe 排序过，这里直接用
+          const items = selMonths.map(m=>{
+            const raw = getter(MODULE_ID, m) || '';
+            const text = String(raw || '').trim();
+            return { month: m, text };
+          });
+
+          const hasAny = items.some(x => x.text);
+          const blocks = items.map(({ month, text })=>{
+            const title = `${monthToShortLabel(month)}（${month}）`;
+            return text ? `${title}\n${text}` : `${title}\n（该月暂无文案）`;
+          });
+
+          insightEl.textContent = blocks.join('\n\n--------------------------------\n\n');
+          insightEl.classList.toggle('is-empty', !hasAny);
+        }
+      }
+
     }
 
     // --- Event handling ---
