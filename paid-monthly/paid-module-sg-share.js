@@ -42,7 +42,7 @@
   // D7 斜线阴影（ECharts 5 的 decal）
   const D7_DECAL = {
     symbol: "rect",
-    symbolSize: 0.3,
+    symbolSize: 0.6,
     dashArrayX: [4, 2],
     dashArrayY: [1, 0],
     rotation: Math.PI / 4,
