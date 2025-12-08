@@ -20,7 +20,7 @@
     };
 
   const MODULE_ID = "m5-player-mix";
-  const COUNTRY_ORDER = ["GH", "KE", "NG", "TZ"];
+  const COUNTRY_ORDER = ["GH", "KE", "NG", "TZ", "UG"];
   const SOURCE_OPTIONS = [
     { key: "organic", label: "自然量" },
     { key: "paid", label: "买量" },
