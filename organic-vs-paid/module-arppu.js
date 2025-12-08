@@ -1,718 +1,897 @@
-/* organic-monthly/module-arppu.js
- * 模块 3：D0 / D7 ARPPU
- * 口径：ARPPU = PURCHASE_VALUE / unique_purchase
- *
- * 交互：
- * - 顶部筛选器：月份 / 国家 / 图表类型（柱状 or 折线）/ D0 & D7（均多选，图表类型做互斥）
- * - 中间图表：
- *    - 柱状：x=国家（固定顺序 GH/KE/NG/TZ/UG），series=月份×(D0/D7)，D7 加斜线阴影，不堆叠
- *    - 折线：日级数据，按国家区分；同国家多月连成一条；D0 虚线、D7 实线，同国同色
- * - 图下表格：行=国家，列=所选月份×(D0/D7) ARPPU
- * - 文案：从 insights.js 读取 arppu，对应月份随筛选变化（多月时取最新月份）
- */
-(function(){
-  const OVP = window.OVP || {};
-  const MODULE_ID = 'arppu';
+// organic-vs-paid/module-arppu.js
+(function () {
+  window.OVP = window.OVP || {};
+  const register =
+    OVP.registerModule ||
+    function (m) {
+      (OVP.modules || (OVP.modules = [])).push(m);
+    };
 
-  const COUNTRY_ORDER = ['GH','KE','NG','TZ','UG'];
-  const METRIC_ORDER = ['D0','D7'];
+  const MODULE_ID = "m3-arppu";
+  const COUNTRIES = ["GH", "KE", "NG", "TZ", "UG"];
 
-  const PALETTE_MONTH = [
-    '#2563eb', '#f59e0b', '#16a34a', '#ef4444', '#8b5cf6', '#06b6d4',
-    '#f97316', '#64748b', '#0ea5e9', '#84cc16', '#a855f7', '#14b8a6'
-  ];
-  const PALETTE_COUNTRY = [
-    '#2563eb', '#16a34a', '#f59e0b', '#8b5cf6', '#ef4444'
-  ];
+  const ECHARTS_SRC =
+    "https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js";
 
-  function uniq(arr){
-    const out = [];
-    const seen = new Set();
-    for(const v of (Array.isArray(arr) ? arr : [])){
-      const k = String(v);
-      if(seen.has(k)) continue;
-      seen.add(k);
-      out.push(v);
+  function injectStylesOnce() {
+    const id = "ovp-m3-arppu-style";
+    if (document.getElementById(id)) return;
+
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = `
+      .ovp-m3{display:flex;flex-direction:column;gap:12px}
+      .ovp-m3 .row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+      .ovp-m3 .fg{display:flex;flex-direction:column;gap:6px;min-width:160px}
+      .ovp-m3 label{font-size:12px;color:var(--text-sub, var(--muted, #6b7280))}
+      .ovp-m3 select{
+        height:36px; padding:0 10px; border-radius:12px;
+        border:1px solid var(--border-subtle, var(--border, rgba(148,163,184,.60)));
+        background: rgba(255,255,255,.92);
+        color: var(--text-main, var(--text, #0f172a));
+        outline:none;
+      }
+      .ovp-m3 .chips{display:flex;flex-wrap:wrap;gap:6px}
+      .ovp-m3 .chip{
+        display:inline-flex;align-items:center;gap:6px;
+        padding:6px 10px;border-radius:999px;
+        border:1px solid var(--border-subtle, var(--border, rgba(148,163,184,.55)));
+        background: rgba(15,23,42,0.03);
+        color: var(--text-main, var(--text, #0f172a));
+        cursor:pointer; user-select:none;
+        font-size:12px; line-height:1;
+      }
+      .ovp-m3 .chip input{
+        width:14px;height:14px;margin:0;
+        accent-color: var(--accent-strong, #1d4ed8);
+      }
+      .ovp-m3 .chip:not(.is-on){
+        opacity:.55;
+        background: rgba(15,23,42,0.02);
+      }
+      .ovp-m3 .chip.is-on{
+        background: var(--accent-soft, rgba(37,99,235,0.12));
+        border-color: rgba(37,99,235,0.26);
+      }
+
+      .ovp-m3 .seg{
+        display:inline-flex; gap:6px; padding:4px;
+        border:1px solid var(--border-subtle, var(--border, rgba(148,163,184,.55)));
+        background: rgba(15,23,42,0.03);
+        border-radius:12px;
+      }
+      .ovp-m3 .seg button{
+        height:28px; padding:0 10px;
+        border:0; border-radius:10px;
+        background:transparent; color:var(--text-sub, var(--muted, #6b7280));
+        cursor:pointer;
+        font-size:12px;
+      }
+      .ovp-m3 .seg button[aria-pressed="true"]{
+        background: rgba(37,99,235,0.12);
+        color: var(--text-main, var(--text, #0f172a));
+      }
+
+      .ovp-m3 .hint{
+        margin-top:2px;
+        font-size:12px;color:var(--text-sub, var(--muted, #6b7280));
+        line-height:1.5;
+      }
+
+      .ovp-m3 .chart{
+        height:340px; width:100%;
+        border:1px solid var(--border-subtle, var(--border, rgba(148,163,184,.55)));
+        border-radius:12px;
+        background: rgba(255,255,255,.65);
+      }
+
+      .ovp-m3 .table-wrap{overflow:auto}
+      .ovp-m3 table{
+        width:100%;
+        border-collapse:separate; border-spacing:0;
+        border:1px solid var(--border-subtle, var(--border, rgba(148,163,184,.55)));
+        border-radius:12px; overflow:hidden;
+        background: rgba(255,255,255,.65);
+      }
+      .ovp-m3 th,.ovp-m3 td{
+        padding:10px 12px;
+        border-bottom:1px solid var(--border-subtle, var(--border, rgba(148,163,184,.45)));
+        font-size:12px;
+        white-space:nowrap;
+      }
+      .ovp-m3 th{color:var(--text-sub, var(--muted, #6b7280)); text-align:left}
+      .ovp-m3 td{color:var(--text-main, var(--text, #0f172a)); text-align:left}
+      .ovp-m3 tr:last-child td{border-bottom:0}
+      .ovp-m3 .empty{
+        padding:12px;
+        border:1px dashed var(--border-subtle, var(--border, rgba(148,163,184,.55)));
+        border-radius:12px;
+        color:var(--text-sub, var(--muted, #6b7280));
+        font-size:12px; line-height:1.6;
+        background: rgba(255,255,255,.55);
+      }
+      .ovp-m3 .subline{
+        display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
+        font-size:12px; color:var(--text-sub, var(--muted, #6b7280));
+        margin-top:-4px;
+      }
+      .ovp-m3 .subline .k{display:inline-flex; gap:6px; align-items:center}
+      .ovp-m3 .dot{width:8px;height:8px;border-radius:999px;display:inline-block}
+      .ovp-m3 .stripe{
+        width:18px;height:10px;border-radius:4px;display:inline-block;
+        border:1px solid var(--border-subtle, var(--border, rgba(148,163,184,.55)));
+        background:
+          repeating-linear-gradient(135deg,
+            rgba(15,23,42,0.20),
+            rgba(15,23,42,0.20) 2px,
+            transparent 2px,
+            transparent 5px
+          );
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function cssVar(name, fallback) {
+    try {
+      const v = getComputedStyle(document.documentElement).getPropertyValue(name);
+      if (v && String(v).trim()) return String(v).trim();
+    } catch (_e) {}
+    return fallback;
+  }
+
+  function isFiniteNumber(x) {
+    return typeof x === "number" && Number.isFinite(x);
+  }
+  function toNumber(x) {
+    if (isFiniteNumber(x)) return x;
+    const n = Number(x);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function pad2(n) {
+    const s = String(n);
+    return s.length === 1 ? "0" + s : s;
+  }
+
+  function readGlobal(name) {
+    try {
+      return Function(`return (typeof ${name} !== "undefined") ? ${name} : undefined;`)();
+    } catch (_e) {
+      return undefined;
     }
+  }
+
+  function pickKey(obj, keys) {
+    if (!obj || typeof obj !== "object") return null;
+
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      if (Object.prototype.hasOwnProperty.call(obj, k)) return k;
+    }
+
+    const map = Object.create(null);
+    for (const k of Object.keys(obj)) map[String(k).toLowerCase()] = k;
+
+    for (let i = 0; i < keys.length; i++) {
+      const want = String(keys[i]).toLowerCase();
+      if (map[want]) return map[want];
+    }
+    return null;
+  }
+
+  function normalizeMonth(input) {
+    if (window.OVP && OVP.insights && typeof OVP.insights.normalizeMonth === "function") {
+      return OVP.insights.normalizeMonth(input);
+    }
+    if (!input) return null;
+
+    if (input instanceof Date && !isNaN(input.getTime())) {
+      return input.getFullYear() + "-" + pad2(input.getMonth() + 1);
+    }
+
+    const s = String(input).trim();
+    let m = s.match(/^(\d{4})[-\/](\d{1,2})$/);
+    if (m) return m[1] + "-" + pad2(m[2]);
+
+    m = s.match(/^(\d{4})(\d{2})$/);
+    if (m) return m[1] + "-" + m[2];
+
+    m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+    if (m) return m[1] + "-" + pad2(m[2]);
+
+    return null;
+  }
+
+  function normalizeDate(input) {
+    if (!input) return null;
+
+    if (input instanceof Date && !isNaN(input.getTime())) {
+      return input.getFullYear() + "-" + pad2(input.getMonth() + 1) + "-" + pad2(input.getDate());
+    }
+
+    const s = String(input).trim();
+    const m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+    if (m) return m[1] + "-" + pad2(m[2]) + "-" + pad2(m[3]);
+    return null;
+  }
+
+  function monthValue(key) {
+    const m = String(key || "").match(/^(\d{4})-(\d{2})$/);
+    if (!m) return -1;
+    return Number(m[1]) * 100 + Number(m[2]);
+  }
+
+  function uniqueMonthsFrom(recordsA, recordsB) {
+    const set = new Set();
+    for (const r of recordsA || []) if (r && r.month) set.add(r.month);
+    for (const r of recordsB || []) if (r && r.month) set.add(r.month);
+    const arr = Array.from(set).filter(Boolean);
+    arr.sort((a, b) => monthValue(a) - monthValue(b));
+    return arr;
+  }
+
+  // 输出日维记录（供月汇总 / 日折线）
+  function normalizeDailyArppuRecords(raw) {
+    const out = [];
+    if (!raw) return out;
+
+    const push = (date, country, d0Up, d7Up, d0Val, d7Val, fallbackMonth) => {
+      const d = normalizeDate(date);
+      const m = normalizeMonth(d || fallbackMonth);
+      const c = String(country || "").toUpperCase();
+      if (!m || !COUNTRIES.includes(c)) return;
+
+      const dateFixed = d || (m + "-01");
+
+      out.push({
+        date: dateFixed,
+        month: m,
+        country: c,
+        d0_up: toNumber(d0Up) || 0,
+        d7_up: toNumber(d7Up) || 0,
+        d0_val: toNumber(d0Val) || 0,
+        d7_val: toNumber(d7Val) || 0
+      });
+    };
+
+    // unwrap wrappers
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const maybeByMonth = pickKey(raw, ["byMonth", "months", "monthMap", "dataByMonth"]);
+      if (maybeByMonth && raw[maybeByMonth] && typeof raw[maybeByMonth] === "object") {
+        return normalizeDailyArppuRecords(raw[maybeByMonth]);
+      }
+
+      const arrKey = pickKey(raw, ["data", "rows", "items", "list"]);
+      if (arrKey && Array.isArray(raw[arrKey])) return normalizeDailyArppuRecords(raw[arrKey]);
+    }
+
+    // A) array of rows
+    if (Array.isArray(raw)) {
+      if (!raw.length) return out;
+      const sample = raw[0] || {};
+      const dateKey = pickKey(sample, ["date", "day", "dt"]);
+      const monthKey = pickKey(sample, ["month", "ym", "period"]);
+      const countryKey = pickKey(sample, ["country", "geo", "cc", "market", "nation"]);
+
+      const d0UpKey = pickKey(sample, ["D0_unique_purchase", "d0_unique_purchase"]);
+      const d7UpKey = pickKey(sample, ["D7_unique_purchase", "d7_unique_purchase"]);
+      const d0ValKey = pickKey(sample, ["D0_PURCHASE_VALUE", "d0_purchase_value"]);
+      const d7ValKey = pickKey(sample, ["D7_PURCHASE_VALUE", "d7_purchase_value"]);
+
+      for (const row of raw) {
+        if (!row || typeof row !== "object") continue;
+        push(
+          dateKey ? row[dateKey] : null,
+          countryKey ? row[countryKey] : null,
+          d0UpKey ? row[d0UpKey] : null,
+          d7UpKey ? row[d7UpKey] : null,
+          d0ValKey ? row[d0ValKey] : null,
+          d7ValKey ? row[d7ValKey] : null,
+          monthKey ? row[monthKey] : null
+        );
+      }
+      return out;
+    }
+
+    // B) object keyed by month: { '2025-09': [ ... ] }
+    if (raw && typeof raw === "object") {
+      for (const k of Object.keys(raw)) {
+        const maybeMonth = normalizeMonth(k);
+        const val = raw[k];
+        if (!maybeMonth) continue;
+
+        if (Array.isArray(val)) {
+          if (!val.length) continue;
+          const sample = val[0] || {};
+          const dateKey = pickKey(sample, ["date", "day", "dt"]);
+          const countryKey = pickKey(sample, ["country", "geo", "cc", "market", "nation"]);
+          const d0UpKey = pickKey(sample, ["D0_unique_purchase", "d0_unique_purchase"]);
+          const d7UpKey = pickKey(sample, ["D7_unique_purchase", "d7_unique_purchase"]);
+          const d0ValKey = pickKey(sample, ["D0_PURCHASE_VALUE", "d0_purchase_value"]);
+          const d7ValKey = pickKey(sample, ["D7_PURCHASE_VALUE", "d7_purchase_value"]);
+
+          for (const row of val) {
+            if (!row || typeof row !== "object") continue;
+            push(
+              dateKey ? row[dateKey] : (row.date || row.day || row.dt),
+              countryKey ? row[countryKey] : row.country,
+              d0UpKey ? row[d0UpKey] : row.D0_unique_purchase,
+              d7UpKey ? row[d7UpKey] : row.D7_unique_purchase,
+              d0ValKey ? row[d0ValKey] : row.D0_PURCHASE_VALUE,
+              d7ValKey ? row[d7ValKey] : row.D7_PURCHASE_VALUE,
+              maybeMonth
+            );
+          }
+        }
+      }
+    }
+
     return out;
   }
 
-  function sumNums(xs){
-    let s = 0;
-    for(const v of xs){
-      const n = Number(v);
-      if(Number.isFinite(n)) s += n;
+  function emptyAgg() {
+    return { d0_up: 0, d7_up: 0, d0_val: 0, d7_val: 0 };
+  }
+
+  function buildDailyAggMap(records) {
+    const map = new Map();
+    for (const r of records || []) {
+      if (!r || !r.date || !r.country) continue;
+      const key = `${r.date}|${r.country}`;
+      const prev = map.get(key) || emptyAgg();
+      prev.d0_up += toNumber(r.d0_up) || 0;
+      prev.d7_up += toNumber(r.d7_up) || 0;
+      prev.d0_val += toNumber(r.d0_val) || 0;
+      prev.d7_val += toNumber(r.d7_val) || 0;
+      map.set(key, prev);
     }
-    return s;
+    return map;
   }
 
-  function getMonthLabel(month, allSelectedMonths){
-    const ms = Array.isArray(allSelectedMonths) ? allSelectedMonths : [];
-    const years = new Set(ms.map(m=>String(m).slice(0,4)));
-    if (years.size <= 1){
-      const mm = String(month).slice(5,7);
-      const mNum = String(Number(mm)); // remove leading zero
-      return `${mNum}月`;
+  function buildMonthlyAggMap(records) {
+    const map = new Map();
+    for (const r of records || []) {
+      if (!r || !r.month || !r.country) continue;
+      const key = `${r.month}|${r.country}`;
+      const prev = map.get(key) || emptyAgg();
+      prev.d0_up += toNumber(r.d0_up) || 0;
+      prev.d7_up += toNumber(r.d7_up) || 0;
+      prev.d0_val += toNumber(r.d0_val) || 0;
+      prev.d7_val += toNumber(r.d7_val) || 0;
+      map.set(key, prev);
     }
-    return String(month);
+    return map;
   }
 
-  function clampSelection(list, allowed){
-    const allow = new Set(allowed.map(String));
-    return uniq(list).map(String).filter(v=>allow.has(v));
+  function daysInMonth(monthKey) {
+    const m = String(monthKey || "").match(/^(\d{4})-(\d{2})$/);
+    if (!m) return 30;
+    const y = Number(m[1]);
+    const mm = Number(m[2]);
+    return new Date(y, mm, 0).getDate();
   }
 
-  function makeHatchDecal(){
-    return {
-      symbol: 'rect',
-      symbolSize: 2,
-      dashArrayX: [1, 0],
-      dashArrayY: [4, 3],
-      rotation: Math.PI / 4,
-      color: 'rgba(255,255,255,0.45)'
-    };
+  function buildMonthDates(monthKey) {
+    const m = String(monthKey || "").match(/^(\d{4})-(\d{2})$/);
+    if (!m) return [];
+    const y = Number(m[1]);
+    const mm = Number(m[2]);
+    const n = daysInMonth(monthKey);
+
+    const out = [];
+    for (let d = 1; d <= n; d++) out.push(`${y}-${pad2(mm)}-${pad2(d)}`);
+    return out;
   }
 
-  function fmtArppu(utils, v){
-    if (!utils || typeof utils.fmtMoney !== 'function') return (v==null ? '—' : String(v));
-    return utils.fmtMoney(v, 'USD', 2);
+  function calcArppu(agg, horizon) {
+    if (!agg) return null;
+    const isD7 = String(horizon).toUpperCase() === "D7";
+    const up = isD7 ? (toNumber(agg.d7_up) || 0) : (toNumber(agg.d0_up) || 0);
+    const val = isD7 ? (toNumber(agg.d7_val) || 0) : (toNumber(agg.d0_val) || 0);
+    if (!up || up <= 0) return null;
+    return val / up;
   }
 
-  function safeInitECharts(el){
-    if (!window.echarts || !el) return null;
-    try{
-      return window.echarts.init(el);
-    }catch(_e){
-      return null;
-    }
+  function loadScriptOnce(id, src) {
+    return new Promise((resolve, reject) => {
+      if (document.getElementById(id)) return resolve();
+      const s = document.createElement("script");
+      s.id = id;
+      s.src = src;
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error(`load failed: ${src}`));
+      document.head.appendChild(s);
+    });
   }
 
-  function computeDailyArppu(row, metric){
-    if (!row) return null;
-    const payersKey = metric === 'D7' ? 'D7_unique_purchase' : 'D0_unique_purchase';
-    const valueKey = metric === 'D7' ? 'D7_PURCHASE_VALUE' : 'D0_PURCHASE_VALUE';
-    const payers = Number(row[payersKey]);
-    const value = Number(row[valueKey]);
-    if (!Number.isFinite(payers) || payers <= 0) return null;
-    if (!Number.isFinite(value)) return null;
-    return value / payers;
+  function loadECharts() {
+    if (window.echarts) return Promise.resolve(window.echarts);
+    return loadScriptOnce("ovp-echarts", ECHARTS_SRC).then(() => {
+      if (!window.echarts) throw new Error("echarts not available");
+      return window.echarts;
+    });
   }
 
-  function aggregateMonthlyArppu(rows, metric){
-    const payersKey = metric === 'D7' ? 'D7_unique_purchase' : 'D0_unique_purchase';
-    const valueKey = metric === 'D7' ? 'D7_PURCHASE_VALUE' : 'D0_PURCHASE_VALUE';
-    const payers = sumNums(rows.map(r=>r && r[payersKey]));
-    const value = sumNums(rows.map(r=>r && r[valueKey]));
-    if (!Number.isFinite(payers) || payers <= 0) return null;
-    return value / payers;
-  }
+  register({
+    id: MODULE_ID,
+    title: "D0 / D7 ARPPU",
+    subtitle: "ARPPU = PURCHASE_VALUE / unique_purchase（D0/D7）",
+    span: "half",
 
-  function render({ mountEl, rawByMonth, months, latestMonth, utils }){
-    if (!mountEl) return;
+    render({ mountEl, organic, paid, utils }) {
+      injectStylesOnce();
 
-    const allMonths = Array.isArray(months) && months.length
-      ? months.map(String)
-      : Object.keys(rawByMonth || {}).map(String).sort((a,b)=>a.localeCompare(b));
+      const organicRaw =
+        organic ??
+        readGlobal("organicData") ??
+        readGlobal("organicMonthlyData") ??
+        readGlobal("ORGANIC_DATA") ??
+        readGlobal("RAW_ORGANIC_BY_MONTH") ??
+        readGlobal("RAW_ORGANIC") ??
+        readGlobal("ORGANIC");
 
-    const defaultMonth = (latestMonth && String(latestMonth)) || (allMonths.length ? allMonths[allMonths.length - 1] : null);
+      const paidRaw =
+        paid ??
+        readGlobal("paidData") ??
+        readGlobal("paidMonthlyData") ??
+        readGlobal("PAID_DATA") ??
+        readGlobal("RAW_PAID_BY_MONTH") ??
+        readGlobal("RAW_PAID") ??
+        readGlobal("PAID");
 
-    const state = {
-      months: defaultMonth ? [defaultMonth] : [],
-      countries: COUNTRY_ORDER.slice(),
-      chartType: 'bar', // 'bar' | 'line'
-      metrics: METRIC_ORDER.slice(), // ['D0','D7']
-    };
+      const organicRecords = normalizeDailyArppuRecords(organicRaw);
+      const paidRecords = normalizeDailyArppuRecords(paidRaw);
 
-    mountEl.innerHTML = `
-      <style>
-        .om-arppu{ display:flex; flex-direction:column; gap:12px; }
-        .om-arppu .om-filters{
-          display:flex;
-          flex-direction:column;
-          gap:10px;
-          padding:12px;
-          border:1px solid rgba(148, 163, 184, 0.60);
-          border-radius:12px;
-          background: rgba(249, 250, 251, 0.90);
-        }
-        .om-arppu .om-filter-block{ display:flex; flex-direction:column; gap:6px; }
-        .om-arppu .om-filter-row{ display:flex; flex-wrap:wrap; gap:12px; }
-        .om-arppu .om-filter-inline{ flex: 1 1 240px; display:flex; flex-direction:column; gap:6px; }
-        .om-arppu .om-filter-title{
-          font-size:11px;
-          color: var(--muted);
-          letter-spacing: .2px;
-        }
-        .om-arppu .om-options{
-          display:flex;
-          flex-wrap:wrap;
-          gap:8px;
-        }
-        .om-arppu .om-check{
-          display:inline-flex;
-          align-items:center;
-          gap:8px;
-          padding:6px 10px;
-          border:1px solid rgba(148, 163, 184, 0.55);
-          border-radius:999px;
-          background:#ffffff;
-          cursor:pointer;
-          user-select:none;
-          font-size:12px;
-          color: var(--text);
-        }
-        .om-arppu .om-check input{ transform: translateY(0.5px); }
-        .om-arppu .om-check.is-active{
-          border-color: rgba(37, 99, 235, 0.55);
-          box-shadow: 0 8px 18px rgba(37, 99, 235, 0.10);
-        }
-        .om-arppu .om-chart-wrap{ display:flex; flex-direction:column; gap:8px; }
-        .om-arppu .om-table-wrap{
-          border:1px solid rgba(148, 163, 184, 0.60);
-          border-radius:12px;
-          background:#ffffff;
-          overflow:auto;
-        }
-        .om-arppu table.om-table{
-          width:100%;
-          border-collapse:separate;
-          border-spacing:0;
-          min-width: 620px;
-        }
-        .om-arppu table.om-table th,
-        .om-arppu table.om-table td{
-          padding:10px 10px;
-          font-size:12px;
-          border-bottom:1px solid rgba(148, 163, 184, 0.35);
-          white-space:nowrap;
-        }
-        .om-arppu table.om-table thead th{
-          position:sticky;
-          top:0;
-          background: rgba(249, 250, 251, 0.95);
-          z-index:2;
-          color: var(--text);
-          font-weight: 600;
-        }
-        .om-arppu table.om-table tbody tr:hover td{
-          background: rgba(37, 99, 235, 0.04);
-        }
-        .om-arppu table.om-table th:first-child,
-        .om-arppu table.om-table td:first-child{
-          position:sticky;
-          left:0;
-          background:#ffffff;
-          z-index:1;
-          font-weight:600;
-        }
-        .om-arppu table.om-table thead th:first-child{
-          background: rgba(249, 250, 251, 0.95);
-          z-index:3;
-        }
-        .om-arppu .om-insight-head{
-          display:flex;
-          align-items:flex-end;
-          justify-content:space-between;
-          gap:10px;
-          margin-bottom:6px;
-        }
-        .om-arppu .om-insight-title{
-          font-size:12px;
-          font-weight:600;
-          color: var(--text);
-        }
-        .om-arppu .om-insight-meta{
-          font-size:11px;
-          color: var(--muted);
-        }
-      </style>
-
-      <div class="om-arppu">
-        <div class="om-filters">
-          <div class="om-filter-block">
-            <div class="om-filter-title">月份（多选）</div>
-            <div class="om-options" id="om-arppu-months"></div>
-          </div>
-
-          <div class="om-filter-block">
-            <div class="om-filter-title">国家（多选）</div>
-            <div class="om-options" id="om-arppu-countries"></div>
-          </div>
-
-          <div class="om-filter-row">
-            <div class="om-filter-inline">
-              <div class="om-filter-title">图表（互斥）</div>
-              <div class="om-options" id="om-arppu-chartType"></div>
-            </div>
-
-            <div class="om-filter-inline">
-              <div class="om-filter-title">口径（多选）</div>
-              <div class="om-options" id="om-arppu-metrics"></div>
+      const months = uniqueMonthsFrom(organicRecords, paidRecords);
+      if (!months.length) {
+        mountEl.innerHTML = `
+          <div class="ovp-m3">
+            <div class="empty">
+              没读到 ARPPU 所需字段：请检查数据源是否包含 date / country / D0_unique_purchase / D0_PURCHASE_VALUE / D7_unique_purchase / D7_PURCHASE_VALUE。
             </div>
           </div>
-        </div>
-
-        <div class="om-chart-wrap">
-          <div class="ovp-chart" id="om-arppu-chart" style="height:420px;"></div>
-          <div class="ovp-chart-note" id="om-arppu-note"></div>
-        </div>
-
-        <div class="om-table-wrap">
-          <table class="om-table" id="om-arppu-table"></table>
-        </div>
-
-        <div>
-          <div class="om-insight-head">
-            <div class="om-insight-title">数据解读</div>
-            <div class="om-insight-meta" id="om-arppu-insight-meta"></div>
-          </div>
-          <div class="ovp-insight is-empty" id="om-arppu-insight">文案待填写：./insights.js</div>
-        </div>
-      </div>
-    `;
-
-    const elMonths = mountEl.querySelector('#om-arppu-months');
-    const elCountries = mountEl.querySelector('#om-arppu-countries');
-    const elChartType = mountEl.querySelector('#om-arppu-chartType');
-    const elMetrics = mountEl.querySelector('#om-arppu-metrics');
-    const elChart = mountEl.querySelector('#om-arppu-chart');
-    const elNote = mountEl.querySelector('#om-arppu-note');
-    const elTable = mountEl.querySelector('#om-arppu-table');
-    const elInsight = mountEl.querySelector('#om-arppu-insight');
-    const elInsightMeta = mountEl.querySelector('#om-arppu-insight-meta');
-
-    const chart = safeInitECharts(elChart);
-
-    const monthColor = {};
-    allMonths.forEach((m, idx)=>{
-      monthColor[String(m)] = PALETTE_MONTH[idx % PALETTE_MONTH.length];
-    });
-
-    const countryColor = {};
-    COUNTRY_ORDER.forEach((c, idx)=>{
-      countryColor[String(c)] = PALETTE_COUNTRY[idx % PALETTE_COUNTRY.length];
-    });
-
-    function setActiveClass(labelEl, checked){
-      if (!labelEl) return;
-      if (checked) labelEl.classList.add('is-active');
-      else labelEl.classList.remove('is-active');
-    }
-
-    function mountChecks(container, items, isChecked, onToggle){
-      if (!container) return;
-      container.innerHTML = '';
-      for (const it of items){
-        const label = document.createElement('label');
-        label.className = 'om-check';
-        const input = document.createElement('input');
-        input.type = 'checkbox';
-        input.value = String(it.value);
-        input.checked = !!isChecked(it.value);
-
-        const span = document.createElement('span');
-        span.textContent = String(it.label);
-
-        label.appendChild(input);
-        label.appendChild(span);
-        setActiveClass(label, input.checked);
-
-        input.addEventListener('change', ()=>{
-          setActiveClass(label, input.checked);
-          onToggle(input.value, input.checked);
-        });
-
-        container.appendChild(label);
-      }
-    }
-
-    function syncChecks(container, selectedValues){
-      if (!container) return;
-      const set = new Set((selectedValues || []).map(String));
-      for (const label of container.querySelectorAll('label.om-check')){
-        const input = label.querySelector('input[type="checkbox"]');
-        if (!input) continue;
-        const checked = set.has(String(input.value));
-        input.checked = checked;
-        setActiveClass(label, checked);
-      }
-    }
-
-    function normalizeState(){
-      // months
-      state.months = clampSelection(state.months, allMonths);
-      if (!state.months.length && defaultMonth) state.months = [defaultMonth];
-
-      // countries
-      state.countries = clampSelection(state.countries, COUNTRY_ORDER);
-      if (!state.countries.length) state.countries = COUNTRY_ORDER.slice();
-
-      // chartType
-      if (state.chartType !== 'bar' && state.chartType !== 'line') state.chartType = 'bar';
-
-      // metrics
-      state.metrics = clampSelection(state.metrics, METRIC_ORDER);
-      if (!state.metrics.length) state.metrics = ['D0'];
-    }
-
-    function getSelectedMonthsSorted(){
-      const ms = utils && typeof utils.sortMonths === 'function'
-        ? utils.sortMonths(state.months)
-        : state.months.slice().sort((a,b)=>String(a).localeCompare(String(b)));
-      return ms.map(String);
-    }
-
-    function getSelectedCountriesOrdered(){
-      const set = new Set(state.countries.map(String));
-      return COUNTRY_ORDER.filter(c=>set.has(c));
-    }
-
-    function getSelectedMetricsOrdered(){
-      const set = new Set(state.metrics.map(String));
-      return METRIC_ORDER.filter(m=>set.has(m));
-    }
-
-    function pickInsightMonth(){
-      const ms = getSelectedMonthsSorted();
-      if (!ms.length) return defaultMonth;
-      return ms[ms.length - 1];
-    }
-
-    function rowsForMonthCountry(month, country){
-      const rows = (rawByMonth && rawByMonth[month]) ? rawByMonth[month] : [];
-      if (!Array.isArray(rows) || !rows.length) return [];
-      return rows.filter(r => r && String(r.country) === String(country));
-    }
-
-    function buildBarOption(){
-      const ms = getSelectedMonthsSorted();
-      const cs = getSelectedCountriesOrdered();
-      const metrics = getSelectedMetricsOrdered();
-
-      const series = [];
-      const hatch = makeHatchDecal();
-
-      for (const month of ms){
-        for (const metric of metrics){
-          const isD7 = metric === 'D7';
-          const data = cs.map(country=>{
-            const rows = rowsForMonthCountry(month, country);
-            return aggregateMonthlyArppu(rows, metric);
-          });
-
-          series.push({
-            name: `${getMonthLabel(month, ms)} ${metric}`,
-            type: 'bar',
-            data,
-            barMaxWidth: 18,
-            emphasis: { focus: 'series' },
-            itemStyle: {
-              color: monthColor[month],
-              decal: isD7 ? hatch : null
-            }
-          });
-        }
-      }
-
-      const option = {
-        grid: { left: 46, right: 18, top: 48, bottom: 52, containLabel: true },
-        legend: {
-          top: 8,
-          left: 0,
-          textStyle: { color: '#475569', fontSize: 11 }
-        },
-        tooltip: {
-          trigger: 'axis',
-          axisPointer: { type: 'shadow' },
-          formatter: (params)=>{
-            const ps = Array.isArray(params) ? params : [params];
-            const axis = (ps[0] && ps[0].axisValueLabel) ? ps[0].axisValueLabel : '';
-            const lines = ps.map(p=>{
-              const v = p && (p.data == null ? null : p.data);
-              return `${p.marker}${p.seriesName}：${fmtArppu(utils, v)}`;
-            });
-            return [axis, ...lines].join('<br/>');
-          }
-        },
-        xAxis: {
-          type: 'category',
-          data: cs,
-          axisTick: { alignWithLabel: true },
-          axisLabel: { color: '#64748b' },
-          axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.55)' } }
-        },
-        yAxis: {
-          type: 'value',
-          axisLabel: {
-            color: '#64748b',
-            formatter: (v)=>{
-              const n = Number(v);
-              return Number.isFinite(n) ? n.toFixed(2) : '';
-            }
-          },
-          splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.22)' } }
-        },
-        series
-      };
-
-      return option;
-    }
-
-    function buildLineOption(){
-      const ms = getSelectedMonthsSorted();
-      const cs = getSelectedCountriesOrdered();
-      const metrics = getSelectedMetricsOrdered();
-
-      const series = [];
-
-      for (const country of cs){
-        for (const metric of metrics){
-          const points = [];
-          for (const month of ms){
-            const rows = rowsForMonthCountry(month, country);
-            for (const r of rows){
-              const date = r && r.date ? String(r.date) : null;
-              if (!date) continue;
-              const v = computeDailyArppu(r, metric);
-              points.push([date, v]);
-            }
-          }
-          points.sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
-
-          series.push({
-            name: `${country} ${metric}`,
-            type: 'line',
-            showSymbol: false,
-            connectNulls: false,
-            data: points,
-            lineStyle: {
-              width: 2,
-              type: metric === 'D0' ? 'dashed' : 'solid',
-              color: countryColor[country]
-            },
-            itemStyle: { color: countryColor[country] }
-          });
-        }
-      }
-
-      const option = {
-        grid: { left: 46, right: 18, top: 48, bottom: 52, containLabel: true },
-        legend: {
-          top: 8,
-          left: 0,
-          textStyle: { color: '#475569', fontSize: 11 }
-        },
-        tooltip: {
-          trigger: 'axis',
-          axisPointer: { type: 'line' },
-          formatter: (params)=>{
-            const ps = Array.isArray(params) ? params : [params];
-            const axis = (ps[0] && ps[0].axisValueLabel) ? ps[0].axisValueLabel : '';
-            const lines = ps.map(p=>{
-              const v = (p && p.data && Array.isArray(p.data)) ? p.data[1] : null;
-              return `${p.marker}${p.seriesName}：${fmtArppu(utils, v)}`;
-            });
-            return [axis, ...lines].join('<br/>');
-          }
-        },
-        xAxis: {
-          type: 'time',
-          axisLabel: { color: '#64748b' },
-          axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.55)' } },
-          splitLine: { show: false }
-        },
-        yAxis: {
-          type: 'value',
-          axisLabel: {
-            color: '#64748b',
-            formatter: (v)=>{
-              const n = Number(v);
-              return Number.isFinite(n) ? n.toFixed(2) : '';
-            }
-          },
-          splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.22)' } }
-        },
-        series
-      };
-
-      return option;
-    }
-
-    function renderChart(){
-      if (!chart){
-        if (elNote) elNote.textContent = '图表未初始化：请确认 echarts 已加载。';
+        `;
         return;
       }
 
-      normalizeState();
+      const latestMonth = months[months.length - 1];
 
-      const ms = getSelectedMonthsSorted();
-      const cs = getSelectedCountriesOrdered();
-      const metrics = getSelectedMetricsOrdered();
-      const insightMonth = pickInsightMonth();
+      const orgDailyMap = buildDailyAggMap(organicRecords);
+      const paidDailyMap = buildDailyAggMap(paidRecords);
+      const orgMonthMap = buildMonthlyAggMap(organicRecords);
+      const paidMonthMap = buildMonthlyAggMap(paidRecords);
 
-      // note
-      if (elNote){
-        const rangeText = ms.length ? `${ms[0]} ~ ${ms[ms.length - 1]}` : '—';
-        elNote.textContent = `口径：ARPPU = PURCHASE_VALUE / unique_purchase；汇总：sum(value)/sum(payers)。币种/单位按 data.js 的 PURCHASE_VALUE。区间：${rangeText}；国家：${cs.join('/') || '—'}；数据：${metrics.join('/') || '—'}；图：${state.chartType === 'bar' ? '月度柱状图' : '日级折线图'}`;
-      }
+      const uid = `ovp-${MODULE_ID}-${Math.random().toString(16).slice(2)}`;
+      const monthId = `${uid}-month`;
+      const chartId = `${uid}-chart`;
+      const tableId = `${uid}-table`;
+      const hintId = `${uid}-hint`;
+      const insightsId = `${uid}-insights`;
 
-      const option = state.chartType === 'line' ? buildLineOption() : buildBarOption();
-      chart.setOption(option, true);
+      const organicColor = cssVar("--ovp-yellow", "#F6C344");
+      const paidColor = cssVar("--ovp-blue", "#2563eb");
 
-      // insight
-      if (elInsightMeta){
-        elInsightMeta.textContent = insightMonth ? `对应月份：${insightMonth}` : '';
-      }
-      if (OVP.ui && typeof OVP.ui.renderInsight === 'function'){
-        OVP.ui.renderInsight({ moduleId: MODULE_ID, month: insightMonth, el: elInsight });
-      } else if (elInsight){
-        elInsight.textContent = '文案系统未就绪：请确认 insights.js 已加载且 OVP.ui.renderInsight 可用。';
-        elInsight.classList.add('is-empty');
-      }
-    }
+      mountEl.innerHTML = `
+        <div class="ovp-m3">
+          <div class="row">
+            <div class="fg">
+              <label for="${monthId}">月份</label>
+              <select id="${monthId}"></select>
+            </div>
 
-    function renderTable(){
-      normalizeState();
-      const ms = getSelectedMonthsSorted();
-      const cs = getSelectedCountriesOrdered();
-      const metrics = getSelectedMetricsOrdered();
+            <div class="fg" style="min-width:320px">
+              <label>国家（多选）</label>
+              <div class="chips" data-role="countries">
+                ${COUNTRIES.map(
+                  (c) => `
+                    <label class="chip is-on">
+                      <input type="checkbox" name="${uid}-country" value="${c}" checked />
+                      <span>${c}</span>
+                    </label>
+                  `
+                ).join("")}
+              </div>
+            </div>
 
-      const ths = [];
-      ths.push('<th>国家</th>');
-      for (const month of ms){
-        const mLabel = getMonthLabel(month, ms);
-        for (const metric of metrics){
-          ths.push(`<th>${mLabel} ${metric} ARPPU</th>`);
-        }
-      }
+            <div class="fg" style="min-width:220px">
+              <label>图表</label>
+              <div class="seg" role="group" aria-label="图表类型切换">
+                <button type="button" data-type="bar" aria-pressed="true">月度柱状图</button>
+                <button type="button" data-type="line" aria-pressed="false">日级折线图</button>
+              </div>
+            </div>
 
-      const rowsHtml = [];
-      for (const country of cs){
-        const tds = [];
-        tds.push(`<td>${country}</td>`);
-        for (const month of ms){
-          for (const metric of metrics){
-            const rows = rowsForMonthCountry(month, country);
-            const v = aggregateMonthlyArppu(rows, metric);
-            tds.push(`<td>${fmtArppu(utils, v)}</td>`);
-          }
-        }
-        rowsHtml.push(`<tr>${tds.join('')}</tr>`);
-      }
+            <div class="fg" style="min-width:220px">
+              <label>D0 / D7（多选）</label>
+              <div class="chips" data-role="horizons">
+                <label class="chip is-on">
+                  <input type="checkbox" name="${uid}-horizon" value="D0" checked />
+                  <span>D0</span>
+                </label>
+                <label class="chip is-on">
+                  <input type="checkbox" name="${uid}-horizon" value="D7" checked />
+                  <span>D7</span>
+                </label>
+              </div>
+            </div>
+          </div>
 
-      elTable.innerHTML = `
-        <thead><tr>${ths.join('')}</tr></thead>
-        <tbody>${rowsHtml.join('')}</tbody>
+          <div class="subline">
+            <div class="k"><span class="dot" style="background:${organicColor}"></span>自然量</div>
+            <div class="k"><span class="dot" style="background:${paidColor}"></span>买量</div>
+            <div class="k"><span class="stripe"></span>D7 斜线（柱状图）</div>
+          </div>
+
+          <div id="${chartId}" class="chart"></div>
+          <div class="hint" id="${hintId}"></div>
+
+          <div class="table-wrap">
+            <table id="${tableId}">
+              <thead>
+                <tr>
+                  <th>国家</th>
+                  <th>自然量 D0 ARPPU</th>
+                  <th>自然量 D7 ARPPU</th>
+                  <th>买量 D0 ARPPU</th>
+                  <th>买量 D7 ARPPU</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div id="${insightsId}"></div>
+        </div>
       `;
-    }
 
-    function rerenderAll(){
-      renderChart();
-      renderTable();
-    }
+      const monthSel = mountEl.querySelector(`#${CSS.escape(monthId)}`);
+      const chartEl = mountEl.querySelector(`#${CSS.escape(chartId)}`);
+      const tableEl = mountEl.querySelector(`#${CSS.escape(tableId)}`);
+      const hintEl = mountEl.querySelector(`#${CSS.escape(hintId)}`);
+      const insightsEl = mountEl.querySelector(`#${CSS.escape(insightsId)}`);
 
-    // Mount filter controls
-    mountChecks(
-      elMonths,
-      allMonths.map(m=>({ value:m, label:m })),
-      (v)=>state.months.includes(String(v)),
-      (v, checked)=>{
-        const vv = String(v);
-        const next = new Set(state.months.map(String));
-        if (checked) next.add(vv);
-        else next.delete(vv);
-        state.months = [...next];
-        normalizeState();
-        syncChecks(elMonths, state.months);
-        rerenderAll();
+      monthSel.innerHTML = months.map((m) => `<option value="${m}">${m}</option>`).join("");
+      monthSel.value = latestMonth;
+
+      const segBtns = Array.from(mountEl.querySelectorAll(".seg button"));
+      let chartType = "bar";
+
+      function setChartType(next) {
+        chartType = next === "line" ? "line" : "bar";
+        for (const b of segBtns) {
+          const isOn = b.getAttribute("data-type") === chartType;
+          b.setAttribute("aria-pressed", isOn ? "true" : "false");
+        }
       }
-    );
 
-    mountChecks(
-      elCountries,
-      COUNTRY_ORDER.map(c=>({ value:c, label:c })),
-      (v)=>state.countries.includes(String(v)),
-      (v, checked)=>{
-        const vv = String(v);
-        const next = new Set(state.countries.map(String));
-        if (checked) next.add(vv);
-        else next.delete(vv);
-        state.countries = [...next];
-        normalizeState();
-        syncChecks(elCountries, state.countries);
-        rerenderAll();
+      const countryInputs = Array.from(
+        mountEl.querySelectorAll(`input[name="${CSS.escape(uid)}-country"]`)
+      );
+      const horizonInputs = Array.from(
+        mountEl.querySelectorAll(`input[name="${CSS.escape(uid)}-horizon"]`)
+      );
+
+      function syncChipClasses() {
+        for (const el of countryInputs) {
+          const label = el.closest("label.chip");
+          if (label) label.classList.toggle("is-on", !!el.checked);
+        }
+        for (const el of horizonInputs) {
+          const label = el.closest("label.chip");
+          if (label) label.classList.toggle("is-on", !!el.checked);
+        }
       }
-    );
 
-    mountChecks(
-      elChartType,
-      [
-        { value:'bar', label:'月度柱状图' },
-        { value:'line', label:'日级折线图' }
-      ],
-      (v)=>state.chartType === String(v),
-      (v, checked)=>{
-        const vv = String(v);
-        if (!checked){
-          // 不允许两者都取消，保持当前
-          syncChecks(elChartType, [state.chartType]);
+      function getSelectedCountries() {
+        const chosen = countryInputs.filter((i) => i.checked).map((i) => String(i.value || "").toUpperCase());
+        const set = new Set(chosen);
+        const list = COUNTRIES.filter((c) => set.has(c));
+        return list.length ? list : COUNTRIES.slice();
+      }
+
+      function getSelectedHorizons() {
+        const chosen = horizonInputs.filter((i) => i.checked).map((i) => String(i.value || "").toUpperCase());
+        const out = [];
+        if (chosen.includes("D0")) out.push("D0");
+        if (chosen.includes("D7")) out.push("D7");
+        return out.length ? out : ["D0"];
+      }
+
+      function fmtMoney(v, digits) {
+        const n = toNumber(v);
+        if (n === null) return "—";
+        const d = typeof digits === "number" ? digits : 2;
+        if (utils && typeof utils.fmtMoney === "function") return utils.fmtMoney(n, "USD", d);
+        return `$${n.toFixed(d)}`;
+      }
+
+      function updateInsights(month) {
+        if (window.OVP && OVP.insights && typeof OVP.insights.render === "function") {
+          OVP.insights.render(insightsEl, MODULE_ID, month, { title: "数据分析" });
           return;
         }
-        state.chartType = (vv === 'line') ? 'line' : 'bar';
-        // 互斥：只保留一个选中
-        syncChecks(elChartType, [state.chartType]);
-        rerenderAll();
+        insightsEl.innerHTML = `<div class="empty">未加载 insights-copy.js：请在 index.html 里把它放到各 module-*.js 之前。</div>`;
       }
-    );
 
-    mountChecks(
-      elMetrics,
-      [
-        { value:'D0', label:'D0' },
-        { value:'D7', label:'D7' }
-      ],
-      (v)=>state.metrics.includes(String(v)),
-      (v, checked)=>{
-        const vv = String(v);
-        const next = new Set(state.metrics.map(String));
-        if (checked) next.add(vv);
-        else next.delete(vv);
-        state.metrics = [...next];
-        normalizeState();
-        syncChecks(elMetrics, state.metrics);
-        rerenderAll();
+      function updateTable(month, countries) {
+        const tbody = tableEl.querySelector("tbody");
+        if (!tbody) return;
+
+        const rows = [];
+        for (const c of countries) {
+          const oAgg = orgMonthMap.get(`${month}|${c}`) || emptyAgg();
+          const pAgg = paidMonthMap.get(`${month}|${c}`) || emptyAgg();
+
+          rows.push(`
+            <tr>
+              <td>${c}</td>
+              <td>${fmtMoney(calcArppu(oAgg, "D0"), 2)}</td>
+              <td>${fmtMoney(calcArppu(oAgg, "D7"), 2)}</td>
+              <td>${fmtMoney(calcArppu(pAgg, "D0"), 2)}</td>
+              <td>${fmtMoney(calcArppu(pAgg, "D7"), 2)}</td>
+            </tr>
+          `);
+        }
+        tbody.innerHTML = rows.join("") || `<tr><td colspan="5">—</td></tr>`;
       }
-    );
 
-    // initial
-    normalizeState();
-    syncChecks(elMonths, state.months);
-    syncChecks(elCountries, state.countries);
-    syncChecks(elChartType, [state.chartType]);
-    syncChecks(elMetrics, state.metrics);
+      function buildBarOption(month, countries, horizons) {
+        const text = cssVar("--text", "#0f172a") || "#0f172a";
+        const muted = cssVar("--muted", "#6b7280") || "#6b7280";
+        const border = cssVar("--border", "rgba(148,163,184,.55)") || "rgba(148,163,184,.55)";
 
-    rerenderAll();
+        const decal = {
+          symbol: "rect",
+          rotation: Math.PI / 4,
+          dashArrayX: [1, 0],
+          dashArrayY: [6, 4],
+          color: "rgba(15,23,42,0.22)"
+        };
 
-    // resize
-    try{
-      if (chart && typeof ResizeObserver !== 'undefined'){
-        const ro = new ResizeObserver(()=>chart.resize());
-        ro.observe(elChart);
-      } else if (chart){
-        window.addEventListener('resize', ()=>chart.resize());
+        const series = [];
+        const pushSeries = (name, color, isD7, getter) => {
+          series.push({
+            name,
+            type: "bar",
+            barMaxWidth: 18,
+            itemStyle: { color, decal: isD7 ? decal : undefined },
+            data: countries.map((c) => getter(c)),
+            emphasis: { focus: "series" }
+          });
+        };
+
+        if (horizons.includes("D0")) {
+          pushSeries("自然量 D0", organicColor, false, (c) => calcArppu(orgMonthMap.get(`${month}|${c}`) || emptyAgg(), "D0"));
+        }
+        if (horizons.includes("D7")) {
+          pushSeries("自然量 D7", organicColor, true, (c) => calcArppu(orgMonthMap.get(`${month}|${c}`) || emptyAgg(), "D7"));
+        }
+        if (horizons.includes("D0")) {
+          pushSeries("买量 D0", paidColor, false, (c) => calcArppu(paidMonthMap.get(`${month}|${c}`) || emptyAgg(), "D0"));
+        }
+        if (horizons.includes("D7")) {
+          pushSeries("买量 D7", paidColor, true, (c) => calcArppu(paidMonthMap.get(`${month}|${c}`) || emptyAgg(), "D7"));
+        }
+
+        return {
+          tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "shadow" },
+            formatter: function (params) {
+              const lines = [];
+              if (params && params.length) {
+                lines.push(`${params[0].axisValue}`);
+                for (const it of params) {
+                  const v = it.value;
+                  lines.push(`${it.marker}${it.seriesName}：${v === null ? "—" : fmtMoney(v, 2)}`);
+                }
+              }
+              return lines.join("<br/>");
+            }
+          },
+          legend: {
+            type: "scroll",
+            data: series.map((s) => s.name),
+            textStyle: { color: muted }
+          },
+          grid: { left: 24, right: 18, top: 52, bottom: 28, containLabel: true },
+          xAxis: {
+            type: "category",
+            data: countries,
+            axisLabel: { color: muted },
+            axisLine: { lineStyle: { color: border } },
+            axisTick: { lineStyle: { color: border } }
+          },
+          yAxis: {
+            type: "value",
+            axisLabel: {
+              color: muted,
+              formatter: function (v) {
+                const n = toNumber(v);
+                if (n === null) return "";
+                return n.toFixed(2);
+              }
+            },
+            axisLine: { lineStyle: { color: border } },
+            splitLine: { lineStyle: { color: border, opacity: 0.35 } }
+          },
+          series,
+          title: {
+            text: `按国家对比（${month}）`,
+            left: 0,
+            textStyle: { color: text, fontSize: 12, fontWeight: 600 }
+          }
+        };
       }
-    }catch(_e){
-      // ignore
+
+      function buildLineOption(month, countries, horizons) {
+        const text = cssVar("--text", "#0f172a") || "#0f172a";
+        const muted = cssVar("--muted", "#6b7280") || "#6b7280";
+        const border = cssVar("--border", "rgba(148,163,184,.55)") || "rgba(148,163,184,.55)";
+
+        const dates = buildMonthDates(month);
+        const palette = [
+          cssVar("--accent-strong", "#1d4ed8"),
+          cssVar("--accent-green", "#16a34a"),
+          "#f59e0b",
+          "#7c3aed",
+          "#0ea5e9"
+        ];
+
+        const colorByCountry = Object.create(null);
+        countries.forEach((c, idx) => (colorByCountry[c] = palette[idx % palette.length]));
+
+        const series = [];
+        for (const c of countries) {
+          const baseColor = colorByCountry[c] || "#2563eb";
+
+          for (const h of horizons) {
+            const isD7 = h === "D7";
+            const oData = dates.map((d) => calcArppu(orgDailyMap.get(`${d}|${c}`) || emptyAgg(), h));
+            const pData = dates.map((d) => calcArppu(paidDailyMap.get(`${d}|${c}`) || emptyAgg(), h));
+
+            series.push({
+              name: `${c} 自然 ${h}`,
+              type: "line",
+              data: oData,
+              smooth: true,
+              showSymbol: false,
+              lineStyle: {
+                color: baseColor,
+                width: 2,
+                type: isD7 ? "dotted" : "dashed",
+                opacity: isD7 ? 0.55 : 1
+              },
+              itemStyle: { color: baseColor }
+            });
+
+            series.push({
+              name: `${c} 买量 ${h}`,
+              type: "line",
+              data: pData,
+              smooth: true,
+              showSymbol: false,
+              lineStyle: {
+                color: baseColor,
+                width: isD7 ? 1.6 : 2.2,
+                type: "solid",
+                opacity: isD7 ? 0.55 : 1
+              },
+              itemStyle: { color: baseColor }
+            });
+          }
+        }
+
+        return {
+          tooltip: {
+            trigger: "axis",
+            formatter: function (params) {
+              const lines = [];
+              if (params && params.length) {
+                lines.push(params[0].axisValue);
+                for (const it of params) {
+                  const v = it.value;
+                  lines.push(`${it.marker}${it.seriesName}：${v === null ? "—" : fmtMoney(v, 2)}`);
+                }
+              }
+              return lines.join("<br/>");
+            }
+          },
+          legend: {
+            type: "scroll",
+            data: series.map((s) => s.name),
+            textStyle: { color: muted }
+          },
+          grid: { left: 24, right: 18, top: 52, bottom: 28, containLabel: true },
+          xAxis: {
+            type: "category",
+            data: dates,
+            boundaryGap: false,
+            axisLabel: { color: muted, formatter: (v) => String(v || "").slice(-2) },
+            axisLine: { lineStyle: { color: border } },
+            axisTick: { lineStyle: { color: border } }
+          },
+          yAxis: {
+            type: "value",
+            axisLabel: {
+              color: muted,
+              formatter: function (v) {
+                const n = toNumber(v);
+                if (n === null) return "";
+                return n.toFixed(2);
+              }
+            },
+            axisLine: { lineStyle: { color: border } },
+            splitLine: { lineStyle: { color: border, opacity: 0.35 } }
+          },
+          series,
+          title: {
+            text: `按日趋势（${month}）`,
+            left: 0,
+            textStyle: { color: text, fontSize: 12, fontWeight: 600 }
+          }
+        };
+      }
+
+      let chart = null;
+      let echartsApi = null;
+
+      function update() {
+        syncChipClasses();
+
+        const month = monthSel.value;
+        const countries = getSelectedCountries();
+        const horizons = getSelectedHorizons();
+
+        if (chartType === "bar") {
+          hintEl.textContent = `柱状图：${month}（ARPPU）按国家对比；D7 用斜线填充。`;
+        } else {
+          const lineCount = countries.length * horizons.length * 2;
+          hintEl.textContent = `折线图：${month} 日级 ARPPU；当前 ${countries.length} 国 × ${horizons.join("+")} × 2（自然/买量）= ${lineCount} 条线。`;
+        }
+
+        updateTable(month, countries);
+        updateInsights(month);
+
+        if (!chart || !echartsApi) return;
+
+        const option =
+          chartType === "bar"
+            ? buildBarOption(month, countries, horizons)
+            : buildLineOption(month, countries, horizons);
+
+        chart.setOption(option, true);
+      }
+
+      monthSel.addEventListener("change", update);
+      for (const b of segBtns) {
+        b.addEventListener("click", () => {
+          setChartType(b.getAttribute("data-type"));
+          update();
+        });
+      }
+      for (const i of countryInputs) i.addEventListener("change", update);
+      for (const i of horizonInputs) i.addEventListener("change", update);
+
+      setChartType("bar");
+      syncChipClasses();
+      update();
+
+      loadECharts()
+        .then((api) => {
+          echartsApi = api;
+          chart = api.init(chartEl);
+          update();
+          window.addEventListener("resize", () => {
+            try { chart && chart.resize(); } catch (_e) {}
+          });
+        })
+        .catch((e) => {
+          chartEl.innerHTML = `<div class="empty">图表库加载失败：${(e && e.message) ? e.message : "echarts not available"}</div>`;
+          update();
+        });
     }
-  }
-
-  if (typeof OVP.registerModule === 'function'){
-    OVP.registerModule({
-      id: MODULE_ID,
-      title: 'D0 / D7 ARPPU',
-      subtitle: 'ARPPU = PURCHASE_VALUE / unique_purchase · 柱状（月度汇总）/ 折线（日级）可切换',
-      render
-    });
-  }
+  });
 })();
