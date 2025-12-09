@@ -4,7 +4,7 @@
  * 模块：买量注册数（registration）& 注册单价（CPA）
  *
  * 数据源：window.RAW_PAID_BY_MONTH
- * 粒度：date(UTC+0) × country × media × productType
+ * 粒度：date(UTC+0) × country  ×  media  ×  productType
  *
  * 指标：
  * - 注册数 = sum(registration)
