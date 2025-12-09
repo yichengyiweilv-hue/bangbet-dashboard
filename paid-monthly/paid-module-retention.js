@@ -235,7 +235,7 @@
         background: rgba(241, 245, 249, 0.98);
         border-bottom: 1px solid rgba(148, 163, 184, 0.45);
         padding: 8px 10px;
-        text-align: left;
+        text-align: center;
         font-weight: 600;
         color: rgba(15, 23, 42, 0.86);
         white-space: nowrap;
@@ -247,7 +247,7 @@
         white-space: nowrap;
       }
       .chart-table td.num{
-        text-align: right;
+        text-align: center;
         font-variant-numeric: tabular-nums;
       }
       .chart-table tr:hover td{
