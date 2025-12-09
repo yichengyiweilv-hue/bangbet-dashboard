@@ -1,4 +1,4 @@
-// paid-monthly/paid-module-sg-share.js
+// paid-monthly/paid-module-sg-share.js   
 (function () {
   const MODULE_KEY = 'sg_share';
   const MODULE_ID = 'paidSgShare';
