@@ -250,7 +250,7 @@
         text-align: center;
         font-variant-numeric: tabular-nums;
       }
-      #table-retention td.num { text-align: center; }
+
       .chart-table tr:hover td{
         background: rgba(37, 99, 235, 0.06);
       }
@@ -914,11 +914,14 @@
               tr.appendChild(td(String(p).toUpperCase()));
 
             colKeys.forEach((ck) => {
-              const ratio = getCell(ck.m, ck.w, c, m, p);
-              const cell = td(formatPct01(ratio, 1));
-              cell.className = "num";
-              tr.appendChild(cell);
-            });
+  const ratio = getCell(ck.m, ck.w, c, m, p);
+  const cell = td(formatPct01(ratio, 1));
+  cell.className = "num";
+  cell.style.textAlign = "center";                 // ✅新增：数值列居中
+  // cell.style.setProperty("text-align","center","important"); // 想更硬就用这一行替换上一行
+  tr.appendChild(cell);
+});
+
 
             tbody.appendChild(tr);
           });
