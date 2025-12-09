@@ -1,4 +1,4 @@
-// paid-monthly/paid-module-sg-share.js   
+// paid-monthly/paid-module-sg-share.js
 (function () {
   const MODULE_KEY = 'sg_share';
   const MODULE_ID = 'paidSgShare';
@@ -377,10 +377,12 @@
           </div>
           <div class="paid-sg-table-note" id="sg-table-note-${MODULE_ID}"></div>
         </div>
-
-        <div>
-          <div class="paid-sg-insight-title" id="sg-insight-title-${MODULE_ID}"></div>
-          <div class="paid-sg-insight-body is-empty" id="sg-insight-${MODULE_ID}"></div>
+        <div class="chart-analysis-box">
+          <div class="chart-analysis-months" id="sg-insight-months-${MODULE_ID}"></div>
+          <div class="chart-analysis-body">
+            <div class="chart-analysis-title" id="sg-insight-title-${MODULE_ID}">数据分析</div>
+            <div class="chart-analysis-text" id="sg-insight-${MODULE_ID}"></div>
+          </div>
         </div>
       </div>
     `;
@@ -494,6 +496,8 @@
     const tableTitleEl = root.querySelector(`#sg-table-title-${MODULE_ID}`);
     const tableEl = root.querySelector(`#sg-table-${MODULE_ID}`);
     const tableNoteEl = root.querySelector(`#sg-table-note-${MODULE_ID}`);
+
+    const insightMonthsEl = root.querySelector(`#sg-insight-months-${MODULE_ID}`);
 
     const insightTitleEl = root.querySelector(`#sg-insight-title-${MODULE_ID}`);
     const insightEl = root.querySelector(`#sg-insight-${MODULE_ID}`);
@@ -1079,23 +1083,58 @@
       }
     }
 
+    let activeInsightMonth = null;
+
+
     function renderInsight(monthsSel) {
-      if (!insightTitleEl || !insightEl) return;
+      if (!insightMonthsEl || !insightTitleEl || !insightEl) return;
+
+      // 样式对齐 retention：用「数据分析」块 + 月份按钮
+      insightTitleEl.textContent = '数据分析';
 
       const ys = yearsOfMonths(monthsSel);
-      const blocks = [];
-      let hasAny = false;
+      const ms = sortMonths(monthsSel);
 
-      for (const m of monthsSel) {
-        const t = getPaidInsightText(m);
-        const label = monthLabel(m, ys);
-        if (t) hasAny = true;
-        blocks.push(`${label}\n${t || '（该月暂无文案）'}`);
+      if (!ms || ms.length === 0) {
+        insightMonthsEl.innerHTML = '';
+        insightEl.textContent = '当前没有可用月份；请确认 RAW_PAID_BY_MONTH 是否已填入数据。';
+        return;
       }
 
-      insightTitleEl.textContent = '解读（随所选月份展示）';
-      insightEl.textContent = blocks.join('\n\n');
-      insightEl.classList.toggle('is-empty', !hasAny);
+      if (!activeInsightMonth || !ms.includes(activeInsightMonth)) {
+        activeInsightMonth = ms[ms.length - 1];
+      }
+
+      insightMonthsEl.innerHTML = '';
+      const btns = [];
+
+      function setText(monthKey) {
+        const t = getPaidInsightText(monthKey);
+        insightEl.textContent = t ? t : '暂未填写该月份的数据分析文案。';
+      }
+
+      ms.forEach((monthKey) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'chart-analysis-month-btn';
+        btn.dataset.month = monthKey;
+        btn.textContent = monthLabel(monthKey, ys);
+        btn.title = monthKey;
+
+        if (monthKey === activeInsightMonth) btn.classList.add('active');
+
+        btn.addEventListener('click', () => {
+          btns.forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          activeInsightMonth = monthKey;
+          setText(monthKey);
+        });
+
+        insightMonthsEl.appendChild(btn);
+        btns.push(btn);
+      });
+
+      setText(activeInsightMonth);
     }
 
     function renderAll() {
