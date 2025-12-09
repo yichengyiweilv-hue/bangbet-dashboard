@@ -1,621 +1,670 @@
-/**
- * paid-module-roi.js
- * ------------------------------------------------------------
- * 模块：D0/D7 充值 ROI（%）
+/* paid-monthly/paid-module-roi.js
+ * 6) D0/D7 充值 ROI
+ * - ROI = D0_PURCHASE_VALUE / spent ; D7_PURCHASE_VALUE / spent
+ * - 展示单位：%
+ * - 视图：月度柱状图 / 日级折线图
+ * - 筛选：月份(最多3) / 国家 / 媒体 / 产品类型 / 口径(D0/D7，多选)
+ * - “全选但不区分”：逻辑全选，但图与表不再按该维度拆分
  *
- * 数据源：window.RAW_PAID_BY_MONTH
- * 粒度：date(UTC+0) × country × media × productType
- *
- * 公式：
- * - D0 ROI = D0_PURCHASE_VALUE / spent
- * - D7 ROI = D7_PURCHASE_VALUE / spent
- *
- * 交互：
- * - 视图：柱状（月度汇总）/ 折线（日级）
- * - 月份：最多选 3 个
- * - 国家/媒体/产品形态：多选，且支持“全选但不区分”（等价全选，但图/表聚合不拆维度）
- * - D0/D7：多选
- *
- * 需要 index.html 提供这些容器 id（如果没有，本脚本会自动在 card-paid-roi 区块内创建）：
- * - roi-view / roi-months / roi-windows / roi-countries / roi-medias / roi-productTypes
- * - chart-paid-roi / table-title-roi / table-roi
+ * 数据源：
+ * - window.RAW_PAID_BY_MONTH（paid-data.js）
+ * - window.PAID_ANALYSIS_TEXT（paid-analytics.js）
  */
-
 (function () {
   const MODULE_KEY = "roi";
+  const STYLE_ID = "paid-roi-module-style";
 
-  // 国家固定顺序（数据里如果出现其他国家，会排在后面）
   const FIXED_COUNTRY_ORDER = ["GH", "KE", "NG", "TZ"];
+  const ALL_VALUE = "ALL";
+  const ALL_NO_SPLIT_VALUE = "__ALL_NO_SPLIT__";
 
-  // D7 斜线阴影（ECharts 5 的 decal）
+  // ECharts decal（用于 D7 阴影区分）
   const D7_DECAL = {
     symbol: "rect",
-    symbolSize: 1,
-    dashArrayX: [6, 3],
-    dashArrayY: [1, 0],
-    rotation: Math.PI / 4,
-    color: "rgba(255,255,255,0.35)",
+    symbolSize: 2,
+    dashArrayX: [1, 0],
+    dashArrayY: [2, 2],
+    rotation: 0,
   };
 
   const FALLBACK_COLORS = [
-    "#2563eb",
-    "#7c3aed",
+    "#3b82f6",
+    "#22c55e",
     "#f97316",
-    "#16a34a",
-    "#0ea5e9",
-    "#db2777",
+    "#a855f7",
+    "#06b6d4",
+    "#ef4444",
     "#84cc16",
-    "#f43f5e",
-    "#14b8a6",
-    "#f59e0b",
+    "#eab308",
   ];
-
-  function getPalette() {
-    const pd = window.PaidDashboard;
-    if (pd && Array.isArray(pd.COLORS) && pd.COLORS.length) return pd.COLORS;
-    return FALLBACK_COLORS;
-  }
-
-  function getRAW() {
-    return window.RAW_PAID_BY_MONTH || {};
-  }
 
   function getDom(id) {
     return document.getElementById(id);
   }
 
   function uniq(arr) {
-    return Array.from(new Set((arr || []).filter((v) => v !== undefined && v !== null)));
-  }
-
-  function setArray(target, values) {
-    target.length = 0;
-    (values || []).forEach((v) => target.push(v));
+    return Array.from(new Set((arr || []).filter(Boolean)));
   }
 
   function normalizeCountry(v) {
-    return String(v || "").toUpperCase();
+    return String(v || "")
+      .trim()
+      .toUpperCase();
   }
+
   function normalizeMedia(v) {
-    return String(v || "").toUpperCase();
+    return String(v || "")
+      .trim()
+      .toUpperCase();
   }
+
   function normalizeProductType(v) {
-    return String(v || "").toLowerCase();
+    return String(v || "")
+      .trim()
+      .toLowerCase();
   }
 
-  function sortCountries(list) {
-    const order = new Map();
-    FIXED_COUNTRY_ORDER.forEach((c, i) => order.set(c, i));
-
-    return (list || [])
-      .slice()
-      .sort((a, b) => {
-        const aa = normalizeCountry(a);
-        const bb = normalizeCountry(b);
-
-        const ia = order.has(aa) ? order.get(aa) : 999;
-        const ib = order.has(bb) ? order.get(bb) : 999;
-        if (ia !== ib) return ia - ib;
-        return String(aa).localeCompare(String(bb));
-      });
+  function safeNum(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
   }
 
-  function buildOptionsFromRAW() {
-    const RAW = getRAW();
-    const months = Object.keys(RAW).sort();
+  function safeDiv(num, den) {
+    const a = Number(num);
+    const b = Number(den);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b === 0) return null;
+    return a / b;
+  }
 
+  function getRAW() {
+    return window.RAW_PAID_BY_MONTH || {};
+  }
+
+  function getPalette() {
+    const pd = window.PaidDashboard;
+    const colors = pd && Array.isArray(pd.COLORS) && pd.COLORS.length ? pd.COLORS : FALLBACK_COLORS;
+    return colors;
+  }
+
+  function sortCountries(countries) {
+    const order = new Map(FIXED_COUNTRY_ORDER.map((c, i) => [c, i]));
+    return (countries || []).slice().sort((a, b) => {
+      const ia = order.has(a) ? order.get(a) : 999;
+      const ib = order.has(b) ? order.get(b) : 999;
+      if (ia !== ib) return ia - ib;
+      return String(a).localeCompare(String(b));
+    });
+  }
+
+  function sortProductTypes(types) {
+    return (types || []).slice().sort((a, b) => {
+      if (a === b) return 0;
+      if (a === "app") return -1;
+      if (b === "app") return 1;
+      return String(a).localeCompare(String(b));
+    });
+  }
+
+  function buildOptionsFromRAW(raw) {
+    const months = Object.keys(raw || {}).sort();
     const cSet = new Set();
     const mSet = new Set();
     const pSet = new Set();
 
-    months.forEach((month) => {
-      (RAW[month] || []).forEach((r) => {
-        if (!r) return;
-        if (r.country) cSet.add(normalizeCountry(r.country));
-        if (r.media) mSet.add(normalizeMedia(r.media));
-        if (r.productType) pSet.add(normalizeProductType(r.productType));
+    months.forEach((mk) => {
+      const rows = raw[mk] || [];
+      rows.forEach((r) => {
+        const c = normalizeCountry(r.country);
+        if (FIXED_COUNTRY_ORDER.includes(c)) cSet.add(c);
+
+        const m = normalizeMedia(r.media);
+        if (m) mSet.add(m);
+
+        const p = normalizeProductType(r.productType);
+        if (p) pSet.add(p);
       });
     });
 
-    // 只保留 GH/KE/NG/TZ（按需求）
-    const countries = sortCountries(Array.from(cSet)).filter(
-      (c) => FIXED_COUNTRY_ORDER.indexOf(c) !== -1
-    );
-    const medias = Array.from(mSet).sort();
-    const productTypes = Array.from(pSet).sort();
-
-    return { months, countries, medias, productTypes };
+    return {
+      months,
+      countries: sortCountries(Array.from(cSet)),
+      medias: Array.from(mSet).sort((a, b) => String(a).localeCompare(String(b))),
+      productTypes: sortProductTypes(Array.from(pSet)),
+    };
   }
 
   function pickDefaultMonths(allMonths) {
-    const months = (allMonths || []).slice();
-    if (!months.length) return [];
-    // 默认取最近 2 个月（不够就取 1 个）
-    return months.slice(Math.max(0, months.length - 2));
+    const ms = (allMonths || []).slice().sort();
+    if (ms.length <= 2) return ms;
+    return ms.slice(-2);
   }
 
-  function ensureNonEmpty(state, opts) {
-    if (!state.months.length) state.months = pickDefaultMonths(opts.months);
-    if (!state.months.length) state.months = (opts.months || []).slice(-1);
-
-    if (!state.countries.length) state.countries = (opts.countries || []).slice();
-    if (!state.medias.length) state.medias = (opts.medias || []).slice();
-    if (!state.productTypes.length) state.productTypes = (opts.productTypes || []).slice();
-
-    if (!state.windows.length) state.windows = ["D0", "D7"];
+  function monthLabel(monthKey, yearsSet) {
+    if (!monthKey) return "";
+    const parts = String(monthKey).split("-");
+    if (parts.length !== 2) return monthKey;
+    const y = parts[0];
+    const m = parts[1];
+    const mNum = Number(m);
+    if (yearsSet && yearsSet.size > 1) return `${y}-${m}`;
+    if (Number.isFinite(mNum)) return `${mNum}月`;
+    return `${m}月`;
   }
 
-  function safeDiv(a, b) {
-    const na = Number(a);
-    const nb = Number(b);
-    if (!isFinite(na) || !isFinite(nb) || nb === 0) return null;
-    return na / nb;
-  }
-
-  function formatPct01(ratio, digits) {
-    if (ratio === null || ratio === undefined || !isFinite(Number(ratio))) return "-";
-    return (Number(ratio) * 100).toFixed(digits) + "%";
-  }
-
-  function formatMonthLabel(monthKey) {
-    const m = String(monthKey || "");
-    const mm = m.split("-")[1];
-    if (!mm) return m;
-    const n = parseInt(mm, 10);
-    if (!isFinite(n)) return m;
-    return `${n}月`;
-  }
-
-  function sumFields(rows, fields) {
-    const out = {};
-    (fields || []).forEach((f) => (out[f] = 0));
-
-    (rows || []).forEach((r) => {
-      if (!r) return;
-      (fields || []).forEach((f) => {
-        const v = Number(r[f]);
-        if (isFinite(v)) out[f] += v;
-      });
-    });
-
-    return out;
+  function formatPct01(v, digits = 1) {
+    if (v === null || v === undefined) return "-";
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "-";
+    return `${(n * 100).toFixed(digits)}%`;
   }
 
   function injectStylesOnce() {
-    const STYLE_ID = "paid-roi-module-style";
     if (document.getElementById(STYLE_ID)) return;
 
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
+      /* 通用：模块内筛选器（参考 organic-monthly 风格） */
       .chart-filter-panel{
-        margin-top: 10px;
-        padding: 10px 12px;
-        border-radius: 14px;
-        border: 1px solid rgba(148, 163, 184, 0.45);
-        background: rgba(255, 255, 255, 0.6);
-        display: grid;
-        gap: 8px;
+        padding: 10px 14px 12px;
+        border-top: 1px solid rgba(148,163,184,.18);
+        border-bottom: 1px solid rgba(148,163,184,.12);
+        background: rgba(248,250,252,.65);
       }
       .chart-filter-panel .hero-filter-row{
-        grid-template-columns: 68px minmax(0, 1fr);
+        display:flex;
+        flex-wrap:wrap;
+        gap:12px 14px;
+        align-items:flex-start;
+      }
+      .chart-filter-panel .filter-group{
+        min-width: 180px;
+      }
+      .chart-filter-panel .filter-title{
+        font-size: 11px;
+        color: var(--text-sub, #64748b);
+        letter-spacing:.2px;
+        margin-bottom:6px;
+        display:flex;
+        align-items:center;
+        gap:6px;
+      }
+      .chart-filter-panel .chart-mini-chips{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+      }
+      .filter-chip{
+        border: 1px solid rgba(148,163,184,.35);
+        color: var(--text-main, #0f172a);
+        background: rgba(255,255,255,.65);
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        cursor: pointer;
+        user-select:none;
+        transition: all .15s ease;
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+      }
+      .filter-chip input{
+        display:none;
+      }
+      .filter-chip span{
+        display:inline-block;
+        line-height: 1;
+      }
+      .filter-chip:hover{
+        transform: translateY(-1px);
+        border-color: rgba(59,130,246,.45);
+      }
+      .filter-chip.filter-chip-active{
+        background: linear-gradient(135deg, rgba(59,130,246,.95), rgba(37,99,235,.95));
+        border-color: rgba(37,99,235,.9);
+        color:#fff;
+      }
+      .filter-chip.filter-chip-disabled{
+        opacity:.45;
+        cursor:not-allowed;
+        transform:none;
+      }
+      .chart-filter-panel .filter-actions{
+        margin-left:auto;
+        min-width: auto;
+        display:flex;
+        align-items:flex-end;
+      }
+      .chart-filter-panel .btn{
+        border: 1px solid rgba(148,163,184,.35);
+        background: rgba(255,255,255,.75);
+        color: var(--text-main, #0f172a);
+        padding: 7px 12px;
+        border-radius: 10px;
+        font-size: 11px;
+        cursor: pointer;
+      }
+      .chart-filter-panel .btn:hover{
+        border-color: rgba(59,130,246,.5);
+      }
+      .chart-filter-panel .filter-hint{
+        margin-top:8px;
+        font-size: 11px;
+        color: var(--text-sub, #64748b);
       }
 
+      /* 表格 */
       .chart-table-section{
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px dashed rgba(148, 163, 184, 0.5);
+        padding: 10px 14px 14px;
       }
       .chart-table-title{
-        font-size: 11px;
-        color: var(--text-sub, #475569);
-        margin-bottom: 6px;
-      }
-      .chart-table-wrapper{
-        max-height: 320px;
-        overflow: auto;
-        border-radius: 10px;
-        border: 1px solid rgba(148, 163, 184, 0.45);
-        background: rgba(255,255,255,0.85);
+        font-size: 12px;
+        color: var(--text-main, #0f172a);
+        font-weight: 600;
+        margin-bottom: 8px;
       }
       .chart-table{
-        width: 100%;
+        width:100%;
         border-collapse: separate;
         border-spacing: 0;
-        font-size: 11px;
+        overflow:hidden;
+        border-radius: 12px;
+        border: 1px solid rgba(148,163,184,.25);
+        background: rgba(255,255,255,.65);
       }
       .chart-table th{
-        position: sticky;
-        top: 0;
-        z-index: 1;
-        background: rgba(241, 245, 249, 0.98);
-        border-bottom: 1px solid rgba(148, 163, 184, 0.45);
-        padding: 8px 10px;
-        text-align: left;
+        font-size: 11px;
+        text-align: center;
+        padding: 9px 10px;
+        background: rgba(241,245,249,.9);
+        border-bottom: 1px solid rgba(148,163,184,.18);
+        color: var(--text-sub, #64748b);
         font-weight: 600;
-        color: var(--text-sub, #475569);
-        white-space: nowrap;
       }
       .chart-table td{
-        padding: 7px 10px;
-        border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+        font-size: 11px;
+        text-align: center;
+        padding: 9px 10px;
+        border-bottom: 1px solid rgba(148,163,184,.12);
         color: var(--text-main, #0f172a);
-        white-space: nowrap;
+      }
+      .chart-table tbody tr:nth-child(odd) td{
+        background: rgba(248,250,252,.55);
       }
       .chart-table td.num{
-        text-align: right;
+        text-align: center;
         font-variant-numeric: tabular-nums;
       }
-      .chart-table tbody tr:nth-child(odd) td{ background: rgba(249, 250, 251, 0.8); }
-      .chart-table tbody tr:hover td{ background: rgba(224, 231, 255, 0.65); }
+
+      /* ROI卡片：隐藏旧 header 小筛选（如果未来加了） */
+      #card-paid-roi .chart-mini-filter{ display:none; }
+
+      /* ROI分析块（多月同时展示） */
+      #card-paid-roi .roi-insights{
+        padding: 10px 14px 14px;
+        border-top: 1px solid rgba(148,163,184,.12);
+      }
+      #card-paid-roi .roi-insights-title{
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-main, #0f172a);
+        margin-bottom: 8px;
+      }
+      #card-paid-roi .roi-insights-item{
+        padding: 10px 12px;
+        border: 1px solid rgba(148,163,184,.22);
+        background: rgba(255,255,255,.65);
+        border-radius: 12px;
+        margin-top: 10px;
+      }
+      #card-paid-roi .roi-insights-month{
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-sub, #64748b);
+        margin-bottom: 6px;
+      }
+      #card-paid-roi .roi-insights-text{
+        font-size: 11px;
+        color: var(--text-main, #0f172a);
+        line-height: 1.65;
+        white-space: pre-wrap;
+      }
     `;
     document.head.appendChild(style);
   }
 
-  function createFilterPanelFallback(sectionEl) {
-    if (!sectionEl) return;
+  function createFilterPanelFallback(cardEl) {
+    if (!cardEl) return null;
+    const existed = cardEl.querySelector("#roi-filter-panel");
+    if (existed) return existed;
 
-    const any =
-      getDom("roi-view") ||
-      getDom("roi-months") ||
-      getDom("roi-countries") ||
-      getDom("roi-medias") ||
-      getDom("roi-productTypes") ||
-      getDom("roi-windows");
-    if (any) return;
-
-    const header = sectionEl.querySelector(".chart-card-header");
-
+    const header = cardEl.querySelector(".chart-card-header");
     const panel = document.createElement("div");
     panel.className = "chart-filter-panel";
     panel.id = "roi-filter-panel";
     panel.innerHTML = `
       <div class="hero-filter-row">
-        <div class="label">视图</div>
-        <div class="chart-mini-radio" id="roi-view"></div>
+        <div class="filter-group">
+          <div class="filter-title">图表</div>
+          <div class="chart-mini-chips" id="roi-view"></div>
+        </div>
+        <div class="filter-group">
+          <div class="filter-title">月份（最多选3）</div>
+          <div class="chart-mini-chips" id="roi-months"></div>
+        </div>
+        <div class="filter-group">
+          <div class="filter-title">国家</div>
+          <div class="chart-mini-chips" id="roi-countries"></div>
+        </div>
+        <div class="filter-group">
+          <div class="filter-title">媒体</div>
+          <div class="chart-mini-chips" id="roi-medias"></div>
+        </div>
+        <div class="filter-group">
+          <div class="filter-title">产品类型</div>
+          <div class="chart-mini-chips" id="roi-productTypes"></div>
+        </div>
+        <div class="filter-group">
+          <div class="filter-title">口径</div>
+          <div class="chart-mini-chips" id="roi-windows"></div>
+        </div>
+        <div class="filter-group filter-actions">
+          <button class="btn" id="roi-reset">重置</button>
+        </div>
       </div>
-
-      <div class="hero-filter-row">
-        <div class="label">月份</div>
-        <div class="chart-mini-chips" id="roi-months"></div>
-      </div>
-
-      <div class="hero-filter-row">
-        <div class="label">国家</div>
-        <div class="chart-mini-chips" id="roi-countries"></div>
-      </div>
-
-      <div class="hero-filter-row">
-        <div class="label">媒体</div>
-        <div class="chart-mini-chips" id="roi-medias"></div>
-      </div>
-
-      <div class="hero-filter-row">
-        <div class="label">产品</div>
-        <div class="chart-mini-chips" id="roi-productTypes"></div>
-      </div>
-
-      <div class="hero-filter-row">
-        <div class="label">口径</div>
-        <div class="chart-mini-chips" id="roi-windows"></div>
-      </div>
-
-      <div style="display:flex;justify-content:flex-end;gap:8px;">
-        <button type="button" class="btn" id="roi-btn-reset">全选 / 重置</button>
-      </div>
+      <div class="filter-hint" id="roi-hint"></div>
     `;
 
-    if (header && header.parentNode) header.parentNode.insertBefore(panel, header.nextSibling);
+    if (header && header.parentNode) {
+      header.parentNode.insertBefore(panel, header.nextSibling);
+    } else {
+      cardEl.insertBefore(panel, cardEl.firstChild);
+    }
+    return panel;
   }
 
   function createTableFallbackAfter(chartEl) {
+    if (!chartEl) return null;
+    const cardEl = chartEl.closest(".chart-card");
+    if (!cardEl) return null;
+
+    const existed = cardEl.querySelector("#roi-table-section");
+    if (existed) return existed;
+
     const section = document.createElement("div");
     section.className = "chart-table-section";
-    section.id = "table-section-roi";
+    section.id = "roi-table-section";
     section.innerHTML = `
       <div class="chart-table-title" id="table-title-roi"></div>
-      <div class="chart-table-wrapper">
-        <table id="table-roi" class="chart-table"></table>
-      </div>
+      <table class="chart-table" id="table-roi"></table>
     `;
 
-    if (chartEl && chartEl.parentNode) {
-      chartEl.parentNode.insertBefore(section, chartEl.nextSibling);
-    }
+    const parent = chartEl.parentNode;
+    if (parent) parent.insertBefore(section, chartEl.nextSibling);
+    return section;
   }
 
-  function init() {
+  function initModule() {
     injectStylesOnce();
 
-    const chartEl = getDom("chart-paid-roi") || getDom("chart-roi");
+    const chartEl = getDom("chart-paid-roi");
     if (!chartEl || !window.echarts) return;
 
-    const sectionEl =
-      (chartEl.closest && chartEl.closest(".chart-card")) ||
-      getDom("card-paid-roi") ||
-      chartEl.parentNode;
+    const cardEl = chartEl.closest(".chart-card");
+    if (!cardEl) return;
 
-    createFilterPanelFallback(sectionEl);
+    // badge 改成 %
+    const badgeEl = cardEl.querySelector(".chart-badge");
+    if (badgeEl) badgeEl.textContent = "单位：%";
 
-    let tableTitleEl = getDom("table-title-roi");
-    let tableEl = getDom("table-roi");
-    if (!tableEl) {
-      createTableFallbackAfter(chartEl);
-      tableTitleEl = getDom("table-title-roi");
-      tableEl = getDom("table-roi");
-    }
+    const panelEl = createFilterPanelFallback(cardEl);
+    createTableFallbackAfter(chartEl);
 
-    const chart = echarts.init(chartEl);
+    const raw = getRAW();
+    const opts = buildOptionsFromRAW(raw);
 
-    // 可选：接入统一 resize
-    if (window.PaidDashboard && typeof window.PaidDashboard.registerChart === "function") {
-      window.PaidDashboard.registerChart(chart);
-    } else {
-      window.addEventListener("resize", () => {
-        try {
-          chart.resize();
-        } catch (e) {}
-      });
-    }
-
-    const opts = buildOptionsFromRAW();
     const state = {
-      view: "bar",
-      months: [],
-      countries: [],
-      medias: [],
-      productTypes: [],
+      view: "bar", // bar | line
+      months: pickDefaultMonths(opts.months),
+      countries: opts.countries.slice(),
+      medias: opts.medias.slice(),
+      productTypes: opts.productTypes.slice(),
       windows: ["D0", "D7"],
-      collapse: { countries: false, medias: false, productTypes: false },
+      collapse: {
+        countries: false,
+        medias: false,
+        productTypes: false,
+      },
     };
 
-    function resetState() {
-      state.view = "bar";
-      state.months = pickDefaultMonths(opts.months);
-      state.countries = (opts.countries || []).slice();
-      state.medias = (opts.medias || []).slice();
-      state.productTypes = (opts.productTypes || []).slice();
-      state.windows = ["D0", "D7"];
-      state.collapse = { countries: false, medias: false, productTypes: false };
+    const chart = window.echarts.init(chartEl);
+    const pd = window.PaidDashboard;
+    if (pd && typeof pd.registerChart === "function") pd.registerChart(chart);
+
+    function enforceMonthLimit() {
+      const hintEl = getDom("roi-hint");
+      const before = (state.months || []).slice();
+      const after = uniq(state.months).sort();
+      if (after.length > 3) {
+        state.months = after.slice(-3);
+        if (hintEl) {
+          hintEl.textContent = `月份最多选3个，已自动保留最近3个：${state.months.join(", ")}`;
+        }
+        return;
+      }
+      state.months = after;
+      if (hintEl) hintEl.textContent = "";
+      // 如果用户刚好选满 3 个，禁用其它月份（由渲染层处理）
+      if (before.join("|") !== state.months.join("|") && hintEl) hintEl.textContent = "";
     }
 
-    function buildTitleSuffix() {
-      const allMedias = opts.medias || [];
-      const allTypes = opts.productTypes || [];
+    function ensureNonEmpty() {
+      // 月份
+      if (!state.months || state.months.length === 0) state.months = pickDefaultMonths(opts.months);
+      enforceMonthLimit();
 
-      const mediaText = state.collapse.medias
-        ? "全部媒体"
-        : state.medias.length === allMedias.length
-        ? "全部媒体"
-        : state.medias.join("+");
+      // 口径
+      state.windows = uniq(state.windows);
+      if (state.windows.length === 0) state.windows = ["D0", "D7"];
 
-      const typeText = state.collapse.productTypes
-        ? "全部形态"
-        : state.productTypes.length === allTypes.length
-        ? "全部形态"
-        : state.productTypes.map((v) => String(v).toUpperCase()).join("+");
+      // 维度
+      state.countries = uniq(state.countries);
+      state.medias = uniq(state.medias);
+      state.productTypes = uniq(state.productTypes);
 
-      return `（${mediaText}，${typeText}）`;
+      if (state.collapse.countries) state.countries = opts.countries.slice();
+      if (state.collapse.medias) state.medias = opts.medias.slice();
+      if (state.collapse.productTypes) state.productTypes = opts.productTypes.slice();
+
+      if (!state.countries.length) state.countries = opts.countries.slice();
+      if (!state.medias.length) state.medias = opts.medias.slice();
+      if (!state.productTypes.length) state.productTypes = opts.productTypes.slice();
     }
 
     function renderRadioView() {
-      const container = getDom("roi-view");
-      if (!container) return;
-      container.innerHTML = "";
+      const el = getDom("roi-view");
+      if (!el) return;
 
-      const makeRadio = (label, value, checked) => {
-        const labelEl = document.createElement("label");
-        const input = document.createElement("input");
-        input.type = "radio";
-        input.name = "roi-view-radio";
-        input.value = value;
-        input.checked = checked;
-        labelEl.appendChild(input);
-        labelEl.appendChild(document.createTextNode(label));
-        input.addEventListener("change", () => {
-          if (input.checked) {
-            state.view = value;
-            renderAll();
-          }
-        });
-        return labelEl;
-      };
+      const items = [
+        { key: "bar", label: "月度柱状图" },
+        { key: "line", label: "日级折线图" },
+      ];
 
-      container.appendChild(makeRadio("柱状（月度）", "bar", state.view === "bar"));
-      container.appendChild(makeRadio("折线（日级）", "line", state.view === "line"));
+      el.innerHTML = items
+        .map((it) => {
+          const checked = state.view === it.key;
+          return `
+            <label class="filter-chip ${checked ? "filter-chip-active" : ""}">
+              <input type="radio" name="roi-view-radio" value="${it.key}" ${checked ? "checked" : ""} />
+              <span>${it.label}</span>
+            </label>
+          `;
+        })
+        .join("");
     }
 
     function renderChipGroup(cfg) {
-      const {
-        containerId,
-        values,
-        stateArray,
-        max,
-        getLabel,
-        allowEmpty,
-        specialAllNoBreakdown,
-        collapseKey,
-      } = cfg;
+      const el = getDom(cfg.containerId);
+      if (!el) return;
 
-      const container = getDom(containerId);
-      if (!container) return;
+      const values = cfg.values || [];
+      const selected = new Set(cfg.selected || []);
+      const max = cfg.maxSelect || null;
 
-      const _values = (values || []).slice();
-      container.innerHTML = "";
+      const collapseKey = cfg.collapseKey || null;
+      const hasNoSplit = !!cfg.specialAllNoBreakdown && !!collapseKey;
+      const isCollapsed = collapseKey ? !!state.collapse[collapseKey] : false;
 
-      if (specialAllNoBreakdown) {
-        const labelEl = document.createElement("label");
-        labelEl.className = "filter-chip";
+      const selectedCount = (cfg.selected || []).length;
 
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.checked = !!state.collapse[collapseKey];
+      const html = [];
 
-        labelEl.appendChild(input);
-        labelEl.appendChild(document.createTextNode("全选但不区分"));
-        labelEl.classList.toggle("filter-chip-active", input.checked);
-
-        input.addEventListener("change", () => {
-          state.collapse[collapseKey] = input.checked;
-          if (input.checked) setArray(stateArray, _values);
-          if (!stateArray.length) setArray(stateArray, _values);
-          renderAll();
-        });
-
-        container.appendChild(labelEl);
+      if (hasNoSplit) {
+        const checked = isCollapsed;
+        html.push(`
+          <label class="filter-chip ${checked ? "filter-chip-active" : ""}">
+            <input
+              type="checkbox"
+              data-group="${cfg.groupKey}"
+              data-special="nosplit"
+              data-collapse="${collapseKey}"
+              value="${ALL_NO_SPLIT_VALUE}"
+              ${checked ? "checked" : ""}
+            />
+            <span>全选但不区分</span>
+          </label>
+        `);
       }
 
-      _values.forEach((value, idx) => {
-        const labelEl = document.createElement("label");
-        labelEl.className = "filter-chip";
+      values.forEach((v) => {
+        const checked = selected.has(v);
 
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.value = value;
+        // 月份：选满 max 后禁用其它未选
+        let disabled = false;
+        if (max && !checked && selectedCount >= max) disabled = true;
 
-        const selected = stateArray.indexOf(value) !== -1;
-        input.checked = selected;
-        labelEl.classList.toggle("filter-chip-active", selected);
+        // no-split：开启时禁用其它项
+        if (hasNoSplit && isCollapsed) disabled = true;
 
-        labelEl.appendChild(input);
-        labelEl.appendChild(
-          document.createTextNode(typeof getLabel === "function" ? getLabel(value, idx) : value)
-        );
-
-        input.addEventListener("change", () => {
-          const existsIndex = stateArray.indexOf(value);
-
-          if (input.checked) {
-            if (max === 1) {
-              setArray(stateArray, [value]);
-            } else if (max && stateArray.length >= max && existsIndex === -1) {
-              input.checked = false;
-              return;
-            } else {
-              if (existsIndex === -1) stateArray.push(value);
-            }
-          } else {
-            if (existsIndex !== -1) stateArray.splice(existsIndex, 1);
-            if (!allowEmpty && stateArray.length === 0) {
-              stateArray.push(value);
-              input.checked = true;
-            }
-          }
-
-          if (specialAllNoBreakdown && state.collapse[collapseKey]) {
-            setArray(stateArray, _values);
-          }
-
-          renderAll();
-        });
-
-        container.appendChild(labelEl);
+        const label = cfg.getLabel ? cfg.getLabel(v) : String(v);
+        html.push(`
+          <label class="filter-chip ${checked ? "filter-chip-active" : ""} ${disabled ? "filter-chip-disabled" : ""}">
+            <input
+              type="checkbox"
+              data-group="${cfg.groupKey}"
+              value="${String(v)}"
+              ${checked ? "checked" : ""}
+              ${disabled ? "disabled" : ""}
+            />
+            <span>${label}</span>
+          </label>
+        `);
       });
+
+      el.innerHTML = html.join("");
     }
 
-    function filteredRowsForMonth(monthKey, extra) {
-      const RAW = getRAW();
-      const rows = (RAW[monthKey] || []).slice();
+    function baseRowPass(r) {
+      const c = normalizeCountry(r.country);
+      if (!FIXED_COUNTRY_ORDER.includes(c)) return false;
 
-      const countrySet = state.collapse.countries
-        ? null
-        : new Set(uniq(state.countries.map(normalizeCountry)));
-      const mediaSet = state.collapse.medias ? null : new Set(uniq(state.medias.map(normalizeMedia)));
-      const typeSet = state.collapse.productTypes
-        ? null
-        : new Set(uniq(state.productTypes.map(normalizeProductType)));
+      if (!state.collapse.countries && !state.countries.includes(c)) return false;
 
-      return rows.filter((r) => {
-        if (!r) return false;
+      const m = normalizeMedia(r.media);
+      if (!state.collapse.medias && !state.medias.includes(m)) return false;
 
-        const c = normalizeCountry(r.country);
-        const m = normalizeMedia(r.media);
-        const p = normalizeProductType(r.productType);
+      const p = normalizeProductType(r.productType);
+      if (!state.collapse.productTypes && !state.productTypes.includes(p)) return false;
 
-        if (countrySet && !countrySet.has(c)) return false;
-        if (mediaSet && !mediaSet.has(m)) return false;
-        if (typeSet && !typeSet.has(p)) return false;
-
-        if (extra && typeof extra === "function") return !!extra(r);
-        return true;
-      });
+      return true;
     }
 
     function renderBar() {
       const palette = getPalette();
+      const monthsSel = uniq(state.months).sort();
+      const windowsSel = uniq(state.windows);
 
-      const monthsSel = uniq(state.months).sort().slice(0, 3);
-      const windowsSel = uniq(state.windows)
-        .filter((w) => w === "D0" || w === "D7")
-        .sort((a, b) => (a === "D0" ? -1 : 1));
+      const yearsSet = new Set(monthsSel.map((m) => String(m).slice(0, 4)));
 
-      let countriesAxis = sortCountries(uniq(state.countries.map(normalizeCountry)));
-      if (state.collapse.countries) countriesAxis = ["ALL"];
+      const xCats = state.collapse.countries
+        ? [ALL_VALUE]
+        : FIXED_COUNTRY_ORDER.filter((c) => state.countries.includes(c));
+
+      // 预聚合：month -> country -> sums
+      const agg = {};
+      monthsSel.forEach((mk) => {
+        agg[mk] = {};
+        const rows = raw[mk] || [];
+        rows.forEach((r) => {
+          if (!r || !r.date) return;
+          if (!baseRowPass(r)) return;
+
+          const c = normalizeCountry(r.country);
+          const cKey = state.collapse.countries ? ALL_VALUE : c;
+          if (!agg[mk][cKey]) agg[mk][cKey] = { spent: 0, d0: 0, d7: 0 };
+
+          const b = agg[mk][cKey];
+          b.spent += safeNum(r.spent);
+          b.d0 += safeNum(r.D0_PURCHASE_VALUE);
+          b.d7 += safeNum(r.D7_PURCHASE_VALUE);
+        });
+      });
 
       const series = [];
-      monthsSel.forEach((monthKey, mi) => {
+      monthsSel.forEach((mk, mi) => {
         const color = palette[mi % palette.length];
-        const mLabel = formatMonthLabel(monthKey);
-
         windowsSel.forEach((win) => {
-          const purchaseField = win === "D7" ? "D7_PURCHASE_VALUE" : "D0_PURCHASE_VALUE";
-          const seriesName = `${mLabel} ${win}`;
+          const isD7 = win === "D7";
+          const name = `${monthLabel(mk, yearsSet)} ${win}`;
 
-          const data = countriesAxis.map((countryKey) => {
-            const rows = filteredRowsForMonth(monthKey, (r) => {
-              if (state.collapse.countries) return true;
-              return normalizeCountry(r.country) === countryKey;
-            });
-            const sums = sumFields(rows, ["spent", purchaseField]);
-            return safeDiv(sums[purchaseField], sums.spent);
+          const data = xCats.map((c) => {
+            const bucket = (agg[mk] && agg[mk][c]) || null;
+            if (!bucket) return null;
+            const num = isD7 ? bucket.d7 : bucket.d0;
+            return safeDiv(num, bucket.spent);
           });
 
+          const itemStyle = isD7
+            ? { color, decal: D7_DECAL }
+            : { color };
+
           series.push({
-            name: seriesName,
+            name,
             type: "bar",
             data,
-            barMaxWidth: 26,
-            itemStyle: {
-              color,
-              decal: win === "D7" ? D7_DECAL : null,
-            },
+            itemStyle,
             emphasis: { focus: "series" },
+            barMaxWidth: 22,
           });
         });
       });
 
       const option = {
-        grid: { left: 54, right: 22, top: 28, bottom: 48 },
-        legend: { top: 0, type: "scroll" },
+        grid: { left: 56, right: 18, top: 44, bottom: 48, containLabel: true },
+        legend: { top: 6, type: "scroll" },
         tooltip: {
           trigger: "axis",
           axisPointer: { type: "shadow" },
-          backgroundColor: "rgba(15, 23, 42, 0.92)",
-          borderWidth: 0,
-          textStyle: { fontSize: 11 },
-          formatter: (params) => {
+          formatter: function (params) {
             if (!params || !params.length) return "";
-            const title = params[0].axisValueLabel;
-            const lines = [`<strong>${title}</strong>`];
+            const axis = params[0].axisValueLabel || params[0].axisValue || "";
+            const lines = [axis];
             params.forEach((p) => {
-              lines.push(`${p.seriesName}：${formatPct01(p.data, 1)}`);
+              lines.push(`${p.marker}${p.seriesName}：${formatPct01(p.data, 1)}`);
             });
             return lines.join("<br/>");
           },
         },
         xAxis: {
           type: "category",
-          data: countriesAxis,
-          axisLabel: { color: "#475569" },
+          data: xCats,
           axisTick: { alignWithLabel: true },
+          axisLabel: { fontSize: 11 },
         },
         yAxis: {
           type: "value",
-          axisLabel: {
-            color: "#475569",
-            formatter: (v) => formatPct01(Number(v), 0),
-          },
-          splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.28)" } },
+          axisLabel: { formatter: (v) => formatPct01(v, 0) },
+          splitLine: { lineStyle: { color: "rgba(148,163,184,.18)" } },
         },
         series,
       };
@@ -624,121 +673,87 @@
     }
 
     function renderLine() {
-      const RAW = getRAW();
       const palette = getPalette();
+      const monthsSel = uniq(state.months).sort();
+      const windowsSel = uniq(state.windows);
 
-      const monthsSel = uniq(state.months).sort().slice(0, 3);
-      const windowsSel = uniq(state.windows)
-        .filter((w) => w === "D0" || w === "D7")
-        .sort((a, b) => (a === "D0" ? -1 : 1));
+      const dateSet = new Set();
+      const byBase = {}; // baseKey -> date -> {spent,d0,d7}
 
-      const countrySet = state.collapse.countries
-        ? null
-        : new Set(uniq(state.countries.map(normalizeCountry)));
-      const mediaSet = state.collapse.medias ? null : new Set(uniq(state.medias.map(normalizeMedia)));
-      const typeSet = state.collapse.productTypes
-        ? null
-        : new Set(uniq(state.productTypes.map(normalizeProductType)));
-
-      const byBase = {};
-      const datesSet = new Set();
-
-      monthsSel.forEach((monthKey) => {
-        (RAW[monthKey] || []).forEach((r) => {
-          if (!r) return;
+      monthsSel.forEach((mk) => {
+        const rows = raw[mk] || [];
+        rows.forEach((r) => {
+          if (!r || !r.date) return;
+          if (!baseRowPass(r)) return;
 
           const c0 = normalizeCountry(r.country);
           const m0 = normalizeMedia(r.media);
           const p0 = normalizeProductType(r.productType);
 
-          if (countrySet && !countrySet.has(c0)) return;
-          if (mediaSet && !mediaSet.has(m0)) return;
-          if (typeSet && !typeSet.has(p0)) return;
-
-          const d = r.date;
-          if (!d) return;
-
-          const c = state.collapse.countries ? "ALL" : c0;
-          const m = state.collapse.medias ? "ALL" : m0;
-          const p = state.collapse.productTypes ? "ALL" : p0;
+          const c = state.collapse.countries ? ALL_VALUE : c0;
+          const m = state.collapse.medias ? ALL_VALUE : m0;
+          const p = state.collapse.productTypes ? ALL_VALUE : p0;
 
           const baseKey = `${c}|${m}|${p}`;
+          const d = String(r.date);
+
+          dateSet.add(d);
           if (!byBase[baseKey]) byBase[baseKey] = {};
           if (!byBase[baseKey][d]) byBase[baseKey][d] = { spent: 0, d0: 0, d7: 0 };
 
-          const bucket = byBase[baseKey][d];
-
-          const spent = Number(r.spent);
-          if (isFinite(spent)) bucket.spent += spent;
-
-          const d0v = Number(r.D0_PURCHASE_VALUE);
-          if (isFinite(d0v)) bucket.d0 += d0v;
-
-          const d7v = Number(r.D7_PURCHASE_VALUE);
-          if (isFinite(d7v)) bucket.d7 += d7v;
-
-          datesSet.add(d);
+          const b = byBase[baseKey][d];
+          b.spent += safeNum(r.spent);
+          b.d0 += safeNum(r.D0_PURCHASE_VALUE);
+          b.d7 += safeNum(r.D7_PURCHASE_VALUE);
         });
       });
 
-      const dates = Array.from(datesSet).sort();
+      const dates = Array.from(dateSet).sort();
       const baseKeys = Object.keys(byBase).sort();
-      const series = [];
 
-      function seriesNameFromBase(baseKey, win) {
-        const parts = baseKey.split("|");
-        const c = parts[0] || "ALL";
-        const m = parts[1] || "ALL";
-        const p = parts[2] || "all";
-
-        const nameParts = [];
-        if (!state.collapse.countries) nameParts.push(c);
-        if (!state.collapse.medias) nameParts.push(m);
-        if (!state.collapse.productTypes) nameParts.push(String(p).toUpperCase());
-        nameParts.push(win);
-
-        return nameParts.join(" · ");
+      function seriesBaseName(baseKey) {
+        const [c, m, p] = String(baseKey).split("|");
+        const parts = [];
+        if (!state.collapse.countries) parts.push(c);
+        if (!state.collapse.medias) parts.push(m);
+        if (!state.collapse.productTypes) parts.push(String(p).toUpperCase());
+        return parts.length ? parts.join(" / ") : ALL_VALUE;
       }
 
-      baseKeys.forEach((baseKey, idx) => {
-        const color = palette[idx % palette.length];
-
+      const series = [];
+      baseKeys.forEach((bk, i) => {
+        const color = palette[i % palette.length];
         windowsSel.forEach((win) => {
+          const isD7 = win === "D7";
           const data = dates.map((d) => {
-            const bucket = byBase[baseKey][d];
-            if (!bucket) return null;
-            const pv = win === "D7" ? bucket.d7 : bucket.d0;
-            return safeDiv(pv, bucket.spent);
+            const b = byBase[bk][d];
+            if (!b) return null;
+            return safeDiv(isD7 ? b.d7 : b.d0, b.spent);
           });
 
           series.push({
-            name: seriesNameFromBase(baseKey, win),
+            name: `${seriesBaseName(bk)} · ${win}`,
             type: "line",
             data,
             showSymbol: false,
-            connectNulls: true,
-            lineStyle: { width: 2, type: win === "D7" ? "dashed" : "solid", color },
+            connectNulls: false,
+            lineStyle: { width: 2, type: isD7 ? "dashed" : "solid" },
             itemStyle: { color },
-            emphasis: { focus: "series" },
           });
         });
       });
 
       const option = {
-        grid: { left: 54, right: 22, top: 28, bottom: 58 },
-        legend: { top: 0, type: "scroll" },
+        grid: { left: 56, right: 18, top: 44, bottom: 58, containLabel: true },
+        legend: { top: 6, type: "scroll" },
         tooltip: {
           trigger: "axis",
-          backgroundColor: "rgba(15, 23, 42, 0.92)",
-          borderWidth: 0,
-          textStyle: { fontSize: 11 },
-          axisPointer: { type: "line" },
-          formatter: (params) => {
+          formatter: function (params) {
             if (!params || !params.length) return "";
-            const title = params[0].axisValueLabel;
-            const lines = [`<strong>${title}</strong>`];
+            const axis = params[0].axisValueLabel || params[0].axisValue || "";
+            const lines = [axis];
             params.forEach((p) => {
-              lines.push(`${p.seriesName}：${formatPct01(p.data, 2)}`);
+              lines.push(`${p.marker}${p.seriesName}：${formatPct01(p.data, 1)}`);
             });
             return lines.join("<br/>");
           },
@@ -746,22 +761,15 @@
         xAxis: {
           type: "category",
           data: dates,
-          boundaryGap: false,
           axisLabel: {
-            color: "#475569",
-            formatter: (v) => {
-              const s = String(v || "");
-              return s.length >= 10 ? s.slice(5) : s;
-            },
+            formatter: (v) => String(v).slice(5), // MM-DD
+            fontSize: 11,
           },
         },
         yAxis: {
           type: "value",
-          axisLabel: {
-            color: "#475569",
-            formatter: (v) => formatPct01(Number(v), 0),
-          },
-          splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.28)" } },
+          axisLabel: { formatter: (v) => formatPct01(v, 0) },
+          splitLine: { lineStyle: { color: "rgba(148,163,184,.18)" } },
         },
         series,
       };
@@ -769,66 +777,109 @@
       chart.setOption(option, true);
     }
 
+    function buildTableTitleSuffix() {
+      const mediasText = state.collapse.medias
+        ? "全部媒体"
+        : uniq(state.medias).join("+") || "全部媒体";
+
+      const typesText = state.collapse.productTypes
+        ? "全部类型"
+        : uniq(state.productTypes).map((t) => String(t).toUpperCase()).join("+") || "全部类型";
+
+      return `（${mediasText}，${typesText}）`;
+    }
+
     function renderTable() {
+      const tableTitleEl = getDom("table-title-roi");
+      const tableEl = getDom("table-roi");
       if (!tableEl) return;
 
-      const monthsSel = uniq(state.months).sort().slice(0, 3);
-      const windowsSel = uniq(state.windows)
-        .filter((w) => w === "D0" || w === "D7")
-        .sort((a, b) => (a === "D0" ? -1 : 1));
+      const monthsSel = uniq(state.months).sort();
+      const windowsSel = uniq(state.windows);
 
-      let rowCountries = sortCountries(uniq(state.countries.map(normalizeCountry)));
-      if (state.collapse.countries) rowCountries = ["ALL"];
+      const yearsSet = new Set(monthsSel.map((m) => String(m).slice(0, 4)));
 
-      const rowMedias = state.collapse.medias ? ["ALL"] : uniq(state.medias.map(normalizeMedia)).sort();
-      const rowTypes = state.collapse.productTypes ? ["ALL"] : uniq(state.productTypes.map(normalizeProductType)).sort();
+      const rowCountries = state.collapse.countries
+        ? [ALL_VALUE]
+        : FIXED_COUNTRY_ORDER.filter((c) => state.countries.includes(c));
 
-      const suffix = buildTitleSuffix();
-      if (tableTitleEl) tableTitleEl.textContent = `当前筛选 · D0/D7 充值 ROI（%）${suffix}`;
+      const rowMedias = state.collapse.medias ? [ALL_VALUE] : uniq(state.medias);
+      const rowTypes = state.collapse.productTypes ? [ALL_VALUE] : uniq(state.productTypes);
 
-      const thead = document.createElement("thead");
-      const trh = document.createElement("tr");
+      const addMedia = !state.collapse.medias;
+      const addType = !state.collapse.productTypes;
 
-      trh.appendChild(th("国家"));
-      if (!state.collapse.medias) trh.appendChild(th("媒体"));
-      if (!state.collapse.productTypes) trh.appendChild(th("产品"));
-
-      const colKeys = [];
-      monthsSel.forEach((m) => {
-        windowsSel.forEach((w) => {
-          colKeys.push({ m, w });
-          trh.appendChild(th(`${formatMonthLabel(m)} ${w} ROI`));
+      const headers = ["国家"];
+      if (addMedia) headers.push("媒体");
+      if (addType) headers.push("产品类型");
+      monthsSel.forEach((mk) => {
+        windowsSel.forEach((win) => {
+          headers.push(`${monthLabel(mk, yearsSet)}${win}充值ROI`);
         });
       });
 
-      thead.appendChild(trh);
+      if (tableTitleEl) tableTitleEl.textContent = `当前筛选 · 充值ROI（%）${buildTableTitleSuffix()}`;
 
-      const cellCache = {};
-      function getCell(monthKey, win, countryKey, mediaKey, typeKey) {
-        const cacheKey = `${monthKey}|${win}|${countryKey}|${mediaKey}|${typeKey}`;
-        if (cellCache[cacheKey] !== undefined) return cellCache[cacheKey];
+      // cache：month|win|c|m|p -> ratio
+      const cache = {};
+      function getCell(monthKey, win, c, m, p) {
+        const k = `${monthKey}|${win}|${c}|${m}|${p}`;
+        if (cache.hasOwnProperty(k)) return cache[k];
 
-        const purchaseField = win === "D7" ? "D7_PURCHASE_VALUE" : "D0_PURCHASE_VALUE";
+        const rows = raw[monthKey] || [];
+        let spentSum = 0;
+        let purchaseSum = 0;
 
-        const rows = filteredRowsForMonth(monthKey, (r) => {
-          if (!state.collapse.countries && countryKey !== "ALL") {
-            if (normalizeCountry(r.country) !== countryKey) return false;
+        rows.forEach((r) => {
+          if (!r || !r.date) return;
+
+          const rc = normalizeCountry(r.country);
+          if (!FIXED_COUNTRY_ORDER.includes(rc)) return;
+
+          // 国家筛选
+          if (!state.collapse.countries) {
+            if (rc !== c) return;
+          } else {
+            // collapse 时依然只统计 FIXED_COUNTRY_ORDER
+            if (!state.countries.includes(rc)) return;
           }
-          if (!state.collapse.medias && mediaKey !== "ALL") {
-            if (normalizeMedia(r.media) !== mediaKey) return false;
+
+          // 媒体筛选
+          const rm = normalizeMedia(r.media);
+          if (!state.collapse.medias) {
+            if (rm !== m) return;
+          } else {
+            if (!state.medias.includes(rm)) return;
           }
-          if (!state.collapse.productTypes && typeKey !== "ALL") {
-            if (normalizeProductType(r.productType) !== typeKey) return false;
+
+          // 产品类型筛选
+          const rp = normalizeProductType(r.productType);
+          if (!state.collapse.productTypes) {
+            if (rp !== p) return;
+          } else {
+            if (!state.productTypes.includes(rp)) return;
           }
-          return true;
+
+          spentSum += safeNum(r.spent);
+          purchaseSum += safeNum(win === "D7" ? r.D7_PURCHASE_VALUE : r.D0_PURCHASE_VALUE);
         });
 
-        const sums = sumFields(rows, ["spent", purchaseField]);
-        const ratio = safeDiv(sums[purchaseField], sums.spent);
-
-        cellCache[cacheKey] = ratio;
+        const ratio = safeDiv(purchaseSum, spentSum);
+        cache[k] = ratio;
         return ratio;
       }
+
+      // build table DOM
+      tableEl.innerHTML = "";
+      const thead = document.createElement("thead");
+      const trh = document.createElement("tr");
+      headers.forEach((h) => {
+        const th = document.createElement("th");
+        th.textContent = h;
+        trh.appendChild(th);
+      });
+      thead.appendChild(trh);
+      tableEl.appendChild(thead);
 
       const tbody = document.createElement("tbody");
 
@@ -837,15 +888,30 @@
           rowTypes.forEach((p) => {
             const tr = document.createElement("tr");
 
-            tr.appendChild(td(c));
-            if (!state.collapse.medias) tr.appendChild(td(m));
-            if (!state.collapse.productTypes) tr.appendChild(td(String(p).toUpperCase()));
+            const tdC = document.createElement("td");
+            tdC.textContent = c;
+            tr.appendChild(tdC);
 
-            colKeys.forEach((ck) => {
-              const ratio = getCell(ck.m, ck.w, c, m, p);
-              const cell = td(formatPct01(ratio, 1));
-              cell.className = "num";
-              tr.appendChild(cell);
+            if (addMedia) {
+              const tdM = document.createElement("td");
+              tdM.textContent = m;
+              tr.appendChild(tdM);
+            }
+
+            if (addType) {
+              const tdP = document.createElement("td");
+              tdP.textContent = String(p).toUpperCase();
+              tr.appendChild(tdP);
+            }
+
+            monthsSel.forEach((mk) => {
+              windowsSel.forEach((win) => {
+                const val = getCell(mk, win, c, m, p);
+                const td = document.createElement("td");
+                td.className = "num";
+                td.textContent = formatPct01(val, 1);
+                tr.appendChild(td);
+              });
             });
 
             tbody.appendChild(tr);
@@ -853,115 +919,199 @@
         });
       });
 
-      tableEl.innerHTML = "";
-      tableEl.appendChild(thead);
       tableEl.appendChild(tbody);
     }
 
-    function th(text) {
-      const el = document.createElement("th");
-      el.textContent = text;
-      return el;
-    }
+    function renderInsights() {
+      const summaryEl = cardEl.querySelector('.chart-summary[data-analysis-key="roi"]');
+      if (!summaryEl) return;
 
-    function td(text) {
-      const el = document.createElement("td");
-      el.textContent = text;
-      return el;
+      const monthsSel = uniq(state.months).sort();
+      const yearsSet = new Set(monthsSel.map((m) => String(m).slice(0, 4)));
+
+      const db = window.PAID_ANALYSIS_TEXT || {};
+      const bucket = db[MODULE_KEY] || {};
+
+      summaryEl.innerHTML = "";
+
+      const wrap = document.createElement("div");
+      wrap.className = "roi-insights";
+
+      const title = document.createElement("div");
+      title.className = "roi-insights-title";
+      title.textContent = "数据分析";
+      wrap.appendChild(title);
+
+      monthsSel.forEach((mk) => {
+        const item = document.createElement("div");
+        item.className = "roi-insights-item";
+
+        const m = document.createElement("div");
+        m.className = "roi-insights-month";
+        m.textContent = `${monthLabel(mk, yearsSet)}（${mk}）`;
+        item.appendChild(m);
+
+        const t = document.createElement("div");
+        t.className = "roi-insights-text";
+        t.textContent = bucket[mk] || "（该月暂无文案）";
+        item.appendChild(t);
+
+        wrap.appendChild(item);
+      });
+
+      summaryEl.appendChild(wrap);
     }
 
     function renderAll() {
-      ensureNonEmpty(state, opts);
-
-      state.months = uniq(state.months).sort().slice(0, 3);
-      state.countries = sortCountries(uniq(state.countries.map(normalizeCountry)));
-      state.medias = uniq(state.medias.map(normalizeMedia)).sort();
-      state.productTypes = uniq(state.productTypes.map(normalizeProductType)).sort();
-      state.windows = uniq(state.windows)
-        .filter((w) => w === "D0" || w === "D7")
-        .sort((a, b) => (a === "D0" ? -1 : 1));
-
-      if (!state.months.length) state.months = pickDefaultMonths(opts.months);
-      if (!state.windows.length) state.windows = ["D0"];
+      ensureNonEmpty();
 
       renderRadioView();
 
       renderChipGroup({
         containerId: "roi-months",
+        groupKey: "months",
         values: opts.months,
-        stateArray: state.months,
-        max: 3,
-        getLabel: (v) => formatMonthLabel(v),
-        allowEmpty: false,
-        specialAllNoBreakdown: false,
-      });
-
-      renderChipGroup({
-        containerId: "roi-windows",
-        values: ["D0", "D7"],
-        stateArray: state.windows,
-        max: 0,
-        getLabel: (v) => v,
-        allowEmpty: false,
-        specialAllNoBreakdown: false,
+        selected: state.months,
+        maxSelect: 3,
+        getLabel: (v) => monthLabel(v, new Set(opts.months.map((m) => String(m).slice(0, 4)))),
       });
 
       renderChipGroup({
         containerId: "roi-countries",
-        values: opts.countries,
-        stateArray: state.countries,
-        max: 0,
-        getLabel: (v) => v,
-        allowEmpty: false,
+        groupKey: "countries",
+        values: sortCountries(opts.countries),
+        selected: state.countries,
         specialAllNoBreakdown: true,
         collapseKey: "countries",
+        getLabel: (v) => v,
       });
 
       renderChipGroup({
         containerId: "roi-medias",
+        groupKey: "medias",
         values: opts.medias,
-        stateArray: state.medias,
-        max: 0,
-        getLabel: (v) => v,
-        allowEmpty: false,
+        selected: state.medias,
         specialAllNoBreakdown: true,
         collapseKey: "medias",
+        getLabel: (v) => v,
       });
 
       renderChipGroup({
         containerId: "roi-productTypes",
+        groupKey: "productTypes",
         values: opts.productTypes,
-        stateArray: state.productTypes,
-        max: 0,
-        getLabel: (v) => String(v).toUpperCase(),
-        allowEmpty: false,
+        selected: state.productTypes,
         specialAllNoBreakdown: true,
         collapseKey: "productTypes",
+        getLabel: (v) => String(v).toUpperCase(),
       });
 
-      const resetBtn = getDom("roi-btn-reset");
-      if (resetBtn && !resetBtn.__bound) {
-        resetBtn.__bound = true;
-        resetBtn.addEventListener("click", () => {
-          resetState();
-          renderAll();
-        });
-      }
+      renderChipGroup({
+        containerId: "roi-windows",
+        groupKey: "windows",
+        values: ["D0", "D7"],
+        selected: state.windows,
+        getLabel: (v) => v,
+      });
 
-      if (state.view === "bar") renderBar();
-      else renderLine();
+      if (state.view === "line") renderLine();
+      else renderBar();
 
       renderTable();
+      renderInsights();
     }
 
+    function resetState() {
+      state.view = "bar";
+      state.months = pickDefaultMonths(opts.months);
+      state.countries = opts.countries.slice();
+      state.medias = opts.medias.slice();
+      state.productTypes = opts.productTypes.slice();
+      state.windows = ["D0", "D7"];
+      state.collapse = { countries: false, medias: false, productTypes: false };
+
+      const hintEl = getDom("roi-hint");
+      if (hintEl) hintEl.textContent = "";
+    }
+
+    function bindPanelEvents() {
+      if (!panelEl) return;
+
+      panelEl.addEventListener("change", (e) => {
+        const t = e.target;
+        if (!(t instanceof HTMLInputElement)) return;
+
+        // view radio
+        if (t.type === "radio" && t.name === "roi-view-radio") {
+          state.view = t.value;
+          renderAll();
+          return;
+        }
+
+        if (t.type !== "checkbox") return;
+
+        const group = t.dataset.group;
+        const val = t.value;
+
+        if (!group) return;
+
+        // special no-split
+        if (t.dataset.special === "nosplit") {
+          const ck = !!t.checked;
+          const collapseKey = t.dataset.collapse;
+          if (collapseKey) state.collapse[collapseKey] = ck;
+          if (ck && opts[group]) state[group] = opts[group].slice();
+          renderAll();
+          return;
+        }
+
+        // ignore clicks on disabled
+        if (t.disabled) return;
+
+        // normal checkbox
+        const arr = state[group] ? state[group].slice() : [];
+        const idx = arr.indexOf(val);
+
+        if (t.checked) {
+          if (idx < 0) arr.push(val);
+        } else {
+          if (idx >= 0) arr.splice(idx, 1);
+        }
+
+        state[group] = arr;
+
+        if (group === "months") enforceMonthLimit();
+        ensureNonEmpty();
+        renderAll();
+      });
+
+      panelEl.addEventListener("click", (e) => {
+        const target = e.target;
+        if (!(target instanceof Element)) return;
+        const btn = target.closest("button");
+        if (!btn) return;
+
+        if (btn.id === "roi-reset") {
+          resetState();
+          renderAll();
+        }
+      });
+    }
+
+    bindPanelEvents();
     renderAll();
   }
 
-  if (window.PaidDashboard && typeof window.PaidDashboard.registerModule === "function") {
-    window.PaidDashboard.registerModule(MODULE_KEY, init);
-  } else if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+  // register
+  const pd = window.PaidDashboard;
+  if (pd && typeof pd.registerModule === "function") {
+    pd.registerModule(MODULE_KEY, initModule);
   } else {
-    init();
+    // fallback（一般不会走到）
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initModule);
+    } else {
+      initModule();
+    }
   }
 })();
