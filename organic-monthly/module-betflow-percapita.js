@@ -117,7 +117,7 @@
   const d7Decal = {
     symbol: "rect",
     rotation: Math.PI / 4,
-    color: "rgba(0,0,0,0.18)",
+    color: "rgba(255,255,255,0.4)",
     dashArrayX: [1, 0],
     dashArrayY: [4, 4],
     symbolSize: 6,
