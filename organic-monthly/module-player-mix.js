@@ -568,10 +568,10 @@
         const d7Decal = {
           symbol: 'rect',
           rotation: Math.PI / 4,
-          color: 'rgba(0,0,0,0.18)',
-          dashArrayX: [1, 0],
-          dashArrayY: [4, 4],
-          symbolSize: 6
+          color: 'rgba(255,255,255,0.35)',
+          dashArrayX: [6, 3],
+          dashArrayY: [1, 0],
+          symbolSize: 1
         };
 
         function pushSeries(segName, segKey, color, stackObj){
