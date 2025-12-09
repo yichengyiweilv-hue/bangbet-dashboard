@@ -24,7 +24,7 @@
     symbolSize: 1,
     dashArrayX: [6, 3],
     dashArrayY: [1, 0],
-    rotation: 0,
+    rotation: Math.PI / 4,
     color: "rgba(255,255,255,0.35)",
   };
 
