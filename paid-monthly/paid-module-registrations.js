@@ -630,7 +630,7 @@
       });
 
       const option = {
-        grid: { left: 44, right: 18, top: 24, bottom: 46 },
+        grid: { left: 70, right: 18, top: 24, bottom: 46 },
         legend: { type: "scroll", bottom: 6 },
         tooltip: {
           trigger: "axis",
@@ -737,7 +737,7 @@
       });
 
       const option = {
-        grid: { left: 44, right: 18, top: 24, bottom: 46 },
+        grid: { left: 70, right: 18, top: 24, bottom: 46 },
         legend: { type: "scroll", bottom: 6 },
         tooltip: {
           trigger: "axis",
