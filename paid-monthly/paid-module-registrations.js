@@ -1,800 +1,941 @@
-/* paid-monthly/paid-module-registrations.js
- * 模块1：买量注册数
- * - 模块内筛选：月份(<=3)、国家、媒体、产品类型、柱状/折线
- * - 国家/媒体/产品类型均提供「全选但不区分」：勾选=全选且不拆该维度
- * - 柱状图：横轴国家（GH/KE/NG/TZ 固定顺序），系列：月份×(媒体可选拆)×(产品类型可选拆)
- * - 折线图：日级别，系列：国家/媒体/产品类型按需拆分；多个月份在同一条线上连贯展示
- * - 表格：行=拆分维度组合；列=每个月注册数 & 注册单价（USD 等值/注册）
+/**
+ * paid-module-registrations.js
+ * ------------------------------------------------------------
+ * 模块：买量注册数（registration）& 注册单价（CPA）
+ *
+ * 数据源：window.RAW_PAID_BY_MONTH
+ * 粒度：date(UTC+0) × country × media × productType
+ *
+ * 指标：
+ * - 注册数 = sum(registration)
+ * - 注册单价（CPA）= sum(spent) / sum(registration)   (USD 等值)
+ *
+ * 交互：
+ * - 视图：柱状（月度汇总）/ 折线（日级）
+ * - 月份：最多选 3 个
+ * - 国家/媒体/产品形态：多选，且支持“全选但不区分”（等价全选，但图/表聚合不拆维度）
+ *
+ * 容器：
+ * - chart-paid-registrations（index.html 已有）
+ * - reg-view / reg-months / reg-countries / reg-medias / reg-productTypes（若无，本脚本会在 card-paid-registrations 内自动创建）
+ * - table-title-paid-registrations / table-paid-registrations（若无，本脚本会自动创建）
  */
 
 (function () {
-  "use strict";
+  const MODULE_KEY = "registrations";
+  const FIXED_COUNTRY_ORDER = ["GH", "KE", "NG", "TZ"];
 
-  const MODULE_NAME = "paid-registrations-v2";
-  const CARD_ID = "card-paid-registrations";
-  const CHART_ID = "chart-paid-registrations";
+  const FALLBACK_COLORS = [
+    "#2563eb",
+    "#16a34a",
+    "#f97316",
+    "#7c3aed",
+    "#ef4444",
+    "#0f766e",
+    "#0ea5e9",
+    "#db2777",
+    "#84cc16",
+    "#f59e0b",
+  ];
 
-  const COUNTRY_ORDER = ["GH", "KE", "NG", "TZ"];
-  const MERGE_LABEL = "全选但不区分";
-  const ALL = "__ALL__";
-
-  function safeNum(v) {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
+  function getPalette() {
+    const pd = window.PaidDashboard;
+    if (pd && Array.isArray(pd.COLORS) && pd.COLORS.length) return pd.COLORS;
+    return FALLBACK_COLORS;
   }
+
+  function getRAW() {
+    return window.RAW_PAID_BY_MONTH || {};
+  }
+
+  function getDom(id) {
+    return document.getElementById(id);
+  }
+
+  function uniq(arr) {
+    return Array.from(
+      new Set((arr || []).filter((v) => v !== undefined && v !== null))
+    );
+  }
+
+  function setArray(target, values) {
+    target.length = 0;
+    (values || []).forEach((v) => target.push(v));
+  }
+
+  function normalizeCountry(v) {
+    return String(v || "").toUpperCase();
+  }
+  function normalizeMedia(v) {
+    return String(v || "").toUpperCase();
+  }
+  function normalizeProductType(v) {
+    return String(v || "").toLowerCase();
+  }
+
+  function sortCountries(list) {
+    const order = new Map();
+    FIXED_COUNTRY_ORDER.forEach((c, i) => order.set(c, i));
+
+    return (list || [])
+      .slice()
+      .sort((a, b) => {
+        const aa = normalizeCountry(a);
+        const bb = normalizeCountry(b);
+        const ia = order.has(aa) ? order.get(aa) : 1e9;
+        const ib = order.has(bb) ? order.get(bb) : 1e9;
+        if (ia !== ib) return ia - ib;
+        return aa.localeCompare(bb);
+      });
+  }
+
+  function buildOptionsFromRAW() {
+    const RAW = getRAW();
+    const months = Object.keys(RAW).sort();
+
+    const cSet = new Set();
+    const mSet = new Set();
+    const pSet = new Set();
+
+    months.forEach((month) => {
+      (RAW[month] || []).forEach((r) => {
+        if (!r) return;
+        if (r.country) cSet.add(normalizeCountry(r.country));
+        if (r.media) mSet.add(normalizeMedia(r.media));
+        if (r.productType) pSet.add(normalizeProductType(r.productType));
+      });
+    });
+
+    // 需求：只展示 GH/KE/NG/TZ，顺序固定
+    const countries = sortCountries(Array.from(cSet)).filter(
+      (c) => FIXED_COUNTRY_ORDER.indexOf(c) !== -1
+    );
+    const medias = Array.from(mSet).sort();
+    const productTypes = Array.from(pSet).sort();
+
+    return { months, countries, medias, productTypes };
+  }
+
+  function pickDefaultMonths(allMonths) {
+    const months = (allMonths || []).slice();
+    if (!months.length) return [];
+    // 默认最近 2 个月（不够就取 1 个）
+    return months.slice(Math.max(0, months.length - 2));
+  }
+
+  function ensureNonEmpty(state, opts) {
+    if (!state.months.length) state.months = pickDefaultMonths(opts.months);
+    if (!state.months.length) state.months = (opts.months || []).slice(-1);
+
+    if (!state.countries.length) state.countries = (opts.countries || []).slice();
+    if (!state.medias.length) state.medias = (opts.medias || []).slice();
+    if (!state.productTypes.length)
+      state.productTypes = (opts.productTypes || []).slice();
+  }
+
   function safeDiv(a, b) {
-    const na = safeNum(a);
-    const nb = safeNum(b);
-    if (!nb) return null;
+    const na = Number(a);
+    const nb = Number(b);
+    if (!isFinite(na) || !isFinite(nb) || nb === 0) return null;
     return na / nb;
   }
 
-  function fmtMonthLabel(month) {
-    if (window.PaidDashboard && typeof window.PaidDashboard.formatMonthLabel === "function") {
-      return window.PaidDashboard.formatMonthLabel(month);
-    }
-    const s = String(month || "");
-    const parts = s.split("-");
-    const m = parseInt(parts[1], 10);
-    return Number.isFinite(m) ? `${m}月` : s;
-  }
-  function fmtInt(n) {
-    if (window.PaidDashboard && typeof window.PaidDashboard.formatInteger === "function") {
-      return window.PaidDashboard.formatInteger(n);
-    }
-    return Math.round(safeNum(n)).toLocaleString("en-US");
-  }
-  function fmtUSD(n) {
-    if (window.PaidDashboard && typeof window.PaidDashboard.formatUSD === "function") {
-      return window.PaidDashboard.formatUSD(n);
-    }
-    const val = safeNum(n);
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 2,
-    }).format(val);
+  function formatMonthLabel(monthKey) {
+    const m = String(monthKey || "");
+    const mm = m.split("-")[1];
+    if (!mm) return m;
+    const n = parseInt(mm, 10);
+    if (!isFinite(n)) return m;
+    return `${n}月`;
   }
 
-  function escapeHtml(str) {
-    return String(str ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
+  function formatInteger(v) {
+    if (v == null || !isFinite(v)) return "-";
+    return Math.round(v).toLocaleString();
   }
 
-  function ensureExtraStyles() {
-    const id = "paid-reg-extensions-style";
-    if (document.getElementById(id)) return;
+  function formatUSD(v, digits) {
+    if (v == null || !isFinite(v)) return "-";
+    const d = Number.isFinite(Number(digits))
+      ? Math.max(0, Math.min(6, Number(digits)))
+      : 2;
+    return Number(v).toLocaleString(undefined, {
+      minimumFractionDigits: d,
+      maximumFractionDigits: d,
+    });
+  }
+
+  function sumFields(rows, fields) {
+    const out = {};
+    (fields || []).forEach((f) => (out[f] = 0));
+
+    (rows || []).forEach((r) => {
+      if (!r) return;
+      (fields || []).forEach((f) => {
+        const v = Number(r[f]);
+        if (isFinite(v)) out[f] += v;
+      });
+    });
+
+    return out;
+  }
+
+  function injectStylesOnce() {
+    const STYLE_ID = "paid-registrations-module-style";
+    if (document.getElementById(STYLE_ID)) return;
 
     const style = document.createElement("style");
-    style.id = id;
+    style.id = STYLE_ID;
     style.textContent = `
-      /* ========= module extensions (table + disabled chips) ========= */
-      .filter-chip.is-disabled { opacity: .55; cursor: not-allowed; }
-      .filter-chip.is-disabled input { cursor: not-allowed; }
+      .chart-filter-panel{
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(255, 255, 255, 0.6);
+        display: grid;
+        gap: 8px;
+      }
+      .chart-filter-panel .hero-filter-row{
+        grid-template-columns: 68px minmax(0, 1fr);
+      }
+      .chart-filter-panel .hero-filter-row .label{
+        font-size: 11px;
+        color: var(--text-sub, #475569);
+        line-height: 22px;
+      }
 
-      /* ========= 图下方数据表（对齐 organic-monthly 风格） ========= */
-      .chart-table-section {
-        margin-top: 6px;
-        padding-top: 6px;
+      .filter-chip.filter-chip-special{ border-style: dashed; }
+
+      .chart-table-section{
+        margin-top: 10px;
+        padding-top: 10px;
         border-top: 1px dashed rgba(148, 163, 184, 0.5);
       }
-      .chart-table-title {
+      .chart-table-title{
         font-size: 11px;
-        color: var(--text-sub, #64748b);
-        margin-bottom: 4px;
+        color: var(--text-sub, #475569);
+        margin-bottom: 6px;
       }
-      .chart-table-wrapper {
-        max-height: 260px;
+      .chart-table-wrapper{
+        max-height: 320px;
         overflow: auto;
-        border-radius: 6px;
-        border: 1px solid rgba(209, 213, 219, 0.9);
-        background: #ffffff;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(255,255,255,0.85);
       }
-      table.chart-table {
+      .chart-table{
         width: 100%;
-        border-collapse: collapse;
+        border-collapse: separate;
+        border-spacing: 0;
         font-size: 11px;
       }
-      .chart-table thead th,
-      .chart-table tbody td {
-        padding: 4px 8px;
-        border-bottom: 1px solid #f3f4f6;
-        white-space: nowrap;
-      }
-      .chart-table thead th {
+      .chart-table th{
         position: sticky;
         top: 0;
         z-index: 1;
-        background: #f9fafb;
-        text-align: center;
-        font-weight: 500;
-        color: var(--text-sub, #64748b);
+        background: rgba(241, 245, 249, 0.98);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.45);
+        padding: 8px 10px;
+        text-align: left;
+        white-space: nowrap;
       }
-      .chart-table tbody tr:nth-child(odd) td { background: #fcfcff; }
-      .chart-table tbody tr:hover td { background: #eef2ff; }
-      .chart-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+      .chart-table td{
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+        color: var(--text, #0f172a);
+        white-space: nowrap;
+      }
+      .chart-table tbody tr:nth-child(2n) td{
+        background: rgba(248, 250, 252, 0.6);
+      }
+      .chart-table td.num,
+      .chart-table th.num{
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
     `;
     document.head.appendChild(style);
   }
 
-  function collectOptions(rawByMonth, months) {
-    const countrySet = new Set();
-    const mediaSet = new Set();
-    const productSet = new Set();
+  function ensureContainers(sectionEl, chartEl) {
+    if (!sectionEl || !chartEl) return;
 
-    for (const month of months) {
-      const rows = rawByMonth[month] || [];
-      for (const r of rows) {
-        if (!r) continue;
-        if (r.country) countrySet.add(r.country);
-        if (r.media) mediaSet.add(r.media);
-        if (r.productType) productSet.add(r.productType);
-      }
-    }
+    // 1) filter panel
+    if (!getDom("reg-filter-panel") && !getDom("reg-view")) {
+      const panel = document.createElement("div");
+      panel.className = "chart-filter-panel";
+      panel.id = "reg-filter-panel";
+      panel.innerHTML = `
+        <div class="hero-filter-row">
+          <div class="label">视图</div>
+          <div class="chart-mini-radio" id="reg-view"></div>
+        </div>
+        <div class="hero-filter-row">
+          <div class="label">月份</div>
+          <div class="chart-mini-chips" id="reg-months"></div>
+        </div>
+        <div class="hero-filter-row">
+          <div class="label">国家</div>
+          <div class="chart-mini-chips" id="reg-countries"></div>
+        </div>
+        <div class="hero-filter-row">
+          <div class="label">媒体</div>
+          <div class="chart-mini-chips" id="reg-medias"></div>
+        </div>
+        <div class="hero-filter-row">
+          <div class="label">形态</div>
+          <div class="chart-mini-chips" id="reg-productTypes"></div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+          <button class="btn" type="button" id="reg-btn-reset">全选 / 重置</button>
+        </div>
+      `;
 
-    const countriesAll = Array.from(countrySet);
-    let countries = COUNTRY_ORDER.filter((c) => countrySet.has(c));
-    if (!countries.length) countries = countriesAll.sort();
-
-    return {
-      countries,
-      medias: Array.from(mediaSet).sort(),
-      productTypes: Array.from(productSet).sort(),
-    };
-  }
-
-  function renderEmptyChart(chart, message) {
-    chart.setOption(
-      {
-        title: {
-          text: message || "无数据",
-          left: "center",
-          top: "center",
-          textStyle: { color: "#94a3b8", fontSize: 12, fontWeight: 500 },
-        },
-        xAxis: { show: false },
-        yAxis: { show: false },
-        series: [],
-      },
-      true
-    );
-  }
-
-  function axisKFormatter(v) {
-    const n = safeNum(v);
-    const abs = Math.abs(n);
-    if (abs >= 1000000) return (n / 1000000).toFixed(1) + "M";
-    if (abs >= 1000) return (n / 1000).toFixed(1) + "k";
-    return String(Math.round(n));
-  }
-
-  function makeChip(labelText, checked, disabled, onChange) {
-    const lab = document.createElement("label");
-    lab.className =
-      "filter-chip" +
-      (checked ? " filter-chip-active" : "") +
-      (disabled ? " is-disabled" : "");
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.checked = !!checked;
-    input.disabled = !!disabled;
-    input.addEventListener("change", () => onChange(input.checked));
-    lab.appendChild(input);
-    lab.appendChild(document.createTextNode(labelText));
-    return lab;
-  }
-
-  function renderMonthsChips(container, allMonths, selectedSet, max, onChange) {
-    container.innerHTML = "";
-    const months = allMonths.slice(); // already sorted
-    for (const m of months) {
-      const checked = selectedSet.has(m);
-      const chip = makeChip(fmtMonthLabel(m), checked, false, (nextChecked) => {
-        if (nextChecked) {
-          if (selectedSet.size >= max) {
-            // 超过上限：回滚
-            renderMonthsChips(container, allMonths, selectedSet, max, onChange);
-            return;
-          }
-          selectedSet.add(m);
-        } else {
-          selectedSet.delete(m);
-          if (selectedSet.size === 0) {
-            // 保底：至少留 1 个月（默认最新月）
-            const fallback = allMonths[allMonths.length - 1];
-            if (fallback) selectedSet.add(fallback);
-          }
-        }
-        onChange();
-      });
-      container.appendChild(chip);
-    }
-  }
-
-  function renderDimChips(container, values, selectedSet, mergeFlagRef, onChange) {
-    container.innerHTML = "";
-
-    // merge chip
-    const mergeChip = makeChip(MERGE_LABEL, mergeFlagRef.value, false, (checked) => {
-      mergeFlagRef.value = checked;
-      if (checked) {
-        selectedSet.clear();
-        for (const v of values) selectedSet.add(v);
+      const header = sectionEl.querySelector(".chart-card-header");
+      if (header && header.parentNode) {
+        header.parentNode.insertBefore(panel, header.nextSibling);
       } else {
-        // 取消 merge：默认保持“全选”，方便用户再手动叉掉
-        if (selectedSet.size === 0) {
-          for (const v of values) selectedSet.add(v);
-        }
-      }
-      onChange();
-    });
-    container.appendChild(mergeChip);
-
-    // normal chips
-    const disableOthers = !!mergeFlagRef.value;
-    for (const v of values) {
-      const checked = disableOthers ? true : selectedSet.has(v);
-      const chip = makeChip(String(v), checked, disableOthers, (nextChecked) => {
-        if (mergeFlagRef.value) return;
-
-        if (nextChecked) selectedSet.add(v);
-        else selectedSet.delete(v);
-
-        // 保底：不允许空选 -> 回到全选
-        if (selectedSet.size === 0) {
-          for (const vv of values) selectedSet.add(vv);
-        }
-        onChange();
-      });
-      container.appendChild(chip);
-    }
-  }
-
-  function selectedOrAllInOrder(selectedSet, allValues) {
-    if (!selectedSet || selectedSet.size === 0) return allValues.slice();
-    return allValues.filter((v) => selectedSet.has(v));
-  }
-
-  function normalizeSelectedMonths(selectedSet, allMonths, max) {
-    let picked = selectedOrAllInOrder(selectedSet, allMonths).slice().sort();
-    if (!picked.length) picked = allMonths.slice(-max).sort();
-    if (picked.length > max) picked = picked.slice(-max);
-    return picked;
-  }
-
-  function aggregateMonthly(rawByMonth, months, selCountries, selMedias, selPT, splitCountry, splitMedia, splitPT) {
-    const map = new Map();
-    for (const month of months) {
-      const rows = rawByMonth[month] || [];
-      for (const r of rows) {
-        if (!r) continue;
-        const c = r.country;
-        const m = r.media;
-        const p = r.productType;
-        if (!c || !m || !p) continue;
-
-        if (selCountries && !selCountries.has(c)) continue;
-        if (selMedias && !selMedias.has(m)) continue;
-        if (selPT && !selPT.has(p)) continue;
-
-        const key = [
-          month,
-          splitCountry ? c : ALL,
-          splitMedia ? m : ALL,
-          splitPT ? p : ALL,
-        ].join("||");
-
-        let agg = map.get(key);
-        if (!agg) {
-          agg = { registration: 0, spent: 0 };
-          map.set(key, agg);
-        }
-        agg.registration += safeNum(r.registration);
-        agg.spent += safeNum(r.spent);
-      }
-    }
-    return map;
-  }
-
-  function buildDailySeries(rawByMonth, months, selCountries, selMedias, selPT, splitCountry, splitMedia, splitPT) {
-    const dateSet = new Set();
-    const groupMap = new Map(); // gkey -> Map(date->sum)
-
-    for (const month of months) {
-      const rows = rawByMonth[month] || [];
-      for (const r of rows) {
-        if (!r) continue;
-        const date = r.date;
-        const c = r.country;
-        const m = r.media;
-        const p = r.productType;
-        if (!date || !c || !m || !p) continue;
-
-        if (selCountries && !selCountries.has(c)) continue;
-        if (selMedias && !selMedias.has(m)) continue;
-        if (selPT && !selPT.has(p)) continue;
-
-        dateSet.add(date);
-
-        const parts = [];
-        if (splitCountry) parts.push(`country=${c}`);
-        if (splitMedia) parts.push(`media=${m}`);
-        if (splitPT) parts.push(`pt=${p}`);
-        const gkey = parts.length ? parts.join("|") : "ALL";
-
-        let dateMap = groupMap.get(gkey);
-        if (!dateMap) {
-          dateMap = new Map();
-          groupMap.set(gkey, dateMap);
-        }
-        dateMap.set(date, (dateMap.get(date) || 0) + safeNum(r.registration));
+        sectionEl.insertBefore(panel, chartEl);
       }
     }
 
-    const dates = Array.from(dateSet).sort(); // YYYY-MM-DD lex sort ok
-    const keys = Array.from(groupMap.keys()).sort();
-
-    const series = keys.map((gkey) => {
-      const dateMap = groupMap.get(gkey);
-      const data = dates.map((d) => (dateMap && dateMap.has(d) ? dateMap.get(d) : null));
-
-      let name = "ALL";
-      if (gkey !== "ALL") {
-        name = gkey
-          .split("|")
-          .map((kv) => kv.split("=")[1])
-          .join(" · ");
+    // 2) table section
+    if (!getDom("table-paid-registrations")) {
+      const tableSection = document.createElement("div");
+      tableSection.className = "chart-table-section";
+      tableSection.id = "table-section-paid-registrations";
+      tableSection.innerHTML = `
+        <div class="chart-table-title" id="table-title-paid-registrations">当前筛选 · 买量注册（月度汇总）</div>
+        <div class="chart-table-wrapper">
+          <table id="table-paid-registrations" class="chart-table"></table>
+        </div>
+      `;
+      if (chartEl.parentNode) {
+        chartEl.parentNode.insertBefore(tableSection, chartEl.nextSibling);
+      } else {
+        sectionEl.appendChild(tableSection);
       }
-
-      return {
-        name,
-        type: "line",
-        data,
-        showSymbol: false,
-        connectNulls: true,
-        emphasis: { focus: "series" },
-      };
-    });
-
-    return { dates, series };
+    }
   }
 
-  function renderBar(chart, categories, series) {
-    if (!categories.length || !series.length) {
-      renderEmptyChart(chart, "无数据");
+  function th(text, cls) {
+    const el = document.createElement("th");
+    if (cls) el.className = cls;
+    el.textContent = text;
+    return el;
+  }
+
+  function td(text, cls) {
+    const el = document.createElement("td");
+    if (cls) el.className = cls;
+    el.textContent = text;
+    return el;
+  }
+
+  let _didInit = false;
+
+  function initModule() {
+    if (_didInit) return;
+    _didInit = true;
+
+    injectStylesOnce();
+
+    if (!window.echarts) {
+      console.warn("[paid-registrations] echarts not found");
       return;
     }
 
-    chart.setOption(
-      {
+    const chartEl =
+      getDom("chart-paid-registrations") || getDom("chart-registrations");
+    if (!chartEl) return;
+
+    const sectionEl =
+      getDom("card-paid-registrations") ||
+      chartEl.closest(".chart-card") ||
+      chartEl.parentElement;
+
+    ensureContainers(sectionEl, chartEl);
+
+    const viewEl = getDom("reg-view");
+    const monthsEl = getDom("reg-months");
+    const countriesEl = getDom("reg-countries");
+    const mediasEl = getDom("reg-medias");
+    const productTypesEl = getDom("reg-productTypes");
+    const resetBtn = getDom("reg-btn-reset");
+
+    const tableTitleEl = getDom("table-title-paid-registrations");
+    const tableEl = getDom("table-paid-registrations");
+
+    const opts = buildOptionsFromRAW();
+
+    const state = {
+      view: "bar",
+      months: pickDefaultMonths(opts.months),
+      countries: (opts.countries || []).slice(),
+      medias: (opts.medias || []).slice(),
+      productTypes: (opts.productTypes || []).slice(),
+      collapse: { countries: false, medias: false, productTypes: false },
+    };
+
+    ensureNonEmpty(state, opts);
+
+    const chart = echarts.init(chartEl);
+    const pd = window.PaidDashboard;
+    if (pd && typeof pd.registerChart === "function") pd.registerChart(chart);
+
+    function renderRadioView() {
+      if (!viewEl) return;
+      const radioName = "paid-reg-view-type";
+      viewEl.innerHTML = `
+        <label>
+          <input type="radio" name="${radioName}" value="bar" ${
+        state.view === "bar" ? "checked" : ""
+      } />
+          柱状（月度）
+        </label>
+        <label>
+          <input type="radio" name="${radioName}" value="line" ${
+        state.view === "line" ? "checked" : ""
+      } />
+          折线（日度）
+        </label>
+      `;
+
+      viewEl.querySelectorAll('input[type="radio"]').forEach((inp) => {
+        inp.addEventListener("change", (e) => {
+          const v = e.target && e.target.value;
+          if (v === "bar" || v === "line") {
+            state.view = v;
+            renderAll();
+          }
+        });
+      });
+    }
+
+    function renderChipGroup(containerEl, values, selectedArray, cfg) {
+      if (!containerEl) return;
+
+      const max = cfg && cfg.max ? Number(cfg.max) : 0;
+      const getLabel =
+        cfg && typeof cfg.getLabel === "function" ? cfg.getLabel : (v) => String(v);
+
+      const emptyFillValues =
+        cfg && typeof cfg.emptyFillValues === "function"
+          ? cfg.emptyFillValues
+          : null;
+
+      const specialAllNoBreakdown = !!(cfg && cfg.specialAllNoBreakdown);
+      const collapseRef = cfg && cfg.collapseFlagRef;
+
+      const allValues = (values || []).slice();
+      const collapseOn =
+        specialAllNoBreakdown && collapseRef && typeof collapseRef.get === "function"
+          ? !!collapseRef.get()
+          : false;
+
+      const selectedSet = new Set((selectedArray || []).map((v) => String(v)));
+
+      let html = "";
+      if (specialAllNoBreakdown) {
+        html += `
+          <label class="filter-chip filter-chip-special">
+            <input type="checkbox" data-special="collapse" ${collapseOn ? "checked" : ""} />
+            <span>全选但不区分</span>
+          </label>
+        `;
+      }
+
+      allValues.forEach((v) => {
+        const val = String(v);
+        const checked = collapseOn || selectedSet.has(val);
+        html += `
+          <label class="filter-chip">
+            <input type="checkbox" value="${val}" ${checked ? "checked" : ""} />
+            <span>${getLabel(v)}</span>
+          </label>
+        `;
+      });
+
+      containerEl.innerHTML = html;
+
+      containerEl.querySelectorAll('input[type="checkbox"]').forEach((el) => {
+        el.addEventListener("change", (e) => {
+          const target = e.target;
+          if (!target) return;
+
+          const isCollapseToggle = target.dataset && target.dataset.special === "collapse";
+
+          if (isCollapseToggle) {
+            const nowOn = !!target.checked;
+            if (collapseRef && typeof collapseRef.set === "function") collapseRef.set(nowOn);
+
+            if (nowOn) {
+              setArray(selectedArray, allValues.slice());
+            } else {
+              if (!selectedArray.length) {
+                const fill = emptyFillValues
+                  ? emptyFillValues(allValues.slice())
+                  : allValues.slice();
+                setArray(selectedArray, max ? fill.slice(0, max) : fill);
+              }
+            }
+            renderAll();
+            return;
+          }
+
+          const val = String(target.value);
+          let next = uniq(selectedArray.map((v) => String(v)));
+
+          if (target.checked) {
+            if (max && next.length >= max) {
+              target.checked = false;
+              return;
+            }
+            if (next.indexOf(val) === -1) next.push(val);
+          } else {
+            next = next.filter((x) => x !== val);
+          }
+
+          setArray(selectedArray, next);
+
+          // “全选但不区分”开启时，不允许缩小范围（始终全选）
+          if (specialAllNoBreakdown && collapseRef && typeof collapseRef.get === "function") {
+            if (collapseRef.get()) setArray(selectedArray, allValues.slice());
+          }
+
+          // 防空：为空则回填（月份按默认回填，其它按全选回填）
+          if (!selectedArray.length) {
+            const fill = emptyFillValues ? emptyFillValues(allValues.slice()) : allValues.slice();
+            setArray(selectedArray, max ? fill.slice(0, max) : fill);
+          }
+
+          renderAll();
+        });
+      });
+    }
+
+    function filteredRowsForMonth(monthKey, extraFilterFn) {
+      const RAW = getRAW();
+      const rows = RAW[monthKey] || [];
+
+      const countrySet = state.collapse.countries
+        ? null
+        : new Set(state.countries.map((v) => normalizeCountry(v)));
+      const mediaSet = state.collapse.medias
+        ? null
+        : new Set(state.medias.map((v) => normalizeMedia(v)));
+      const typeSet = state.collapse.productTypes
+        ? null
+        : new Set(state.productTypes.map((v) => normalizeProductType(v)));
+
+      return rows.filter((r) => {
+        if (!r) return false;
+
+        const c = normalizeCountry(r.country);
+        const m = normalizeMedia(r.media);
+        const p = normalizeProductType(r.productType);
+
+        if (countrySet && !countrySet.has(c)) return false;
+        if (mediaSet && !mediaSet.has(m)) return false;
+        if (typeSet && !typeSet.has(p)) return false;
+
+        if (typeof extraFilterFn === "function") {
+          if (!extraFilterFn(r, c, m, p)) return false;
+        }
+        return true;
+      });
+    }
+
+    function seriesNameFromBase(baseKey) {
+      const parts = String(baseKey || "").split("|");
+      const c = parts[0] || "ALL";
+      const m = parts[1] || "ALL";
+      const p = parts[2] || "all";
+
+      const nameParts = [];
+      if (!state.collapse.countries) nameParts.push(c);
+      if (!state.collapse.medias) nameParts.push(m);
+      if (!state.collapse.productTypes) nameParts.push(String(p).toUpperCase());
+
+      return nameParts.length ? nameParts.join(" · ") : "ALL";
+    }
+
+    function buildTitleSuffix() {
+      const allMedias = (opts.medias || []).slice().sort();
+      const allTypes = (opts.productTypes || []).slice().sort();
+
+      let mediaText = "全媒体";
+      if (state.collapse.medias) {
+        mediaText = "全媒体（不区分）";
+      } else {
+        const sel = uniq(state.medias.map(normalizeMedia)).sort();
+        mediaText = sel.length === allMedias.length ? "全媒体" : sel.join("+");
+      }
+
+      let typeText = "全形态";
+      if (state.collapse.productTypes) {
+        typeText = "全形态（不区分）";
+      } else {
+        const sel = uniq(state.productTypes.map(normalizeProductType)).sort();
+        const pretty = sel.map((x) => String(x).toUpperCase());
+        typeText = sel.length === allTypes.length ? "全形态" : pretty.join("+");
+      }
+
+      return `（${mediaText}，${typeText}）`;
+    }
+
+    function renderBar() {
+      const monthsSel = uniq(state.months).sort().slice(0, 3);
+      let countriesAxis = sortCountries(uniq(state.countries.map(normalizeCountry)));
+      if (state.collapse.countries) countriesAxis = ["ALL"];
+
+      if (!monthsSel.length || !countriesAxis.length) {
+        chart.clear();
+        chart.setOption(
+          {
+            title: {
+              text: "无可用数据",
+              left: "center",
+              top: "middle",
+              textStyle: { color: "#94a3b8", fontSize: 12 },
+            },
+          },
+          true
+        );
+        return;
+      }
+
+      const palette = getPalette();
+
+      const series = monthsSel.map((monthKey, idx) => {
+        const color = palette[idx % palette.length];
+
+        const data = countriesAxis.map((countryKey) => {
+          const rows = filteredRowsForMonth(monthKey, (_r, c) => {
+            if (state.collapse.countries) return true;
+            return c === countryKey;
+          });
+          const sum = sumFields(rows, ["registration"]);
+          return sum.registration || 0;
+        });
+
+        return {
+          name: formatMonthLabel(monthKey),
+          type: "bar",
+          data,
+          itemStyle: { color },
+          barMaxWidth: 28,
+        };
+      });
+
+      const option = {
+        grid: { left: 44, right: 18, top: 24, bottom: 46 },
+        legend: { type: "scroll", bottom: 6 },
         tooltip: {
           trigger: "axis",
           axisPointer: { type: "shadow" },
           formatter: (params) => {
             if (!params || !params.length) return "";
-            const title = escapeHtml(params[0].axisValueLabel || "");
-            const lines = [title];
-            for (const p of params) {
-              const v = safeNum(p.data);
-              lines.push(`${p.marker}${escapeHtml(p.seriesName)}：${fmtInt(v)}`);
-            }
+            const title = params[0].axisValueLabel;
+            const lines = [`<strong>${title}</strong>`];
+            params.forEach((p) => {
+              lines.push(`${p.seriesName}：${formatInteger(p.data)}`);
+            });
             return lines.join("<br/>");
           },
         },
-        legend: { type: "scroll", top: 4 },
-        grid: { left: 52, right: 20, top: 56, bottom: 40 },
-        xAxis: { type: "category", data: categories },
+        xAxis: {
+          type: "category",
+          data: countriesAxis,
+          axisLabel: { color: "#475569" },
+        },
         yAxis: {
           type: "value",
-          name: "注册数",
-          axisLabel: { formatter: axisKFormatter },
+          axisLabel: { color: "#475569", formatter: (v) => formatInteger(Number(v)) },
+          splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.28)" } },
         },
-        series: series.map((s) => ({
-          ...s,
-          type: "bar",
-          barMaxWidth: 22,
-        })),
-      },
-      true
-    );
-  }
+        series,
+      };
 
-  function renderLine(chart, dates, series) {
-    if (!dates.length || !series.length) {
-      renderEmptyChart(chart, "无数据");
-      return;
+      chart.setOption(option, true);
     }
 
-    chart.setOption(
-      {
+    function renderLine() {
+      const monthsSel = uniq(state.months).sort().slice(0, 3);
+      if (!monthsSel.length) {
+        chart.clear();
+        return;
+      }
+
+      const byBase = {};
+      const datesSet = new Set();
+
+      monthsSel.forEach((monthKey) => {
+        const rows = filteredRowsForMonth(monthKey);
+        rows.forEach((r) => {
+          if (!r || !r.date) return;
+          const d = String(r.date);
+          datesSet.add(d);
+
+          const c0 = normalizeCountry(r.country);
+          const m0 = normalizeMedia(r.media);
+          const p0 = normalizeProductType(r.productType);
+
+          const c = state.collapse.countries ? "ALL" : c0;
+          const m = state.collapse.medias ? "ALL" : m0;
+          const p = state.collapse.productTypes ? "ALL" : p0;
+
+          const baseKey = `${c}|${m}|${p}`;
+
+          if (!byBase[baseKey]) byBase[baseKey] = {};
+          if (!byBase[baseKey][d]) byBase[baseKey][d] = { reg: 0 };
+
+          const reg = Number(r.registration);
+          if (isFinite(reg)) byBase[baseKey][d].reg += reg;
+        });
+      });
+
+      const dates = Array.from(datesSet).sort();
+      const baseKeys = Object.keys(byBase).sort();
+      const palette = getPalette();
+
+      if (!dates.length || !baseKeys.length) {
+        chart.clear();
+        chart.setOption(
+          {
+            title: {
+              text: "无可用数据",
+              left: "center",
+              top: "middle",
+              textStyle: { color: "#94a3b8", fontSize: 12 },
+            },
+          },
+          true
+        );
+        return;
+      }
+
+      const series = baseKeys.map((baseKey, idx) => {
+        const name = seriesNameFromBase(baseKey);
+        const color = palette[idx % palette.length];
+
+        const data = dates.map((d) => {
+          const bucket = byBase[baseKey][d];
+          return bucket ? bucket.reg : null;
+        });
+
+        return {
+          name,
+          type: "line",
+          data,
+          showSymbol: false,
+          connectNulls: true,
+          lineStyle: { width: 2, color },
+          itemStyle: { color },
+        };
+      });
+
+      const option = {
+        grid: { left: 44, right: 18, top: 24, bottom: 46 },
+        legend: { type: "scroll", bottom: 6 },
         tooltip: {
           trigger: "axis",
+          axisPointer: { type: "line" },
           formatter: (params) => {
             if (!params || !params.length) return "";
-            const title = escapeHtml(params[0].axisValueLabel || "");
-            const lines = [title];
-            for (const p of params) {
-              const v = p.data == null ? null : safeNum(p.data);
-              lines.push(`${p.marker}${escapeHtml(p.seriesName)}：${v == null ? "-" : fmtInt(v)}`);
-            }
+            const title = params[0].axisValueLabel;
+            const lines = [`<strong>${title}</strong>`];
+            params.forEach((p) => {
+              lines.push(`${p.seriesName}：${formatInteger(p.data)}`);
+            });
             return lines.join("<br/>");
           },
         },
-        legend: { type: "scroll", top: 4 },
-        grid: { left: 52, right: 20, top: 56, bottom: 48 },
         xAxis: {
           type: "category",
           data: dates,
+          boundaryGap: false,
           axisLabel: {
-            formatter: (v) => String(v).slice(5), // MM-DD
+            color: "#475569",
+            formatter: (v) => {
+              const s = String(v || "");
+              return s.length >= 10 ? s.slice(5) : s;
+            },
           },
         },
         yAxis: {
           type: "value",
-          name: "注册数",
-          axisLabel: { formatter: axisKFormatter },
+          axisLabel: { color: "#475569", formatter: (v) => formatInteger(Number(v)) },
+          splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.28)" } },
         },
         series,
-      },
-      true
-    );
-  }
+      };
 
-  function buildTableTitle(medias, productTypes) {
-    const mediaPart = medias.length ? medias.join("+") : "-";
-    const ptPart = productTypes.length ? productTypes.join("+") : "-";
-    return `当前筛选 · 买量注册数（月度汇总）（${mediaPart}，${ptPart}）`;
-  }
-
-  function buildTableHtml(rows, headers) {
-    let html = "<thead><tr>";
-    for (const h of headers) html += `<th>${escapeHtml(h)}</th>`;
-    html += "</tr></thead><tbody>";
-
-    for (const r of rows) {
-      html += "<tr>";
-      for (const cell of r) {
-        const isNum = typeof cell === "object" && cell && cell.__num;
-        const val = isNum ? cell.val : cell;
-        html += `<td${isNum ? ' class="num"' : ""}>${escapeHtml(val)}</td>`;
-      }
-      html += "</tr>";
+      chart.setOption(option, true);
     }
 
-    html += "</tbody>";
-    return html;
-  }
+    function renderTable() {
+      if (!tableEl) return;
 
-  function initModule() {
-    if (!window.echarts) return;
-    if (!window.PaidDashboard || typeof window.PaidDashboard.registerChart !== "function") return;
+      const monthsSel = uniq(state.months).sort().slice(0, 3);
 
-    const card = document.getElementById(CARD_ID);
-    const chartDom = document.getElementById(CHART_ID);
-    if (!card || !chartDom) return;
+      let rowCountries = sortCountries(uniq(state.countries.map(normalizeCountry)));
+      if (state.collapse.countries) rowCountries = ["ALL"];
 
-    ensureExtraStyles();
+      const rowMedias = state.collapse.medias
+        ? ["ALL"]
+        : uniq(state.medias.map(normalizeMedia)).sort();
+      const rowTypes = state.collapse.productTypes
+        ? ["ALL"]
+        : uniq(state.productTypes.map(normalizeProductType)).sort();
 
-    const RAW = window.RAW_PAID_BY_MONTH || {};
-    const allMonths =
-      (window.PaidDashboard && typeof window.PaidDashboard.getMonths === "function"
-        ? window.PaidDashboard.getMonths()
-        : Object.keys(RAW).sort()) || [];
+      const suffix = buildTitleSuffix();
+      if (tableTitleEl)
+        tableTitleEl.textContent = `当前筛选 · 买量注册（月度汇总）${suffix}`;
 
-    if (!allMonths.length) {
-      chartDom.innerHTML = "无数据（RAW_PAID_BY_MONTH 为空）";
-      return;
-    }
+      const thead = document.createElement("thead");
+      const trh = document.createElement("tr");
 
-    const opts = collectOptions(RAW, allMonths);
+      trh.appendChild(th("国家"));
+      if (!state.collapse.medias) trh.appendChild(th("媒体"));
+      if (!state.collapse.productTypes) trh.appendChild(th("产品类型"));
 
-    const countriesAll = opts.countries;
-    const mediasAll = opts.medias;
-    const productTypesAll = opts.productTypes;
+      monthsSel.forEach((m) => {
+        trh.appendChild(th(`${formatMonthLabel(m)} 注册数`, "num"));
+        trh.appendChild(th(`${formatMonthLabel(m)} 注册单价`, "num"));
+      });
 
-    const defaultMonths = allMonths.slice(-3);
-    const state = {
-      view: "bar",
-      months: new Set(defaultMonths),
-      countries: new Set(countriesAll),
-      medias: new Set(mediasAll),
-      productTypes: new Set(productTypesAll),
+      thead.appendChild(trh);
 
-      mergeCountries: { value: false },
-      mergeMedias: { value: true },
-      mergeProductTypes: { value: true },
-    };
+      const cellCache = {};
+      function getCell(monthKey, countryKey, mediaKey, typeKey) {
+        const cacheKey = `${monthKey}|${countryKey}|${mediaKey}|${typeKey}`;
+        if (cacheKey in cellCache) return cellCache[cacheKey];
 
-    // ---- inject filters UI into header controls ----
-    const controls = card.querySelector(".chart-controls");
-    let filtersWrap = card.querySelector("#paid-reg-mini-filters");
-    if (!filtersWrap) {
-      filtersWrap = document.createElement("div");
-      filtersWrap.id = "paid-reg-mini-filters";
-      filtersWrap.className = "chart-mini-filters";
-      if (controls) controls.appendChild(filtersWrap);
-    }
+        const rows = filteredRowsForMonth(monthKey, (_r, c, m, p) => {
+          if (countryKey !== "ALL" && c !== countryKey) return false;
+          if (mediaKey !== "ALL" && m !== mediaKey) return false;
+          if (typeKey !== "ALL" && p !== typeKey) return false;
+          return true;
+        });
 
-    // View
-    const viewFilter = document.createElement("div");
-    viewFilter.className = "chart-mini-filter";
-    const viewLabel = document.createElement("span");
-    viewLabel.className = "chart-mini-label";
-    viewLabel.textContent = "视图：";
-    const viewRadio = document.createElement("div");
-    viewRadio.className = "chart-mini-radio";
+        const sum = sumFields(rows, ["spent", "registration"]);
+        const reg = sum.registration || 0;
+        const cpa = safeDiv(sum.spent, reg);
 
-    const viewName = "paid-reg-view";
-    const radioBar = document.createElement("input");
-    radioBar.type = "radio";
-    radioBar.name = viewName;
-    radioBar.value = "bar";
-    radioBar.checked = state.view === "bar";
-
-    const radioLine = document.createElement("input");
-    radioLine.type = "radio";
-    radioLine.name = viewName;
-    radioLine.value = "line";
-    radioLine.checked = state.view === "line";
-
-    const labBar = document.createElement("label");
-    labBar.appendChild(radioBar);
-    labBar.appendChild(document.createTextNode("柱状（月度）"));
-
-    const labLine = document.createElement("label");
-    labLine.appendChild(radioLine);
-    labLine.appendChild(document.createTextNode("折线（日度）"));
-
-    viewRadio.appendChild(labBar);
-    viewRadio.appendChild(labLine);
-    viewFilter.appendChild(viewLabel);
-    viewFilter.appendChild(viewRadio);
-
-    // Months
-    const monthFilter = document.createElement("div");
-    monthFilter.className = "chart-mini-filter";
-    const monthLabel = document.createElement("span");
-    monthLabel.className = "chart-mini-label";
-    monthLabel.textContent = "月份：";
-    const monthChips = document.createElement("div");
-    monthChips.className = "chart-mini-chips";
-    monthFilter.appendChild(monthLabel);
-    monthFilter.appendChild(monthChips);
-
-    // Countries
-    const countryFilter = document.createElement("div");
-    countryFilter.className = "chart-mini-filter";
-    const countryLabel = document.createElement("span");
-    countryLabel.className = "chart-mini-label";
-    countryLabel.textContent = "国家：";
-    const countryChips = document.createElement("div");
-    countryChips.className = "chart-mini-chips";
-    countryFilter.appendChild(countryLabel);
-    countryFilter.appendChild(countryChips);
-
-    // Media
-    const mediaFilter = document.createElement("div");
-    mediaFilter.className = "chart-mini-filter";
-    const mediaLabel = document.createElement("span");
-    mediaLabel.className = "chart-mini-label";
-    mediaLabel.textContent = "媒体：";
-    const mediaChips = document.createElement("div");
-    mediaChips.className = "chart-mini-chips";
-    mediaFilter.appendChild(mediaLabel);
-    mediaFilter.appendChild(mediaChips);
-
-    // Product type
-    const ptFilter = document.createElement("div");
-    ptFilter.className = "chart-mini-filter";
-    const ptLabel = document.createElement("span");
-    ptLabel.className = "chart-mini-label";
-    ptLabel.textContent = "产品：";
-    const ptChips = document.createElement("div");
-    ptChips.className = "chart-mini-chips";
-    ptFilter.appendChild(ptLabel);
-    ptFilter.appendChild(ptChips);
-
-    // Avoid duplicate insertion if re-init
-    if (!filtersWrap.dataset.built) {
-      filtersWrap.innerHTML = "";
-      filtersWrap.appendChild(viewFilter);
-      filtersWrap.appendChild(monthFilter);
-      filtersWrap.appendChild(countryFilter);
-      filtersWrap.appendChild(mediaFilter);
-      filtersWrap.appendChild(ptFilter);
-      filtersWrap.dataset.built = "1";
-    }
-
-    // ---- insert table under chart; move summary below table ----
-    let tableSection = card.querySelector('.chart-table-section[data-module="paid-reg"]');
-    let tableTitleEl, tableEl;
-    if (!tableSection) {
-      tableSection = document.createElement("div");
-      tableSection.className = "chart-table-section";
-      tableSection.dataset.module = "paid-reg";
-
-      tableTitleEl = document.createElement("div");
-      tableTitleEl.className = "chart-table-title";
-      tableTitleEl.id = "table-title-paid-registrations";
-
-      const wrapper = document.createElement("div");
-      wrapper.className = "chart-table-wrapper";
-
-      tableEl = document.createElement("table");
-      tableEl.className = "chart-table";
-      tableEl.id = "table-paid-registrations";
-
-      wrapper.appendChild(tableEl);
-      tableSection.appendChild(tableTitleEl);
-      tableSection.appendChild(wrapper);
-
-      chartDom.insertAdjacentElement("afterend", tableSection);
-
-      // move summary under table (保持 “图 -> 表 -> 文案” 顺序)
-      const summary = card.querySelector(".chart-summary");
-      if (summary) tableSection.insertAdjacentElement("afterend", summary);
-    } else {
-      tableTitleEl = tableSection.querySelector(".chart-table-title");
-      tableEl = tableSection.querySelector("table.chart-table");
-    }
-
-    const chart = window.echarts.init(chartDom);
-    window.PaidDashboard.registerChart(chart);
-
-    function rerender() {
-      // normalize selections
-      const months = normalizeSelectedMonths(state.months, allMonths, 3);
-
-      const selCountriesArr = selectedOrAllInOrder(state.countries, countriesAll);
-      const selMediasArr = selectedOrAllInOrder(state.medias, mediasAll);
-      const selPTArr = selectedOrAllInOrder(state.productTypes, productTypesAll);
-
-      const selCountries = new Set(selCountriesArr);
-      const selMedias = new Set(selMediasArr);
-      const selPT = new Set(selPTArr);
-
-      const splitCountry = !state.mergeCountries.value;
-      const splitMedia = !state.mergeMedias.value;
-      const splitPT = !state.mergeProductTypes.value;
-
-      // monthly aggregation for bar + table
-      const monthlyMap = aggregateMonthly(
-        RAW,
-        months,
-        selCountries,
-        selMedias,
-        selPT,
-        splitCountry,
-        splitMedia,
-        splitPT
-      );
-
-      // -------- table --------
-      // title: 按需求拼 media + productType
-      if (tableTitleEl) {
-        tableTitleEl.textContent = buildTableTitle(selMediasArr, selPTArr);
+        const out = { reg, cpa };
+        cellCache[cacheKey] = out;
+        return out;
       }
 
-      const headers = [];
-      if (splitCountry) headers.push("国家");
-      if (splitMedia) headers.push("媒体");
-      if (splitPT) headers.push("产品类型");
-      for (const m of months) {
-        headers.push(`${fmtMonthLabel(m)}注册数`);
-        headers.push(`${fmtMonthLabel(m)}注册单价`);
-      }
+      const tbody = document.createElement("tbody");
 
-      // rows = cross-product of selected split dims (small & predictable)
-      const rowCountries = splitCountry ? selCountriesArr : [ALL];
-      const rowMedias = splitMedia ? selMediasArr : [ALL];
-      const rowPTs = splitPT ? selPTArr : [ALL];
+      rowCountries.forEach((c) => {
+        rowMedias.forEach((m) => {
+          rowTypes.forEach((p) => {
+            const tr = document.createElement("tr");
 
-      const rows = [];
-      for (const c of rowCountries) {
-        for (const md of rowMedias) {
-          for (const pt of rowPTs) {
-            const row = [];
-            if (splitCountry) row.push(c);
-            if (splitMedia) row.push(md);
-            if (splitPT) row.push(pt);
+            tr.appendChild(td(c));
+            if (!state.collapse.medias) tr.appendChild(td(m));
+            if (!state.collapse.productTypes)
+              tr.appendChild(td(String(p).toUpperCase()));
 
-            for (const m of months) {
-              const key = [m, splitCountry ? c : ALL, splitMedia ? md : ALL, splitPT ? pt : ALL].join("||");
-              const agg = monthlyMap.get(key) || { registration: 0, spent: 0 };
-              const reg = safeNum(agg.registration);
-              const cpa = safeDiv(agg.spent, agg.registration);
+            monthsSel.forEach((monthKey) => {
+              const cell = getCell(monthKey, c, m, p);
+              tr.appendChild(td(formatInteger(cell.reg), "num"));
+              tr.appendChild(td(formatUSD(cell.cpa, 2), "num"));
+            });
 
-              row.push({ __num: true, val: fmtInt(reg) });
-              row.push({ __num: true, val: cpa == null ? "-" : fmtUSD(cpa) });
-            }
+            tbody.appendChild(tr);
+          });
+        });
+      });
 
-            rows.push(row);
-          }
-        }
-      }
-
-      if (tableEl) {
-        tableEl.innerHTML = buildTableHtml(rows, headers);
-      }
-
-      // -------- chart --------
-      if (state.view === "line") {
-        const { dates, series } = buildDailySeries(
-          RAW,
-          months,
-          selCountries,
-          selMedias,
-          selPT,
-          splitCountry,
-          splitMedia,
-          splitPT
-        );
-        renderLine(chart, dates, series);
-      } else {
-        // bar categories
-        const categories = splitCountry ? selCountriesArr : ["ALL"];
-
-        // bar series combos: months × (media?) × (productType?)
-        const mediaSeriesVals = splitMedia ? selMediasArr : [ALL];
-        const ptSeriesVals = splitPT ? selPTArr : [ALL];
-
-        const series = [];
-        for (const m of months) {
-          for (const md of mediaSeriesVals) {
-            for (const pt of ptSeriesVals) {
-              const nameParts = [fmtMonthLabel(m)];
-              if (splitMedia) nameParts.push(md);
-              if (splitPT) nameParts.push(pt);
-              const sName = nameParts.join(" · ");
-
-              const data = categories.map((cat) => {
-                const key = [m, splitCountry ? cat : ALL, splitMedia ? md : ALL, splitPT ? pt : ALL].join("||");
-                const agg = monthlyMap.get(key);
-                return agg ? safeNum(agg.registration) : 0;
-              });
-
-              series.push({ name: sName, data });
-            }
-          }
-        }
-
-        renderBar(chart, categories, series);
-      }
-
-      // -------- re-render chips (keep checked/disabled right) --------
-      renderMonthsChips(monthChips, allMonths, state.months, 3, rerender);
-      renderDimChips(countryChips, countriesAll, state.countries, state.mergeCountries, rerender);
-      renderDimChips(mediaChips, mediasAll, state.medias, state.mergeMedias, rerender);
-      renderDimChips(ptChips, productTypesAll, state.productTypes, state.mergeProductTypes, rerender);
-
-      // view radios keep sync
-      radioBar.checked = state.view === "bar";
-      radioLine.checked = state.view === "line";
+      tableEl.innerHTML = "";
+      tableEl.appendChild(thead);
+      tableEl.appendChild(tbody);
     }
 
-    // view change
-    radioBar.addEventListener("change", () => {
-      if (radioBar.checked) {
+    function renderAll() {
+      ensureNonEmpty(state, opts);
+
+      renderRadioView();
+
+      renderChipGroup(monthsEl, opts.months, state.months, {
+        max: 3,
+        getLabel: (v) => formatMonthLabel(v),
+        emptyFillValues: (allMonths) => pickDefaultMonths(allMonths),
+      });
+
+      renderChipGroup(countriesEl, opts.countries, state.countries, {
+        specialAllNoBreakdown: true,
+        collapseFlagRef: {
+          get: () => state.collapse.countries,
+          set: (v) => (state.collapse.countries = !!v),
+        },
+        getLabel: (v) => String(v),
+      });
+
+      renderChipGroup(mediasEl, opts.medias, state.medias, {
+        specialAllNoBreakdown: true,
+        collapseFlagRef: {
+          get: () => state.collapse.medias,
+          set: (v) => (state.collapse.medias = !!v),
+        },
+        getLabel: (v) => String(v),
+      });
+
+      renderChipGroup(productTypesEl, opts.productTypes, state.productTypes, {
+        specialAllNoBreakdown: true,
+        collapseFlagRef: {
+          get: () => state.collapse.productTypes,
+          set: (v) => (state.collapse.productTypes = !!v),
+        },
+        getLabel: (v) => String(v).toUpperCase(),
+      });
+
+      if (state.view === "line") renderLine();
+      else renderBar();
+
+      renderTable();
+    }
+
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
         state.view = "bar";
-        rerender();
-      }
-    });
-    radioLine.addEventListener("change", () => {
-      if (radioLine.checked) {
-        state.view = "line";
-        rerender();
-      }
-    });
+        state.collapse.countries = false;
+        state.collapse.medias = false;
+        state.collapse.productTypes = false;
 
-    // initial render
-    rerender();
+        state.months = pickDefaultMonths(opts.months);
+        state.countries = (opts.countries || []).slice();
+        state.medias = (opts.medias || []).slice();
+        state.productTypes = (opts.productTypes || []).slice();
+
+        renderAll();
+      });
+    }
+
+    renderAll();
   }
 
-  window.PaidDashboard && typeof window.PaidDashboard.registerModule === "function"
-    ? window.PaidDashboard.registerModule(MODULE_NAME, initModule)
-    : initModule();
+  const pd = window.PaidDashboard;
+  if (pd && typeof pd.registerModule === "function") {
+    pd.registerModule(MODULE_KEY, initModule);
+    // 动态注入场景：如果 init 已跑过，这里补一次
+    if (document.readyState !== "loading") {
+      try {
+        initModule();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  } else {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initModule);
+    } else {
+      initModule();
+    }
+  }
 })();
