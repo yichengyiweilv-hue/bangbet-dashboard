@@ -1,1250 +1,1088 @@
-// ===========================
-// 模块 7：D0 / D7 人均流水（买量）
-// 文件：paid-monthly/paid-module-betflow.js
-// ===========================
-//
-// 需求要点（简版）：
-// - 顶部筛选器：月份(最多3)、国家、图表类型(柱/折)、媒体、产品类型、人均类型(总/体育/游戏-单选)、D0/D7(多选)
-// - 媒体/产品类型/国家支持「全选但不区分」：勾选=全选；折线与表格不按该维度拆分
-// - 柱状图：x=国家（GH/KE/NG/TZ 固定顺序）；每国最多 月份×(D0/D7) 6 根；同月同色，D7 加斜线阴影
-// - 折线图：日级；按(国家×媒体×产品类型)拆分（受「全选但不区分」影响）；同组跨多月连贯；D0 虚线 / D7 实线
-// - 表格：行=国家（必要时加媒体/产品类型列）；列=选中月份×(D0/D7) 的「X月Dx 人均XX流水」；表名附带(媒体,产品类型)
-// - 取数：来自 RAW_PAID_BY_MONTH（paid-data.js）；口径：BET_FLOW / BET_PLACED_USER
+/**
+ * paid-module-betflow.js
+ * ------------------------------------------------------------
+ * 模块：D0/D7 人均流水（总/体育/游戏）
+ *
+ * 数据源：window.RAW_PAID_BY_MONTH
+ * 粒度：date(UTC+0) × country × media × productType
+ *
+ * 公式：
+ * - 人均流水 = BET_FLOW / BET_PLACED_USER
+ *
+ * 交互：
+ * - 视图：柱状（月度汇总）/ 折线（日级）
+ * - 月份：最多选 3 个
+ * - 国家/媒体/产品类型：多选，且支持“全选但不区分”（等价全选，但图/表聚合不拆维度）
+ * - 人均口径：总流水 / 体育流水 / 游戏流水（单选）
+ * - D0/D7：多选
+ *
+ * 需要 index.html 提供这些容器 id（如果没有，本脚本会自动在 card-paid-betflow 区块内创建）：
+ * - betflow-view / betflow-months / betflow-countries / betflow-medias / betflow-productTypes / betflow-metric / betflow-windows
+ * - chart-paid-betflow / table-title-betflow / table-betflow
+ */
 
 (function () {
-  'use strict';
+  const MODULE_KEY = "betflow";
 
-  // ---- Guard ----
-  window.OVP = window.OVP || {};
-  const MODULE_ID = 'flow'; // ⚠️ 对应 paid-analytics.js 里的文案 key：flow
+  // 国家固定顺序（数据里如果出现其他国家，会排在后面）
+  const FIXED_COUNTRY_ORDER = ["GH", "KE", "NG", "TZ"];
 
-  const COUNTRIES_ORDER = ['GH', 'KE', 'NG', 'TZ'];
-  const PRODUCT_ORDER = ['app', 'h5'];
-
-  const MONTH_PALETTE = [
-    '#2563eb', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444',
-    '#0ea5e9', '#22c55e', '#f97316', '#6366f1', '#14b8a6',
-    '#e11d48', '#64748b'
-  ];
-
-  const SERIES_PALETTE = [
-    '#2563eb', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444',
-    '#0ea5e9', '#22c55e', '#f97316', '#6366f1', '#14b8a6',
-    '#e11d48', '#64748b', '#7c3aed', '#059669', '#ea580c'
-  ];
-
-  const METRICS = {
-    D0: { key: 'D0', label: 'D0', lineStyle: 'dashed' },
-    D7: { key: 'D7', label: 'D7', lineStyle: 'solid' }
+  // D7 斜线阴影（ECharts 5 的 decal）
+  const D7_DECAL = {
+    symbol: "rect",
+    symbolSize: 1,
+    dashArrayX: [6, 3],
+    dashArrayY: [1, 0],
+    rotation: Math.PI / 4,
+    color: "rgba(255,255,255,0.35)",
   };
 
-  const PER_CAPITA = {
-    total: {
-      key: 'total',
-      label: '总',
-      num: { D0: 'D0_TOTAL_BET_FLOW',   D7: 'D7_TOTAL_BET_FLOW'   },
-      den: { D0: 'D0_TOTAL_BET_PLACED_USER', D7: 'D7_TOTAL_BET_PLACED_USER' }
-    },
-    sports: {
-      key: 'sports',
-      label: '体育',
-      num: { D0: 'D0_SPORTS_BET_FLOW', D7: 'D7_SPORTS_BET_FLOW' },
-      den: { D0: 'D0_SPORTS_BET_PLACED_USER', D7: 'D7_SPORTS_BET_PLACED_USER' }
-    },
-    games: {
-      key: 'games',
-      label: '游戏',
-      num: { D0: 'D0_GAMES_BET_FLOW',  D7: 'D7_GAMES_BET_FLOW'  },
-      den: { D0: 'D0_GAMES_BET_PLACED_USER',  D7: 'D7_GAMES_BET_PLACED_USER'  }
+  const FALLBACK_COLORS = [
+    "#2563eb",
+    "#7c3aed",
+    "#f97316",
+    "#16a34a",
+    "#0ea5e9",
+    "#db2777",
+    "#84cc16",
+    "#f43f5e",
+    "#14b8a6",
+    "#f59e0b",
+  ];
+
+  const METRIC_OPTIONS = [
+    { key: "total", label: "总流水" },
+    { key: "sports", label: "体育流水" },
+    { key: "games", label: "游戏流水" },
+  ];
+
+  function getMetricConfig(metricKey) {
+    const k = String(metricKey || "total");
+    if (k === "sports") {
+      return {
+        key: "sports",
+        label: "体育流水",
+        d0Flow: "D0_SPORTS_BET_FLOW",
+        d0User: "D0_SPORTS_BET_PLACED_USER",
+        d7Flow: "D7_SPORTS_BET_FLOW",
+        d7User: "D7_SPORTS_BET_PLACED_USER",
+      };
     }
-  };
+    if (k === "games") {
+      return {
+        key: "games",
+        label: "游戏流水",
+        d0Flow: "D0_GAMES_BET_FLOW",
+        d0User: "D0_GAMES_BET_PLACED_USER",
+        d7Flow: "D7_GAMES_BET_FLOW",
+        d7User: "D7_GAMES_BET_PLACED_USER",
+      };
+    }
+    return {
+      key: "total",
+      label: "总流水",
+      d0Flow: "D0_TOTAL_BET_FLOW",
+      d0User: "D0_TOTAL_BET_PLACED_USER",
+      d7Flow: "D7_TOTAL_BET_FLOW",
+      d7User: "D7_TOTAL_BET_PLACED_USER",
+    };
+  }
 
-  const STYLE_ID = 'ovp-style-paid-betflow';
+  function getPalette() {
+    const pd = window.PaidDashboard;
+    if (pd && Array.isArray(pd.COLORS) && pd.COLORS.length) return pd.COLORS;
+    return FALLBACK_COLORS;
+  }
 
-  function injectStyles() {
+  function getRAW() {
+    return window.RAW_PAID_BY_MONTH || {};
+  }
+
+  function getDom(id) {
+    return document.getElementById(id);
+  }
+
+  function uniq(arr) {
+    return Array.from(new Set((arr || []).filter((v) => v !== undefined && v !== null)));
+  }
+
+  function setArray(target, values) {
+    target.length = 0;
+    (values || []).forEach((v) => target.push(v));
+  }
+
+  function normalizeCountry(v) {
+    return String(v || "").toUpperCase();
+  }
+  function normalizeMedia(v) {
+    return String(v || "").toUpperCase();
+  }
+  function normalizeProductType(v) {
+    return String(v || "").toLowerCase();
+  }
+
+  function sortCountries(list) {
+    const order = new Map();
+    FIXED_COUNTRY_ORDER.forEach((c, i) => order.set(c, i));
+
+    return (list || [])
+      .slice()
+      .sort((a, b) => {
+        const aa = normalizeCountry(a);
+        const bb = normalizeCountry(b);
+        const ia = order.has(aa) ? order.get(aa) : 999;
+        const ib = order.has(bb) ? order.get(bb) : 999;
+        if (ia !== ib) return ia - ib;
+        return aa.localeCompare(bb);
+      })
+      .map((x) => normalizeCountry(x));
+  }
+
+  function pickDefaultMonths(allMonths) {
+    const ms = (allMonths || []).slice().sort();
+    if (ms.length <= 2) return ms;
+    return ms.slice(-2);
+  }
+
+  function buildOptionsFromRAW() {
+    const RAW = getRAW();
+    const months = Object.keys(RAW || {}).sort();
+
+    const cSet = new Set();
+    const mSet = new Set();
+    const pSet = new Set();
+
+    months.forEach((monthKey) => {
+      (RAW[monthKey] || []).forEach((r) => {
+        if (!r) return;
+        if (r.country) cSet.add(normalizeCountry(r.country));
+        if (r.media) mSet.add(normalizeMedia(r.media));
+        if (r.productType) pSet.add(normalizeProductType(r.productType));
+      });
+    });
+
+    const countries = sortCountries(Array.from(cSet));
+    const medias = Array.from(mSet).sort();
+    const productTypes = Array.from(pSet).sort();
+
+    return { months, countries, medias, productTypes };
+  }
+
+  function ensureNonEmpty(state, opts) {
+    if (!state.months.length) state.months = pickDefaultMonths(opts.months);
+    if (!state.months.length) state.months = (opts.months || []).slice(-1);
+
+    if (!state.countries.length) state.countries = (opts.countries || []).slice();
+    if (!state.medias.length) state.medias = (opts.medias || []).slice();
+    if (!state.productTypes.length) state.productTypes = (opts.productTypes || []).slice();
+
+    if (!state.metric.length) state.metric = ["total"];
+
+    if (!state.windows.length) state.windows = ["D0", "D7"];
+  }
+
+  function safeDiv(a, b) {
+    const na = Number(a);
+    const nb = Number(b);
+    if (!isFinite(na) || !isFinite(nb) || nb === 0) return null;
+    return na / nb;
+  }
+
+  function formatMonthLabel(monthKey) {
+    const m = String(monthKey || "");
+    const mm = m.split("-")[1];
+    if (!mm) return m;
+    const n = parseInt(mm, 10);
+    if (!isFinite(n)) return m;
+    return `${n}月`;
+  }
+
+  function formatUSD(v, digits) {
+    const d = typeof digits === "number" ? digits : 2;
+    if (v == null || !isFinite(v)) return "-";
+    return Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+
+  function sumFields(rows, fields) {
+    const out = {};
+    (fields || []).forEach((f) => (out[f] = 0));
+
+    (rows || []).forEach((r) => {
+      if (!r) return;
+      (fields || []).forEach((f) => {
+        const v = Number(r[f]);
+        if (isFinite(v)) out[f] += v;
+      });
+    });
+
+    return out;
+  }
+
+  function injectStylesOnce() {
+    const STYLE_ID = "paid-betflow-module-style";
     if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement('style');
+
+    const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
-      /* paid-betflow: filters */
-      .ovp-pbf-filters{
-        display:flex;
-        flex-wrap:wrap;
-        gap:10px;
-        align-items:flex-start;
-        margin: 0 0 10px;
+      /* betflow：用模块级筛选器，隐藏旧的 header 口径 radio */
+      #card-paid-betflow .chart-mini-filter{ display:none; }
+
+      .chart-filter-panel{
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(255, 255, 255, 0.6);
+        display: grid;
+        gap: 8px;
       }
-      .ovp-pbf-group{
-        display:flex;
-        flex-wrap:wrap;
-        align-items:center;
-        gap:8px;
-        padding:8px 10px;
-        border:1px solid rgba(148,163,184,.60);
-        border-radius:12px;
-        background: rgba(255,255,255,.72);
+      .chart-filter-panel .hero-filter-row{
+        display: grid;
+        grid-template-columns: 70px 1fr;
+        align-items: start;
+        gap: 10px;
       }
-      .ovp-pbf-group-title{
-        font-size:11px;
-        color: var(--muted);
-        margin-right:2px;
-        white-space:nowrap;
+      .chart-filter-panel .hero-filter-row .label{
+        font-size: 12px;
+        color: var(--text-sub, #475569);
+        padding-top: 6px;
       }
-      .ovp-pbf-option{
-        display:inline-flex;
-        align-items:center;
-        gap:6px;
-        padding:4px 8px;
-        border:1px solid rgba(148,163,184,.55);
-        border-radius:999px;
-        background:#fff;
-        cursor:pointer;
-        user-select:none;
-        font-size:11px;
-        color: var(--text);
-        line-height:1;
+      .chart-filter-panel .chart-mini-chips{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
       }
-      .ovp-pbf-option input{
-        margin:0;
-        accent-color: var(--ovp-blue, #2563eb);
+      .chart-filter-panel .chart-mini-chips label{
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        background: rgba(255,255,255,0.75);
+        font-size: 12px;
+        color: var(--text-main, #0f172a);
+        cursor: pointer;
+        user-select: none;
       }
-      .ovp-pbf-option:hover{
-        border-color: rgba(37,99,235,.55);
+      .chart-filter-panel .chart-mini-chips label input{
+        accent-color: #2563eb;
       }
-      .ovp-pbf-hint{
-        font-size:11px;
-        color: var(--muted);
-        margin-left: 2px;
-        white-space:nowrap;
+      .chart-filter-panel .chart-mini-chips label.chip-active{
+        border-color: rgba(37, 99, 235, 0.8);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+      }
+      .chart-filter-panel .chart-mini-radio{
+        display: inline-flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .chart-filter-panel .chart-mini-radio label{
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-main, #0f172a);
+        cursor: pointer;
+        user-select: none;
       }
 
-      /* paid-betflow: table */
-      .ovp-pbf-tablewrap{
-        border:1px solid rgba(148,163,184,.60);
-        border-radius:12px;
-        background: rgba(255,255,255,.92);
-        overflow:auto;
+      .chart-table-section{ margin-top: 10px; }
+      .chart-table-title{
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-sub, #475569);
+        margin-bottom: 6px;
       }
-      .ovp-pbf-tablehead{
-        display:flex;
-        align-items:baseline;
-        justify-content:space-between;
-        gap:10px;
-        padding:10px 12px;
-        border-bottom:1px solid rgba(148,163,184,.35);
-        background: rgba(249,250,251,.98);
+      .chart-table-wrapper{
+        max-height: 320px;
+        overflow: auto;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(255,255,255,0.85);
       }
-      .ovp-pbf-tabletitle{
-        font-size:12px;
-        font-weight:600;
-        color: var(--text);
+      .chart-table{
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 11px;
       }
-      .ovp-pbf-tablemeta{
-        font-size:11px;
-        color: var(--muted);
-        white-space:nowrap;
+      .chart-table th{
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: rgba(241, 245, 249, 0.98);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.45);
+        padding: 8px 10px;
+        text-align: left;
+        font-weight: 600;
+        color: var(--text-sub, #475569);
+        white-space: nowrap;
       }
-      .ovp-pbf-table{
-        width:100%;
-        border-collapse:separate;
-        border-spacing:0;
-        min-width: 860px;
-        font-size:12px;
+      .chart-table td{
+        padding: 7px 10px;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+        color: var(--text-main, #0f172a);
+        white-space: nowrap;
       }
-      .ovp-pbf-table thead th{
-        position:sticky;
-        top:0;
-        background: rgba(249,250,251,.98);
-        color: var(--muted);
-        font-weight:600;
-        text-align:right;
-        padding:10px 10px;
-        border-bottom:1px solid rgba(148,163,184,.45);
-        white-space:nowrap;
+      .chart-table td.num{
+        text-align: right;
+        font-variant-numeric: tabular-nums;
       }
-      .ovp-pbf-table thead th:first-child{
-        text-align:left;
-        left:0;
-        z-index:2;
-      }
-      .ovp-pbf-table tbody td{
-        padding:9px 10px;
-        border-bottom:1px solid rgba(148,163,184,.22);
-        text-align:right;
-        white-space:nowrap;
-      }
-      .ovp-pbf-table tbody tr:last-child td{
-        border-bottom:none;
-      }
-      .ovp-pbf-table tbody td:first-child{
-        text-align:left;
-        position:sticky;
-        left:0;
-        background: rgba(255,255,255,.98);
-        z-index:1;
-        color: var(--text);
-        font-weight:600;
-      }
-
-      /* paid-betflow: insight header */
-      .ovp-pbf-insight-head{
-        display:flex;
-        align-items:baseline;
-        justify-content:space-between;
-        gap:10px;
-        margin-top: 4px;
-      }
-      .ovp-pbf-insight-title{
-        font-size:12px;
-        font-weight:600;
-        color: var(--text);
-      }
-      .ovp-pbf-insight-meta{
-        font-size:11px;
-        color: var(--muted);
-        white-space:nowrap;
-      }
+      .chart-table tbody tr:nth-child(odd) td{ background: rgba(249, 250, 251, 0.8); }
+      .chart-table tbody tr:hover td{ background: rgba(224, 231, 255, 0.65); }
     `;
     document.head.appendChild(style);
   }
 
-  function uniq(arr) {
-    const out = [];
-    const seen = new Set();
-    for (const v of (Array.isArray(arr) ? arr : [])) {
-      const k = String(v);
-      if (seen.has(k)) continue;
-      seen.add(k);
-      out.push(v);
-    }
-    return out;
-  }
-
-  function safeNum(v) {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
-  }
-
-  function sortMonthsSafe(utils, ms) {
-    if (utils && typeof utils.sortMonths === 'function') return utils.sortMonths(ms);
-    return (Array.isArray(ms) ? ms.slice() : []).sort((a, b) => String(a).localeCompare(String(b)));
-  }
-
-  function monthToShortLabel(ym) {
-    // "2025-09" -> "9月"
-    if (!ym || typeof ym !== 'string' || ym.length < 7) return String(ym || '');
-    const m = Number(ym.slice(5, 7));
-    if (!Number.isFinite(m) || m <= 0) return ym;
-    return `${m}月`;
-  }
-
-  function fmtMoney(utils, v, digits = 2, currency = 'USD') {
-    if (v === null || v === undefined) return '—';
-    const n = Number(v);
-    if (!Number.isFinite(n)) return '—';
-    if (utils && typeof utils.fmtMoney === 'function') return utils.fmtMoney(n, currency, digits);
-    try {
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: digits }).format(n);
-    } catch (_) {
-      return `${n.toFixed(digits)} ${currency}`;
-    }
-  }
-
-  function createDecal() {
-    return {
-      symbol: 'rect',
-      symbolSize: 2,
-      dashArrayX: [1, 0],
-      dashArrayY: [6, 6],
-      rotation: Math.PI / 4,
-      color: 'rgba(255,255,255,0.40)'
-    };
-  }
-
-  function getAllValues(rawByMonth, allMonths) {
-    const medias = new Set();
-    const productTypes = new Set();
-
-    try {
-      for (const m of allMonths) {
-        const rows = Array.isArray(rawByMonth && rawByMonth[m]) ? rawByMonth[m] : [];
-        for (const r of rows) {
-          if (r && r.media) medias.add(String(r.media));
-          if (r && r.productType) productTypes.add(String(r.productType));
-        }
-      }
-    } catch (_) { /* ignore */ }
-
-    return {
-      medias: Array.from(medias).sort((a, b) => String(a).localeCompare(String(b))),
-      productTypes: Array.from(productTypes).sort((a, b) => {
-        const ia = PRODUCT_ORDER.indexOf(a);
-        const ib = PRODUCT_ORDER.indexOf(b);
-        if (ia >= 0 && ib >= 0) return ia - ib;
-        if (ia >= 0) return -1;
-        if (ib >= 0) return 1;
-        return String(a).localeCompare(String(b));
-      })
-    };
-  }
-
-  function ensureNonEmpty(nextArr, fallbackArr) {
-    const a = Array.isArray(nextArr) ? nextArr : [];
-    if (a.length) return a;
-    return Array.isArray(fallbackArr) && fallbackArr.length ? fallbackArr.slice() : [];
-  }
-
-  function enforceMaxMonths(utils, arr, max, noteFn) {
-    const ms = sortMonthsSafe(utils, uniq(arr));
-    if (ms.length <= max) return ms;
-    const kept = ms.slice(-max);
-    if (typeof noteFn === 'function') noteFn(`月份最多选${max}个，已自动保留最近${max}个月：${kept.join(', ')}`);
-    return kept;
-  }
-
-  function buildBarAgg({ rawByMonth, months, countries, medias, productTypes, metrics, perDef, countryNoSplit }) {
-    const countriesSet = new Set(countries);
-    const mediasSet = new Set(medias);
-    const prodSet = new Set(productTypes);
-
-    const out = {};
-    for (const month of months) {
-      const rows = Array.isArray(rawByMonth && rawByMonth[month]) ? rawByMonth[month] : [];
-      const acc = {}; // key -> {D0:{num,den}, D7:{num,den}}
-      const keys = countryNoSplit ? ['ALL'] : countries;
-      for (const k of keys) {
-        acc[k] = {};
-        for (const metric of metrics) acc[k][metric] = { num: 0, den: 0 };
-      }
-
-      for (const r of rows) {
-        if (!r) continue;
-        const c = String(r.country || '');
-        if (!c) continue;
-        if (!countriesSet.has(c)) continue;
-        if (!mediasSet.has(String(r.media || ''))) continue;
-        if (!prodSet.has(String(r.productType || ''))) continue;
-
-        const targetKey = countryNoSplit ? 'ALL' : c;
-        const slot = acc[targetKey];
-        if (!slot) continue;
-
-        for (const metric of metrics) {
-          const numField = perDef.num[metric];
-          const denField = perDef.den[metric];
-          slot[metric].num += safeNum(r[numField]);
-          slot[metric].den += safeNum(r[denField]);
-        }
-      }
-
-      out[month] = {};
-      for (const k of keys) {
-        out[month][k] = {};
-        for (const metric of metrics) {
-          const den = acc[k][metric].den;
-          out[month][k][metric] = den > 0 ? (acc[k][metric].num / den) : null;
-        }
-      }
-    }
-
-    return out;
-  }
-
-  function buildBarOption({ utils, perLabel, months, categories, metrics, monthAgg, monthColorMap }) {
-    const series = [];
-    const legend = [];
-
-    for (let i = 0; i < months.length; i++) {
-      const m = months[i];
-      const mLabel = monthToShortLabel(m);
-      const color = monthColorMap[m] || MONTH_PALETTE[i % MONTH_PALETTE.length];
-
-      for (const metric of metrics) {
-        const name = `${mLabel} ${metric}`;
-        legend.push(name);
-
-        series.push({
-          name,
-          type: 'bar',
-          data: categories.map((cat) => {
-            const v = (monthAgg && monthAgg[m] && monthAgg[m][cat]) ? monthAgg[m][cat][metric] : null;
-            return (v === null || v === undefined) ? null : v;
-          }),
-          itemStyle: metric === 'D7'
-            ? { color, decal: createDecal() }
-            : { color },
-          emphasis: { focus: 'series' }
-        });
-      }
-    }
-
-    return {
-      animationDuration: 300,
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        formatter: function (params) {
-          if (!Array.isArray(params) || !params.length) return '';
-          const axis = params[0].axisValueLabel || params[0].axisValue || '';
-          let html = `<div style="font-weight:600;margin-bottom:6px;">${axis}</div>`;
-          html += `<div style="color:#6b7280;margin-bottom:6px;">人均${perLabel}流水 · 单位：USD/人</div>`;
-          for (const p of params) {
-            const val = (p.data === null || p.data === undefined) ? null : Number(p.data);
-            const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:10px;background:${p.color};margin-right:6px;vertical-align:middle;"></span>`;
-            html += `<div style="margin:4px 0;">${dot}<span style="color:#111827;">${p.seriesName}</span>：<span style="font-weight:600;color:#111827;">${fmtMoney(utils, val, 2)}</span></div>`;
-          }
-          return html;
-        }
-      },
-      legend: {
-        data: legend,
-        top: 8,
-        left: 8,
-        textStyle: { color: '#6b7280', fontSize: 11 },
-        type: 'scroll'
-      },
-      grid: { top: 56, left: 52, right: 18, bottom: 36, containLabel: true },
-      xAxis: {
-        type: 'category',
-        data: categories,
-        axisTick: { alignWithLabel: true },
-        axisLabel: { color: '#6b7280' }
-      },
-      yAxis: {
-        type: 'value',
-        min: 0,
-        axisLabel: {
-          color: '#6b7280',
-          formatter: function (val) {
-            const n = Number(val);
-            if (!Number.isFinite(n)) return '';
-            return n >= 1000 ? `${Math.round(n / 100) / 10}k` : String(Math.round(n));
-          }
-        },
-        splitLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } }
-      },
-      series
-    };
-  }
-
-  function buildDailySeries({ rawByMonth, months, countries, medias, productTypes, metrics, perDef, groupBy }) {
-    const countriesSet = new Set(countries);
-    const mediasSet = new Set(medias);
-    const prodSet = new Set(productTypes);
-
-    const dateSet = new Set();
-    const acc = new Map(); // key: date \u0001 groupKey -> {D0:{num,den}, D7:{num,den}}
-    const meta = new Map(); // groupKey -> {country, media, productType, label}
-
-    function groupKeyOf(r) {
-      const parts = [];
-      if (groupBy.country) parts.push(String(r.country || ''));
-      if (groupBy.media) parts.push(String(r.media || ''));
-      if (groupBy.productType) parts.push(String(r.productType || ''));
-      return parts.length ? parts.join('|') : 'ALL';
-    }
-
-    function metaOfKey(key) {
-      if (key === 'ALL') return { country: 'ALL', media: 'ALL', productType: 'ALL' };
-      const parts = String(key).split('|');
-      const out = { country: 'ALL', media: 'ALL', productType: 'ALL' };
-      let i = 0;
-      if (groupBy.country) out.country = parts[i++] || '—';
-      if (groupBy.media) out.media = parts[i++] || '—';
-      if (groupBy.productType) out.productType = parts[i++] || '—';
-      return out;
-    }
-
-    for (const m of months) {
-      const rows = Array.isArray(rawByMonth && rawByMonth[m]) ? rawByMonth[m] : [];
-      for (const r of rows) {
-        if (!r || !r.date) continue;
-        const c = String(r.country || '');
-        if (!c) continue;
-        if (!countriesSet.has(c)) continue;
-        if (!mediasSet.has(String(r.media || ''))) continue;
-        if (!prodSet.has(String(r.productType || ''))) continue;
-
-        const d = String(r.date);
-        dateSet.add(d);
-
-        const gk = groupKeyOf(r);
-        if (!meta.has(gk)) {
-          const mm = metaOfKey(gk);
-          const parts = [];
-          if (groupBy.country) parts.push(mm.country);
-          if (groupBy.media) parts.push(mm.media);
-          if (groupBy.productType) parts.push(mm.productType);
-          meta.set(gk, {
-            ...mm,
-            label: parts.length ? parts.join('·') : 'ALL'
-          });
-        }
-
-        const k = `${d}\u0001${gk}`;
-        if (!acc.has(k)) {
-          const init = {};
-          for (const metric of metrics) init[metric] = { num: 0, den: 0 };
-          acc.set(k, init);
-        }
-        const slot = acc.get(k);
-
-        for (const metric of metrics) {
-          const numField = perDef.num[metric];
-          const denField = perDef.den[metric];
-          slot[metric].num += safeNum(r[numField]);
-          slot[metric].den += safeNum(r[denField]);
-        }
-      }
-    }
-
-    const dates = Array.from(dateSet).sort((a, b) => String(a).localeCompare(String(b)));
-
-    const groups = Array.from(meta.entries()).map(([key, m]) => ({ key, ...m }));
-
-    function countryIdx(c) {
-      const i = COUNTRIES_ORDER.indexOf(c);
-      return i >= 0 ? i : 999;
-    }
-    function productIdx(p) {
-      const i = PRODUCT_ORDER.indexOf(p);
-      return i >= 0 ? i : 999;
-    }
-
-    groups.sort((a, b) => {
-      if (groupBy.country) {
-        const da = countryIdx(a.country);
-        const db = countryIdx(b.country);
-        if (da !== db) return da - db;
-      }
-      if (groupBy.media) {
-        const ma = String(a.media).localeCompare(String(b.media));
-        if (ma !== 0) return ma;
-      }
-      if (groupBy.productType) {
-        const pa = productIdx(a.productType);
-        const pb = productIdx(b.productType);
-        if (pa !== pb) return pa - pb;
-      }
-      return String(a.label).localeCompare(String(b.label));
-    });
-
-    groups.forEach((g, idx) => { g.color = SERIES_PALETTE[idx % SERIES_PALETTE.length]; });
-
-    for (const g of groups) {
-      g.data = {};
-      for (const metric of metrics) {
-        g.data[metric] = dates.map((d) => {
-          const slot = acc.get(`${d}\u0001${g.key}`);
-          if (!slot) return null;
-          const den = slot[metric].den;
-          return den > 0 ? (slot[metric].num / den) : null;
-        });
-      }
-    }
-
-    return { dates, groups };
-  }
-
-  function buildLineOption({ utils, perLabel, dates, groups, metrics }) {
-    const series = [];
-    const legendData = [];
-
-    for (const g of groups) {
-      legendData.push(g.label);
-
-      for (const metric of metrics) {
-        const def = METRICS[metric];
-        if (!def) continue;
-
-        series.push({
-          id: `${g.key}__${metric}`,
-          name: g.label, // 同名：legend 里只显示一次，切换时 D0/D7 一起隐藏
-          type: 'line',
-          data: g.data[metric],
-          showSymbol: false,
-          connectNulls: true,
-          smooth: false,
-          lineStyle: { width: 2, type: def.lineStyle, color: g.color },
-          itemStyle: { color: g.color },
-          emphasis: { focus: 'series' }
-        });
-      }
-    }
-
-    return {
-      animationDuration: 300,
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'line' },
-        formatter: function (params) {
-          if (!Array.isArray(params) || !params.length) return '';
-          const date = params[0].axisValueLabel || params[0].axisValue || '';
-          const byName = {};
-
-          for (const p of params) {
-            const sid = String(p.seriesId || '');
-            const metric = sid.endsWith('__D7') ? 'D7' : (sid.endsWith('__D0') ? 'D0' : '');
-            if (!byName[p.seriesName]) byName[p.seriesName] = {};
-            byName[p.seriesName][metric] = (p.data === null || p.data === undefined) ? null : Number(p.data);
-          }
-
-          const names = Object.keys(byName).sort((a, b) => String(a).localeCompare(String(b)));
-
-          let html = `<div style="font-weight:600;margin-bottom:6px;">${date}</div>`;
-          html += `<div style="color:#6b7280;margin-bottom:6px;">人均${perLabel}流水 · 单位：USD/人</div>`;
-
-          for (const name of names) {
-            const d0 = ('D0' in byName[name]) ? byName[name].D0 : null;
-            const d7 = ('D7' in byName[name]) ? byName[name].D7 : null;
-            const d0s = fmtMoney(utils, d0, 2);
-            const d7s = fmtMoney(utils, d7, 2);
-            html += `<div style="margin:4px 0;"><span style="color:#111827;font-weight:600;">${name}</span>：<span style="color:#111827;">D0 ${d0s}</span><span style="color:#6b7280;"> / </span><span style="color:#111827;">D7 ${d7s}</span></div>`;
-          }
-          return html;
-        }
-      },
-      legend: {
-        data: legendData,
-        top: 8,
-        left: 8,
-        textStyle: { color: '#6b7280', fontSize: 11 },
-        type: 'scroll'
-      },
-      grid: { top: 56, left: 52, right: 18, bottom: 44, containLabel: true },
-      xAxis: {
-        type: 'category',
-        data: dates,
-        axisLabel: {
-          color: '#6b7280',
-          formatter: function (v) {
-            const s = String(v || '');
-            return s.length >= 10 ? s.slice(5) : s;
-          }
-        },
-        axisTick: { show: false }
-      },
-      yAxis: {
-        type: 'value',
-        min: 0,
-        axisLabel: {
-          color: '#6b7280',
-          formatter: function (val) {
-            const n = Number(val);
-            if (!Number.isFinite(n)) return '';
-            return n >= 1000 ? `${Math.round(n / 100) / 10}k` : String(Math.round(n));
-          }
-        },
-        splitLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } }
-      },
-      series
-    };
-  }
-
-  function buildTableGroups({ rawByMonth, months, countries, medias, productTypes, metrics, perDef, groupBy }) {
-    const countriesSet = new Set(countries);
-    const mediasSet = new Set(medias);
-    const prodSet = new Set(productTypes);
-
-    const groups = new Map(); // gk -> { country, media, productType, byMonth: { [m]: {D0:{num,den}, D7...} } }
-
-    function keyOf(r) {
-      const parts = [];
-      if (groupBy.country) parts.push(String(r.country || ''));
-      if (groupBy.media) parts.push(String(r.media || ''));
-      if (groupBy.productType) parts.push(String(r.productType || ''));
-      return parts.length ? parts.join('|') : 'ALL';
-    }
-    function metaFromKey(key) {
-      if (key === 'ALL') return { country: 'ALL', media: 'ALL', productType: 'ALL' };
-      const parts = String(key).split('|');
-      const out = { country: 'ALL', media: 'ALL', productType: 'ALL' };
-      let i = 0;
-      if (groupBy.country) out.country = parts[i++] || '—';
-      if (groupBy.media) out.media = parts[i++] || '—';
-      if (groupBy.productType) out.productType = parts[i++] || '—';
-      return out;
-    }
-
-    for (const m of months) {
-      const rows = Array.isArray(rawByMonth && rawByMonth[m]) ? rawByMonth[m] : [];
-      for (const r of rows) {
-        if (!r) continue;
-        const c = String(r.country || '');
-        if (!c) continue;
-        if (!countriesSet.has(c)) continue;
-        if (!mediasSet.has(String(r.media || ''))) continue;
-        if (!prodSet.has(String(r.productType || ''))) continue;
-
-        const gk = keyOf(r);
-        if (!groups.has(gk)) {
-          const meta = metaFromKey(gk);
-          groups.set(gk, { key: gk, ...meta, byMonth: {} });
-        }
-        const g = groups.get(gk);
-
-        if (!g.byMonth[m]) {
-          const init = {};
-          for (const metric of metrics) init[metric] = { num: 0, den: 0 };
-          g.byMonth[m] = init;
-        }
-
-        for (const metric of metrics) {
-          const numField = perDef.num[metric];
-          const denField = perDef.den[metric];
-          g.byMonth[m][metric].num += safeNum(r[numField]);
-          g.byMonth[m][metric].den += safeNum(r[denField]);
-        }
-      }
-    }
-
-    const list = Array.from(groups.values());
-
-    function countryIdx(c) {
-      const i = COUNTRIES_ORDER.indexOf(c);
-      return i >= 0 ? i : 999;
-    }
-    function productIdx(p) {
-      const i = PRODUCT_ORDER.indexOf(p);
-      return i >= 0 ? i : 999;
-    }
-
-    list.sort((a, b) => {
-      const da = countryIdx(a.country);
-      const db = countryIdx(b.country);
-      if (da !== db) return da - db;
-
-      if (groupBy.media) {
-        const ma = String(a.media).localeCompare(String(b.media));
-        if (ma !== 0) return ma;
-      }
-      if (groupBy.productType) {
-        const pa = productIdx(a.productType);
-        const pb = productIdx(b.productType);
-        if (pa !== pb) return pa - pb;
-      }
-      return 0;
-    });
-
-    return list;
-  }
-
-  function buildTableHtml({ utils, months, metrics, perLabel, groups, showMediaCol, showProductCol, titleSuffix }) {
-    const cols = [];
-
-    cols.push({ key: 'country', label: '国家', align: 'left' });
-    if (showMediaCol) cols.push({ key: 'media', label: '媒体', align: 'left' });
-    if (showProductCol) cols.push({ key: 'productType', label: '产品类型', align: 'left' });
-
-    for (const m of months) {
-      const mLabel = monthToShortLabel(m);
-      for (const metric of metrics) {
-        cols.push({
-          key: `${m}__${metric}`,
-          label: `${mLabel} ${metric} 人均${perLabel}流水`,
-          align: 'right'
-        });
-      }
-    }
-
-    const headTh = cols.map((c, idx) => {
-      const align = (idx === 0 || c.align === 'left') ? 'left' : 'right';
-      return `<th style="text-align:${align};">${c.label}</th>`;
-    }).join('');
-
-    const bodyTr = groups.map((g) => {
-      const tds = [];
-
-      tds.push(`<td>${g.country}</td>`);
-      if (showMediaCol) tds.push(`<td>${g.media}</td>`);
-      if (showProductCol) tds.push(`<td>${g.productType}</td>`);
-
-      for (const m of months) {
-        for (const metric of metrics) {
-          const cell = g.byMonth && g.byMonth[m] && g.byMonth[m][metric] ? g.byMonth[m][metric] : null;
-          const val = cell && cell.den > 0 ? (cell.num / cell.den) : null;
-          tds.push(`<td>${fmtMoney(utils, val, 2)}</td>`);
-        }
-      }
-
-      return `<tr>${tds.join('')}</tr>`;
-    }).join('');
-
-    const meta = `列：${months.length}个月 × ${metrics.length}个口径 · 单位：USD/人`;
-
-    return `
-      <div class="ovp-pbf-tablehead">
-        <div class="ovp-pbf-tabletitle">数据表${titleSuffix ? `（${titleSuffix}）` : ''}</div>
-        <div class="ovp-pbf-tablemeta">${meta}</div>
+  function createFilterPanelFallback(sectionEl) {
+    if (!sectionEl) return;
+
+    const any =
+      getDom("betflow-view") ||
+      getDom("betflow-months") ||
+      getDom("betflow-countries") ||
+      getDom("betflow-medias") ||
+      getDom("betflow-productTypes") ||
+      getDom("betflow-metric") ||
+      getDom("betflow-windows");
+    if (any) return;
+
+    const header = sectionEl.querySelector(".chart-card-header");
+
+    const panel = document.createElement("div");
+    panel.className = "chart-filter-panel";
+    panel.id = "betflow-filter-panel";
+    panel.innerHTML = `
+      <div class="hero-filter-row">
+        <div class="label">视图</div>
+        <div class="chart-mini-radio" id="betflow-view"></div>
       </div>
-      <table class="ovp-pbf-table">
-        <thead><tr>${headTh}</tr></thead>
-        <tbody>${bodyTr || `<tr><td colspan="${cols.length}" style="text-align:left;color:#6b7280;">无数据</td></tr>`}</tbody>
-      </table>
+
+      <div class="hero-filter-row">
+        <div class="label">月份</div>
+        <div class="chart-mini-chips" id="betflow-months"></div>
+      </div>
+
+      <div class="hero-filter-row">
+        <div class="label">国家</div>
+        <div class="chart-mini-chips" id="betflow-countries"></div>
+      </div>
+
+      <div class="hero-filter-row">
+        <div class="label">媒体</div>
+        <div class="chart-mini-chips" id="betflow-medias"></div>
+      </div>
+
+      <div class="hero-filter-row">
+        <div class="label">产品类型</div>
+        <div class="chart-mini-chips" id="betflow-productTypes"></div>
+      </div>
+
+      <div class="hero-filter-row">
+        <div class="label">人均</div>
+        <div class="chart-mini-chips" id="betflow-metric"></div>
+      </div>
+
+      <div class="hero-filter-row">
+        <div class="label">口径</div>
+        <div class="chart-mini-chips" id="betflow-windows"></div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <button type="button" class="btn" id="betflow-btn-reset">全选 / 重置</button>
+      </div>
     `;
+
+    if (header && header.parentNode) header.parentNode.insertBefore(panel, header.nextSibling);
   }
 
-  function buildTitleSuffix({ medias, productTypes, mediaNoSplit, productNoSplit }) {
-    // 表名括号：示例要求「fb+gg，app」
-    const mediaText = mediaNoSplit ? '全选但不区分' : (medias && medias.length ? medias.join('+') : '—');
-    const prodText = productNoSplit ? '全选但不区分' : (productTypes && productTypes.length ? productTypes.join('+') : '—');
-    return `${mediaText}，${prodText}`;
+  function createTableFallbackAfter(chartEl) {
+    const section = document.createElement("div");
+    section.className = "chart-table-section";
+    section.id = "table-section-betflow";
+    section.innerHTML = `
+      <div class="chart-table-title" id="table-title-betflow"></div>
+      <div class="chart-table-wrapper">
+        <table id="table-betflow" class="chart-table"></table>
+      </div>
+    `;
+
+    if (chartEl && chartEl.parentNode) {
+      chartEl.parentNode.insertBefore(section, chartEl.nextSibling);
+    }
   }
 
-  function getAnalysisText(moduleKey, month) {
-    try {
-      const a = (window.ANALYSIS_TEXT && window.ANALYSIS_TEXT[moduleKey]) ? window.ANALYSIS_TEXT[moduleKey] : null;
-      if (a && month && typeof a[month] === 'string') return a[month];
-    } catch (_) { /* ignore */ }
+  function init() {
+    injectStylesOnce();
 
-    try {
-      if (window.OVP && typeof window.OVP.getInsight === 'function') {
-        return window.OVP.getInsight(moduleKey, month) || '';
-      }
-    } catch (_) { /* ignore */ }
+    const chartEl = getDom("chart-paid-betflow") || getDom("chart-betflow");
+    if (!chartEl || !window.echarts) return;
 
-    return '';
-  }
+    const sectionEl =
+      (chartEl.closest && chartEl.closest(".chart-card")) || getDom("card-paid-betflow") || chartEl.parentNode;
 
-  // ---------- Main render ----------
-  function render({ mountEl, rawByMonth, months, latestMonth, utils }) {
-    injectStyles();
+    createFilterPanelFallback(sectionEl);
 
-    const allMonths = sortMonthsSafe(utils, months || []);
-    const hasData = rawByMonth && typeof rawByMonth === 'object' && allMonths.length;
-
-    const ui = (OVP.ui && typeof OVP.ui.mountModule === 'function')
-      ? OVP.ui.mountModule(mountEl, { moduleId: MODULE_ID, chartHeight: 380 })
-      : null;
-
-    if (!ui || !ui.chartEl || !ui.insightEl) {
-      mountEl.innerHTML = `<div class="ovp-alert">flow 模块挂载失败：缺少 OVP.ui.mountModule。</div>`;
-      return;
+    let tableTitleEl = getDom("table-title-betflow");
+    let tableEl = getDom("table-betflow");
+    if (!tableEl) {
+      createTableFallbackAfter(chartEl);
+      tableTitleEl = getDom("table-title-betflow");
+      tableEl = getDom("table-betflow");
     }
 
-    const chartEl = ui.chartEl;
-    const chartNoteEl = ui.chartNoteEl;
-    const insightEl = ui.insightEl;
+    const chart = echarts.init(chartEl);
 
-    const stackEl = mountEl.querySelector('.ovp-module-stack');
-    const chartBlockEl = chartEl.parentElement;
-
-    if (!hasData) {
-      chartEl.classList.add('is-empty');
-      chartEl.innerHTML = `<div class="ovp-skeleton"></div>`;
-      if (chartNoteEl) chartNoteEl.textContent = '未检测到 RAW_PAID_BY_MONTH：请确认 paid-data.js 正常加载。';
-      insightEl.textContent = '—';
-      insightEl.classList.add('is-empty');
-      return;
+    // 可选：接入统一 resize
+    if (window.PaidDashboard && typeof window.PaidDashboard.registerChart === "function") {
+      window.PaidDashboard.registerChart(chart);
+    } else {
+      window.addEventListener("resize", () => {
+        try {
+          chart.resize();
+        } catch (e) {}
+      });
     }
 
-    const vals = getAllValues(rawByMonth, allMonths);
-    const allMedias = vals.medias.length ? vals.medias : ['FB', 'GG'];
-    const allProductTypes = vals.productTypes.length ? vals.productTypes : ['app', 'h5'];
-    const allCountries = COUNTRIES_ORDER.slice();
-
-    const defaultMonths = (function () {
-      if (!allMonths.length) return [];
-      if (allMonths.length <= 2) return allMonths.slice();
-      return allMonths.slice(-2);
-    })();
-
+    const opts = buildOptionsFromRAW();
     const state = {
-      months: defaultMonths,
-      view: 'bar', // bar | line
-      countries: allCountries.slice(),
-      medias: allMedias.slice(),
-      productTypes: allProductTypes.slice(),
-      countryNoSplit: false,
-      mediaNoSplit: true,
-      productNoSplit: true,
-      perKey: 'total',
-      metrics: ['D0', 'D7']
+      view: "bar",
+      months: [],
+      countries: [],
+      medias: [],
+      productTypes: [],
+      metric: ["total"], // 单选：total/sports/games
+      windows: ["D0", "D7"],
+      collapse: { countries: false, medias: false, productTypes: false },
     };
 
-    const filtersEl = document.createElement('div');
-    filtersEl.className = 'ovp-pbf-filters';
-
-    function buildGroup(title, options, hint) {
-      const g = document.createElement('div');
-      g.className = 'ovp-pbf-group';
-      const t = document.createElement('span');
-      t.className = 'ovp-pbf-group-title';
-      t.textContent = title;
-      g.appendChild(t);
-
-      for (const opt of options) {
-        const label = document.createElement('label');
-        label.className = 'ovp-pbf-option';
-        const input = document.createElement('input');
-        input.type = opt.type || 'checkbox';
-        input.name = opt.name || '';
-        input.value = opt.value;
-        input.dataset.group = opt.group;
-        if (opt.special) input.dataset.special = opt.special;
-        if (opt.checked) input.checked = true;
-
-        label.appendChild(input);
-        label.appendChild(document.createTextNode(opt.label));
-        g.appendChild(label);
-      }
-
-      if (hint) {
-        const h = document.createElement('span');
-        h.className = 'ovp-pbf-hint';
-        h.textContent = hint;
-        g.appendChild(h);
-      }
-
-      return g;
+    function resetState() {
+      state.view = "bar";
+      state.months = pickDefaultMonths(opts.months);
+      state.countries = (opts.countries || []).slice();
+      state.medias = (opts.medias || []).slice();
+      state.productTypes = (opts.productTypes || []).slice();
+      state.metric = ["total"];
+      state.windows = ["D0", "D7"];
+      state.collapse = { countries: false, medias: false, productTypes: false };
     }
 
-    function renderFilterUI() {
-      filtersEl.innerHTML = '';
+    function buildTitleSuffix() {
+      const allMedias = opts.medias || [];
+      const allTypes = opts.productTypes || [];
 
-      const monthOpts = allMonths.map((m) => ({
-        group: 'month',
-        type: 'checkbox',
-        value: m,
-        label: monthToShortLabel(m),
-        checked: state.months.includes(m)
-      }));
+      const mediaText = state.collapse.medias
+        ? "全部媒体"
+        : state.medias.length === allMedias.length
+        ? "全部媒体"
+        : state.medias.join("+");
 
-      const countryOpts = [
-        { group: 'country', type: 'checkbox', value: '__nosplit__', label: '全选但不区分', checked: !!state.countryNoSplit, special: 'nosplit' },
-        ...allCountries.map((c) => ({ group: 'country', type: 'checkbox', value: c, label: c, checked: state.countryNoSplit ? true : state.countries.includes(c) }))
-      ];
+      const typeText = state.collapse.productTypes
+        ? "全部形态"
+        : state.productTypes.length === allTypes.length
+        ? "全部形态"
+        : state.productTypes.map((v) => String(v).toUpperCase()).join("+");
 
-      const viewName = `${MODULE_ID}-view`;
-      const viewOpts = [
-        { group: 'view', type: 'radio', name: viewName, value: 'bar', label: '月度柱状图', checked: state.view === 'bar' },
-        { group: 'view', type: 'radio', name: viewName, value: 'line', label: '日级折线图', checked: state.view === 'line' }
-      ];
-
-      const mediaOpts = [
-        { group: 'media', type: 'checkbox', value: '__nosplit__', label: '全选但不区分', checked: !!state.mediaNoSplit, special: 'nosplit' },
-        ...allMedias.map((m) => ({ group: 'media', type: 'checkbox', value: m, label: m, checked: state.mediaNoSplit ? true : state.medias.includes(m) }))
-      ];
-
-      const prodOpts = [
-        { group: 'product', type: 'checkbox', value: '__nosplit__', label: '全选但不区分', checked: !!state.productNoSplit, special: 'nosplit' },
-        ...allProductTypes.map((p) => ({ group: 'product', type: 'checkbox', value: p, label: p, checked: state.productNoSplit ? true : state.productTypes.includes(p) }))
-      ];
-
-      const perName = `${MODULE_ID}-per`;
-      const perOpts = [
-        { group: 'per', type: 'radio', name: perName, value: 'total', label: '人均总流水', checked: state.perKey === 'total' },
-        { group: 'per', type: 'radio', name: perName, value: 'sports', label: '人均体育流水', checked: state.perKey === 'sports' },
-        { group: 'per', type: 'radio', name: perName, value: 'games', label: '人均游戏流水', checked: state.perKey === 'games' }
-      ];
-
-      const metricOpts = ['D0', 'D7'].map((k) => ({ group: 'metric', type: 'checkbox', value: k, label: k, checked: state.metrics.includes(k) }));
-
-      filtersEl.appendChild(buildGroup('月份', monthOpts, '最多选3个'));
-      filtersEl.appendChild(buildGroup('国家', countryOpts));
-      filtersEl.appendChild(buildGroup('图表', viewOpts));
-      filtersEl.appendChild(buildGroup('媒体', mediaOpts));
-      filtersEl.appendChild(buildGroup('产品类型', prodOpts));
-      filtersEl.appendChild(buildGroup('人均', perOpts));
-      filtersEl.appendChild(buildGroup('数据', metricOpts));
+      return `（${mediaText}，${typeText}）`;
     }
 
-    renderFilterUI();
+    function renderRadioView() {
+      const container = getDom("betflow-view");
+      if (!container) return;
+      container.innerHTML = "";
 
-    if (stackEl && chartBlockEl) stackEl.insertBefore(filtersEl, chartBlockEl);
-    else mountEl.insertBefore(filtersEl, mountEl.firstChild);
-
-    const tableWrap = document.createElement('div');
-    tableWrap.className = 'ovp-pbf-tablewrap';
-    tableWrap.innerHTML = `<div class="ovp-alert">数据表加载中…</div>`;
-    if (stackEl) stackEl.insertBefore(tableWrap, insightEl);
-
-    const insightHead = document.createElement('div');
-    insightHead.className = 'ovp-pbf-insight-head';
-    insightHead.innerHTML = `
-      <div class="ovp-pbf-insight-title">数据解读</div>
-      <div class="ovp-pbf-insight-meta" id="${MODULE_ID}-insight-meta">—</div>
-    `;
-    if (stackEl) stackEl.insertBefore(insightHead, insightEl);
-    const insightMetaEl = insightHead.querySelector(`#${MODULE_ID}-insight-meta`);
-
-    let chart = null;
-    function ensureChart() {
-      if (chart) return chart;
-      if (!window.echarts || !chartEl) return null;
-
-      chartEl.classList.remove('is-empty');
-      chartEl.innerHTML = '';
-      chart = window.echarts.init(chartEl);
-
-      try {
-        if (window.ResizeObserver) {
-          const ro = new ResizeObserver(() => { try { chart.resize(); } catch (_) {} });
-          ro.observe(chartEl);
-        }
-      } catch (_) {}
-
-      return chart;
-    }
-
-    function setNote(msg) {
-      if (!chartNoteEl) return;
-      chartNoteEl.textContent = msg || '';
-      chartNoteEl.classList.toggle('is-empty', !String(msg || '').trim());
-    }
-
-    function resolveSelected() {
-      const selectedMonths = enforceMaxMonths(utils, state.months, 3, setNote);
-      state.months = ensureNonEmpty(selectedMonths, defaultMonths);
-
-      state.metrics = ensureNonEmpty(uniq(state.metrics), ['D0', 'D7']);
-
-      if (state.countryNoSplit) state.countries = allCountries.slice();
-      state.countries = ensureNonEmpty(uniq(state.countries), allCountries);
-
-      if (state.mediaNoSplit) state.medias = allMedias.slice();
-      state.medias = ensureNonEmpty(uniq(state.medias), allMedias);
-
-      if (state.productNoSplit) state.productTypes = allProductTypes.slice();
-      state.productTypes = ensureNonEmpty(uniq(state.productTypes), allProductTypes);
-
-      const monthsOrdered = sortMonthsSafe(utils, state.months);
-      const countriesOrdered = state.countryNoSplit
-        ? ['ALL']
-        : COUNTRIES_ORDER.filter((c) => state.countries.includes(c));
-
-      const metricsOrdered = ['D0', 'D7'].filter((m) => state.metrics.includes(m));
-
-      return {
-        months: monthsOrdered,
-        countriesForBar: countriesOrdered.length ? countriesOrdered : (state.countryNoSplit ? ['ALL'] : []),
-        countriesForFilter: state.countryNoSplit ? allCountries.slice() : COUNTRIES_ORDER.filter((c) => state.countries.includes(c)),
-        medias: state.mediaNoSplit ? allMedias.slice() : state.medias.slice(),
-        productTypes: state.productNoSplit ? allProductTypes.slice() : state.productTypes.slice(),
-        metrics: metricsOrdered,
-        perDef: PER_CAPITA[state.perKey] || PER_CAPITA.total
-      };
-    }
-
-    function updateInsights(selectedMonths) {
-      const ms = sortMonthsSafe(utils, selectedMonths);
-      if (insightMetaEl) insightMetaEl.textContent = ms.length ? `月份：${ms.join(', ')}` : '月份：—';
-
-      const blocks = ms.map((m) => {
-        const text = String(getAnalysisText(MODULE_ID, m) || '').trim();
-        return `${monthToShortLabel(m)}（${m}）\n${text ? text : '（该月暂无文案）'}`;
-      });
-
-      const out = blocks.join('\n\n--------------------------------\n\n');
-      insightEl.textContent = out || '（暂无文案）';
-      insightEl.classList.toggle('is-empty', !String(out || '').trim());
-    }
-
-    function updateAll() {
-      setNote('');
-
-      const sel = resolveSelected();
-      const { months: monthsSel, countriesForBar, countriesForFilter, medias, productTypes, metrics, perDef } = sel;
-
-      renderFilterUI();
-
-      const perLabel = perDef.label;
-      const monthColorMap = {};
-      allMonths.forEach((m, idx) => { monthColorMap[m] = MONTH_PALETTE[idx % MONTH_PALETTE.length]; });
-
-      const ec = ensureChart();
-      if (ec) {
-        let option;
-
-        if (state.view === 'bar') {
-          const agg = buildBarAgg({
-            rawByMonth,
-            months: monthsSel,
-            countries: countriesForFilter,
-            medias,
-            productTypes,
-            metrics,
-            perDef,
-            countryNoSplit: state.countryNoSplit
-          });
-
-          option = buildBarOption({
-            utils,
-            perLabel,
-            months: monthsSel,
-            categories: countriesForBar,
-            metrics,
-            monthAgg: agg,
-            monthColorMap
-          });
-
-          const mediaNote = state.mediaNoSplit ? '媒体=全选不区分' : `媒体=${medias.join('+')}`;
-          const prodNote = state.productNoSplit ? '产品=全选不区分' : `产品=${productTypes.join('+')}`;
-          setNote(`口径：人均${perLabel}流水 = ${perDef.num.D0} / ${perDef.den.D0}（按 D0/D7 切换）· ${mediaNote} · ${prodNote} · 单位：USD/人`);
-        } else {
-          const groupBy = {
-            country: !state.countryNoSplit,
-            media: !state.mediaNoSplit,
-            productType: !state.productNoSplit
-          };
-
-          const daily = buildDailySeries({
-            rawByMonth,
-            months: monthsSel,
-            countries: countriesForFilter,
-            medias,
-            productTypes,
-            metrics,
-            perDef,
-            groupBy
-          });
-
-          option = buildLineOption({
-            utils,
-            perLabel,
-            dates: daily.dates,
-            groups: daily.groups,
-            metrics
-          });
-
-          const mediaNote = state.mediaNoSplit ? '媒体=全选不区分' : `媒体=${medias.join('+')}`;
-          const prodNote = state.productNoSplit ? '产品=全选不区分' : `产品=${productTypes.join('+')}`;
-          const splitNote = `拆分维度：${[
-            groupBy.country ? '国家' : null,
-            groupBy.media ? '媒体' : null,
-            groupBy.productType ? '产品类型' : null
-          ].filter(Boolean).join('·') || '不拆分'}`;
-
-          setNote(`日级折线：${splitNote} · ${mediaNote} · ${prodNote} · D0 虚线 / D7 实线 · 单位：USD/人`);
-        }
-
-        ec.setOption(option, true);
-      }
-
-      const tableGroupBy = {
-        country: !state.countryNoSplit,
-        media: !state.mediaNoSplit,
-        productType: !state.productNoSplit
+      const makeRadio = (label, value, checked) => {
+        const labelEl = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = "betflow-view-radio";
+        input.value = value;
+        input.checked = checked;
+        labelEl.appendChild(input);
+        labelEl.appendChild(document.createTextNode(label));
+        input.addEventListener("change", () => {
+          if (input.checked) {
+            state.view = value;
+            renderAll();
+          }
+        });
+        return labelEl;
       };
 
-      const tableGroups = buildTableGroups({
-        rawByMonth,
-        months: monthsSel,
-        countries: countriesForFilter,
-        medias,
-        productTypes,
-        metrics,
-        perDef,
-        groupBy: tableGroupBy
-      });
-
-      const titleSuffix = buildTitleSuffix({
-        medias,
-        productTypes,
-        mediaNoSplit: state.mediaNoSplit,
-        productNoSplit: state.productNoSplit
-      });
-
-      tableWrap.innerHTML = buildTableHtml({
-        utils,
-        months: monthsSel,
-        metrics,
-        perLabel,
-        groups: tableGroups,
-        showMediaCol: !state.mediaNoSplit,
-        showProductCol: !state.productNoSplit,
-        titleSuffix
-      });
-
-      updateInsights(monthsSel);
+      container.appendChild(makeRadio("柱状（月度）", "bar", state.view === "bar"));
+      container.appendChild(makeRadio("折线（日级）", "line", state.view === "line"));
     }
 
-    filtersEl.addEventListener('change', function (e) {
-      const t = e.target;
-      if (!t || t.tagName !== 'INPUT') return;
+    function renderChipGroup(cfg) {
+      const {
+        containerId,
+        values,
+        stateArray,
+        max,
+        getLabel,
+        allowEmpty,
+        specialAllNoBreakdown,
+        collapseKey,
+      } = cfg;
 
-      const group = t.dataset.group;
-      const value = t.value;
-      const special = t.dataset.special || '';
+      const container = getDom(containerId);
+      if (!container) return;
 
-      if (group === 'view') { state.view = value; updateAll(); return; }
-      if (group === 'per') { state.perKey = value; updateAll(); return; }
+      const _values = (values || []).slice();
+      container.innerHTML = "";
 
-      if (group === 'month') {
-        const next = state.months.slice();
-        const i = next.indexOf(value);
-        if (i >= 0) next.splice(i, 1);
-        else next.push(value);
+      // 1) “全选但不区分”
+      if (specialAllNoBreakdown) {
+        const labelEl = document.createElement("label");
+        labelEl.className = "chip-special";
 
-        state.months = ensureNonEmpty(enforceMaxMonths(utils, next, 3, setNote), state.months);
-        updateAll();
-        return;
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = !!state.collapse[collapseKey];
+
+        labelEl.appendChild(input);
+        labelEl.appendChild(document.createTextNode("全选但不区分"));
+
+        if (input.checked) labelEl.classList.add("chip-active");
+
+        input.addEventListener("change", () => {
+          state.collapse[collapseKey] = !!input.checked;
+          if (state.collapse[collapseKey]) {
+            setArray(stateArray, _values);
+          }
+          renderAll();
+        });
+
+        container.appendChild(labelEl);
       }
 
-      if (group === 'metric') {
-        const next = state.metrics.slice();
-        const i = next.indexOf(value);
-        if (i >= 0) next.splice(i, 1);
-        else next.push(value);
-        state.metrics = ensureNonEmpty(next, state.metrics);
-        updateAll();
-        return;
+      // 2) 普通 chips
+      _values.forEach((v) => {
+        const vv = v;
+        const checked = stateArray.includes(vv);
+
+        const labelEl = document.createElement("label");
+        if (checked) labelEl.classList.add("chip-active");
+
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = checked;
+
+        labelEl.appendChild(input);
+        labelEl.appendChild(document.createTextNode(getLabel ? getLabel(vv) : vv));
+
+        input.addEventListener("change", () => {
+          const exists = stateArray.includes(vv);
+
+          if (input.checked && !exists) {
+            // max===1 -> 单选
+            if (max === 1) {
+              setArray(stateArray, [vv]);
+            } else if (max && max > 0 && stateArray.length >= max) {
+              // 超过 max：不允许
+              input.checked = false;
+              return;
+            } else {
+              stateArray.push(vv);
+            }
+          }
+
+          if (!input.checked && exists) {
+            if (!allowEmpty && stateArray.length <= 1) {
+              // 不允许清空
+              input.checked = true;
+              return;
+            }
+            const idx = stateArray.indexOf(vv);
+            if (idx >= 0) stateArray.splice(idx, 1);
+          }
+
+          if (specialAllNoBreakdown && state.collapse[collapseKey]) {
+            // 处于“不区分”时，强制全选
+            setArray(stateArray, _values);
+          }
+
+          renderAll();
+        });
+
+        container.appendChild(labelEl);
+      });
+    }
+
+    function filteredRowsForMonth(monthKey, extraFilterFn) {
+      const RAW = getRAW();
+      const rows = RAW[monthKey] || [];
+
+      const countrySet = state.collapse.countries ? null : new Set(uniq(state.countries.map(normalizeCountry)));
+      const mediaSet = state.collapse.medias ? null : new Set(uniq(state.medias.map(normalizeMedia)));
+      const typeSet = state.collapse.productTypes
+        ? null
+        : new Set(uniq(state.productTypes.map(normalizeProductType)));
+
+      return rows.filter((r) => {
+        if (!r) return false;
+        const c = normalizeCountry(r.country);
+        const m = normalizeMedia(r.media);
+        const p = normalizeProductType(r.productType);
+
+        if (countrySet && !countrySet.has(c)) return false;
+        if (mediaSet && !mediaSet.has(m)) return false;
+        if (typeSet && !typeSet.has(p)) return false;
+
+        if (extraFilterFn && !extraFilterFn(r)) return false;
+        return true;
+      });
+    }
+
+    function renderBar() {
+      const palette = getPalette();
+      const monthsSel = uniq(state.months).sort().slice(0, 3);
+      const windowsSel = uniq(state.windows)
+        .filter((w) => w === "D0" || w === "D7")
+        .sort((a, b) => (a === "D0" ? -1 : 1));
+
+      const metricCfg = getMetricConfig(state.metric[0]);
+      let countriesAxis = sortCountries(uniq(state.countries.map(normalizeCountry)));
+      if (state.collapse.countries) countriesAxis = ["ALL"];
+
+      const series = [];
+      monthsSel.forEach((monthKey, mi) => {
+        const color = palette[mi % palette.length];
+        const mLabel = formatMonthLabel(monthKey);
+
+        windowsSel.forEach((win) => {
+          const flowField = win === "D7" ? metricCfg.d7Flow : metricCfg.d0Flow;
+          const userField = win === "D7" ? metricCfg.d7User : metricCfg.d0User;
+
+          const seriesName = `${mLabel} ${win}`;
+          const data = countriesAxis.map((countryKey) => {
+            const rows = filteredRowsForMonth(monthKey, (r) => {
+              if (state.collapse.countries) return true;
+              return normalizeCountry(r.country) === countryKey;
+            });
+            const sums = sumFields(rows, [flowField, userField]);
+            return safeDiv(sums[flowField], sums[userField]);
+          });
+
+          series.push({
+            name: seriesName,
+            type: "bar",
+            data,
+            barMaxWidth: 26,
+            itemStyle: {
+              color,
+              decal: win === "D7" ? D7_DECAL : null,
+            },
+            emphasis: { focus: "series" },
+          });
+        });
+      });
+
+      const option = {
+        grid: { left: 54, right: 22, top: 28, bottom: 48 },
+        legend: { top: 0, type: "scroll" },
+        tooltip: {
+          trigger: "axis",
+          axisPointer: { type: "shadow" },
+          backgroundColor: "rgba(15, 23, 42, 0.92)",
+          borderWidth: 0,
+          textStyle: { fontSize: 11 },
+          formatter: (params) => {
+            if (!params || !params.length) return "";
+            const title = params[0].axisValueLabel;
+            const lines = [`<strong>${title}</strong>`];
+            params.forEach((p) => {
+              lines.push(`${p.seriesName}：${formatUSD(p.data, 2)}`);
+            });
+            return lines.join("<br/>");
+          },
+        },
+        xAxis: {
+          type: "category",
+          data: countriesAxis,
+          axisLabel: { color: "#475569" },
+          axisTick: { alignWithLabel: true },
+        },
+        yAxis: {
+          type: "value",
+          axisLabel: {
+            color: "#475569",
+            formatter: (v) => formatUSD(Number(v), 2),
+          },
+          splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.28)" } },
+        },
+        series,
+      };
+
+      chart.setOption(option, true);
+    }
+
+    function renderLine() {
+      const RAW = getRAW();
+      const palette = getPalette();
+
+      const monthsSel = uniq(state.months).sort().slice(0, 3);
+      const windowsSel = uniq(state.windows)
+        .filter((w) => w === "D0" || w === "D7")
+        .sort((a, b) => (a === "D0" ? -1 : 1));
+
+      const metricCfg = getMetricConfig(state.metric[0]);
+
+      const countrySet = state.collapse.countries ? null : new Set(uniq(state.countries.map(normalizeCountry)));
+      const mediaSet = state.collapse.medias ? null : new Set(uniq(state.medias.map(normalizeMedia)));
+      const typeSet = state.collapse.productTypes ? null : new Set(uniq(state.productTypes.map(normalizeProductType)));
+
+      const byBase = {};
+      const datesSet = new Set();
+
+      monthsSel.forEach((monthKey) => {
+        (RAW[monthKey] || []).forEach((r) => {
+          if (!r) return;
+
+          const c0 = normalizeCountry(r.country);
+          const m0 = normalizeMedia(r.media);
+          const p0 = normalizeProductType(r.productType);
+
+          if (countrySet && !countrySet.has(c0)) return;
+          if (mediaSet && !mediaSet.has(m0)) return;
+          if (typeSet && !typeSet.has(p0)) return;
+
+          const d = r.date;
+          if (!d) return;
+
+          const c = state.collapse.countries ? "ALL" : c0;
+          const m = state.collapse.medias ? "ALL" : m0;
+          const p = state.collapse.productTypes ? "ALL" : p0;
+
+          const baseKey = `${c}|${m}|${p}`;
+          if (!byBase[baseKey]) byBase[baseKey] = {};
+          if (!byBase[baseKey][d]) byBase[baseKey][d] = { d0Flow: 0, d0User: 0, d7Flow: 0, d7User: 0 };
+
+          const bucket = byBase[baseKey][d];
+
+          const d0f = Number(r[metricCfg.d0Flow]);
+          if (isFinite(d0f)) bucket.d0Flow += d0f;
+
+          const d0u = Number(r[metricCfg.d0User]);
+          if (isFinite(d0u)) bucket.d0User += d0u;
+
+          const d7f = Number(r[metricCfg.d7Flow]);
+          if (isFinite(d7f)) bucket.d7Flow += d7f;
+
+          const d7u = Number(r[metricCfg.d7User]);
+          if (isFinite(d7u)) bucket.d7User += d7u;
+
+          datesSet.add(d);
+        });
+      });
+
+      const dates = Array.from(datesSet).sort();
+      const baseKeys = Object.keys(byBase).sort();
+      const series = [];
+
+      function seriesNameFromBase(baseKey, win) {
+        const parts = baseKey.split("|");
+        const c = parts[0] || "ALL";
+        const m = parts[1] || "ALL";
+        const p = parts[2] || "all";
+
+        const nameParts = [];
+        if (!state.collapse.countries) nameParts.push(c);
+        if (!state.collapse.medias) nameParts.push(m);
+        if (!state.collapse.productTypes) nameParts.push(String(p).toUpperCase());
+        nameParts.push(win);
+
+        return nameParts.join(" · ");
       }
 
-      if (group === 'country' || group === 'media' || group === 'product') {
-        if (special === 'nosplit') {
-          const checked = !!t.checked;
-          if (group === 'country') state.countryNoSplit = checked;
-          if (group === 'media') state.mediaNoSplit = checked;
-          if (group === 'product') state.productNoSplit = checked;
-          updateAll();
-          return;
-        }
+      baseKeys.forEach((baseKey, idx) => {
+        const color = palette[idx % palette.length];
 
-        if (group === 'country') {
-          if (state.countryNoSplit) { updateAll(); return; }
-          const next = state.countries.slice();
-          const i = next.indexOf(value);
-          if (i >= 0) next.splice(i, 1);
-          else next.push(value);
-          state.countries = ensureNonEmpty(next, state.countries);
-          updateAll();
-          return;
-        }
+        windowsSel.forEach((win) => {
+          const data = dates.map((d) => {
+            const bucket = byBase[baseKey][d];
+            if (!bucket) return null;
+            return win === "D7" ? safeDiv(bucket.d7Flow, bucket.d7User) : safeDiv(bucket.d0Flow, bucket.d0User);
+          });
 
-        if (group === 'media') {
-          if (state.mediaNoSplit) { updateAll(); return; }
-          const next = state.medias.slice();
-          const i = next.indexOf(value);
-          if (i >= 0) next.splice(i, 1);
-          else next.push(value);
-          state.medias = ensureNonEmpty(next, state.medias);
-          updateAll();
-          return;
-        }
+          series.push({
+            name: seriesNameFromBase(baseKey, win),
+            type: "line",
+            smooth: false,
+            symbol: "circle",
+            symbolSize: 5,
+            showSymbol: false,
+            data,
+            connectNulls: true,
+            lineStyle: { width: 2, type: win === "D7" ? "dashed" : "solid", color },
+            itemStyle: { color },
+            emphasis: { focus: "series" },
+          });
+        });
+      });
 
-        if (group === 'product') {
-          if (state.productNoSplit) { updateAll(); return; }
-          const next = state.productTypes.slice();
-          const i = next.indexOf(value);
-          if (i >= 0) next.splice(i, 1);
-          else next.push(value);
-          state.productTypes = ensureNonEmpty(next, state.productTypes);
-          updateAll();
-          return;
-        }
+      const option = {
+        grid: { left: 54, right: 22, top: 28, bottom: 58 },
+        legend: { top: 0, type: "scroll" },
+        tooltip: {
+          trigger: "axis",
+          backgroundColor: "rgba(15, 23, 42, 0.92)",
+          borderWidth: 0,
+          textStyle: { fontSize: 11 },
+          axisPointer: { type: "line" },
+          formatter: (params) => {
+            if (!params || !params.length) return "";
+            const title = params[0].axisValueLabel;
+            const lines = [`<strong>${title}</strong>`];
+            params.forEach((p) => {
+              lines.push(`${p.seriesName}：${formatUSD(p.data, 2)}`);
+            });
+            return lines.join("<br/>");
+          },
+        },
+        xAxis: {
+          type: "category",
+          data: dates,
+          boundaryGap: false,
+          axisLabel: {
+            color: "#475569",
+            formatter: (v) => {
+              // YYYY-MM-DD -> MM-DD
+              const s = String(v || "");
+              const parts = s.split("-");
+              if (parts.length >= 3) return `${parts[1]}-${parts[2]}`;
+              return s;
+            },
+          },
+        },
+        yAxis: {
+          type: "value",
+          axisLabel: {
+            color: "#475569",
+            formatter: (v) => formatUSD(Number(v), 2),
+          },
+          splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.28)" } },
+        },
+        series,
+      };
+
+      chart.setOption(option, true);
+    }
+
+    function renderTable() {
+      if (!tableEl) return;
+
+      const monthsSel = uniq(state.months).sort().slice(0, 3);
+      const windowsSel = uniq(state.windows)
+        .filter((w) => w === "D0" || w === "D7")
+        .sort((a, b) => (a === "D0" ? -1 : 1));
+
+      const metricCfg = getMetricConfig(state.metric[0]);
+
+      let rowCountries = sortCountries(uniq(state.countries.map(normalizeCountry)));
+      if (state.collapse.countries) rowCountries = ["ALL"];
+
+      const rowMedias = state.collapse.medias ? ["ALL"] : uniq(state.medias.map(normalizeMedia)).sort();
+      const rowTypes = state.collapse.productTypes ? ["ALL"] : uniq(state.productTypes.map(normalizeProductType)).sort();
+
+      const suffix = buildTitleSuffix();
+      if (tableTitleEl) tableTitleEl.textContent = `当前筛选 · D0/D7 人均${metricCfg.label}${suffix}`;
+
+      const thead = document.createElement("thead");
+      const trh = document.createElement("tr");
+
+      trh.appendChild(th("国家"));
+      if (!state.collapse.medias) trh.appendChild(th("媒体"));
+      if (!state.collapse.productTypes) trh.appendChild(th("产品类型"));
+
+      const colKeys = [];
+      monthsSel.forEach((m) => {
+        windowsSel.forEach((w) => {
+          colKeys.push({ m, w });
+          trh.appendChild(th(`${formatMonthLabel(m)} ${w} 人均${metricCfg.label}`));
+        });
+      });
+
+      thead.appendChild(trh);
+
+      const cellCache = {};
+      function getCell(monthKey, win, countryKey, mediaKey, typeKey) {
+        const cacheKey = `${monthKey}|${win}|${countryKey}|${mediaKey}|${typeKey}|${metricCfg.key}`;
+        if (cellCache[cacheKey] !== undefined) return cellCache[cacheKey];
+
+        const flowField = win === "D7" ? metricCfg.d7Flow : metricCfg.d0Flow;
+        const userField = win === "D7" ? metricCfg.d7User : metricCfg.d0User;
+
+        const rows = filteredRowsForMonth(monthKey, (r) => {
+          if (!state.collapse.countries && countryKey !== "ALL") {
+            if (normalizeCountry(r.country) !== countryKey) return false;
+          }
+          if (!state.collapse.medias && mediaKey !== "ALL") {
+            if (normalizeMedia(r.media) !== mediaKey) return false;
+          }
+          if (!state.collapse.productTypes && typeKey !== "ALL") {
+            if (normalizeProductType(r.productType) !== typeKey) return false;
+          }
+          return true;
+        });
+
+        const sums = sumFields(rows, [flowField, userField]);
+        const ratio = safeDiv(sums[flowField], sums[userField]);
+
+        cellCache[cacheKey] = ratio;
+        return ratio;
       }
-    });
 
-    updateAll();
+      const tbody = document.createElement("tbody");
+
+      rowCountries.forEach((c) => {
+        rowMedias.forEach((m) => {
+          rowTypes.forEach((p) => {
+            const tr = document.createElement("tr");
+
+            tr.appendChild(td(c));
+            if (!state.collapse.medias) tr.appendChild(td(m));
+            if (!state.collapse.productTypes) tr.appendChild(td(String(p).toUpperCase()));
+
+            colKeys.forEach((ck) => {
+              const val = getCell(ck.m, ck.w, c, m, p);
+              const cell = td(formatUSD(val, 2));
+              cell.className = "num";
+              tr.appendChild(cell);
+            });
+
+            tbody.appendChild(tr);
+          });
+        });
+      });
+
+      tableEl.innerHTML = "";
+      tableEl.appendChild(thead);
+      tableEl.appendChild(tbody);
+    }
+
+    function th(text) {
+      const el = document.createElement("th");
+      el.textContent = text;
+      return el;
+    }
+
+    function td(text) {
+      const el = document.createElement("td");
+      el.textContent = text;
+      return el;
+    }
+
+    function renderAll() {
+      ensureNonEmpty(state, opts);
+
+      state.months = uniq(state.months).sort().slice(0, 3);
+      state.countries = sortCountries(uniq(state.countries.map(normalizeCountry)));
+      state.medias = uniq(state.medias.map(normalizeMedia)).sort();
+      state.productTypes = uniq(state.productTypes.map(normalizeProductType)).sort();
+      state.metric = uniq(state.metric).filter((k) => METRIC_OPTIONS.some((x) => x.key === k)).slice(0, 1);
+      state.windows = uniq(state.windows)
+        .filter((w) => w === "D0" || w === "D7")
+        .sort((a, b) => (a === "D0" ? -1 : 1));
+
+      // “全选但不区分” -> 选择强制全选（并在图/表里聚合）
+      if (state.collapse.countries) state.countries = (opts.countries || []).slice();
+      if (state.collapse.medias) state.medias = (opts.medias || []).slice();
+      if (state.collapse.productTypes) state.productTypes = (opts.productTypes || []).slice();
+
+      if (!state.metric.length) state.metric = ["total"];
+      if (!state.windows.length) state.windows = ["D0", "D7"];
+
+      renderRadioView();
+
+      renderChipGroup({
+        containerId: "betflow-months",
+        values: opts.months,
+        stateArray: state.months,
+        max: 3,
+        getLabel: (v) => formatMonthLabel(v),
+        allowEmpty: false,
+        specialAllNoBreakdown: false,
+      });
+
+      renderChipGroup({
+        containerId: "betflow-countries",
+        values: opts.countries,
+        stateArray: state.countries,
+        max: 0,
+        getLabel: (v) => v,
+        allowEmpty: false,
+        specialAllNoBreakdown: true,
+        collapseKey: "countries",
+      });
+
+      renderChipGroup({
+        containerId: "betflow-medias",
+        values: opts.medias,
+        stateArray: state.medias,
+        max: 0,
+        getLabel: (v) => v,
+        allowEmpty: false,
+        specialAllNoBreakdown: true,
+        collapseKey: "medias",
+      });
+
+      renderChipGroup({
+        containerId: "betflow-productTypes",
+        values: opts.productTypes,
+        stateArray: state.productTypes,
+        max: 0,
+        getLabel: (v) => String(v).toUpperCase(),
+        allowEmpty: false,
+        specialAllNoBreakdown: true,
+        collapseKey: "productTypes",
+      });
+
+      renderChipGroup({
+        containerId: "betflow-metric",
+        values: METRIC_OPTIONS.map((x) => x.key),
+        stateArray: state.metric,
+        max: 1,
+        getLabel: (v) => (METRIC_OPTIONS.find((x) => x.key === v) || {}).label || v,
+        allowEmpty: false,
+        specialAllNoBreakdown: false,
+      });
+
+      renderChipGroup({
+        containerId: "betflow-windows",
+        values: ["D0", "D7"],
+        stateArray: state.windows,
+        max: 0,
+        getLabel: (v) => v,
+        allowEmpty: false,
+        specialAllNoBreakdown: false,
+      });
+
+      const resetBtn = getDom("betflow-btn-reset");
+      if (resetBtn && !resetBtn.__bound) {
+        resetBtn.__bound = true;
+        resetBtn.addEventListener("click", () => {
+          resetState();
+          renderAll();
+        });
+      }
+
+      if (state.view === "bar") renderBar();
+      else renderLine();
+
+      renderTable();
+    }
+
+    renderAll();
   }
 
-  if (window.OVP && typeof window.OVP.registerModule === 'function') {
-    window.OVP.registerModule({
-      id: MODULE_ID,
-      title: 'D0 / D7 人均流水',
-      subtitle: '买量口径：人均流水 = BET_FLOW / BET_PLACED_USER（支持媒体、产品类型拆分；柱状=月度，折线=日级）',
-      render
-    });
+  if (window.PaidDashboard && typeof window.PaidDashboard.registerModule === "function") {
+    window.PaidDashboard.registerModule(MODULE_KEY, init);
+  } else if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
   }
 })();
