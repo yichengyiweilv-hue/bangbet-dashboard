@@ -250,6 +250,7 @@
         text-align: center;
         font-variant-numeric: tabular-nums;
       }
+      #table-retention td.num { text-align: center; }
       .chart-table tr:hover td{
         background: rgba(37, 99, 235, 0.06);
       }
