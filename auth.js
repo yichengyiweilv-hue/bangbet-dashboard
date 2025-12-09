@@ -45,7 +45,7 @@
       },
     },
     ui: {
-      title: "用户增长部-买量&自然量数据分析看板",
+      title: "用户增长部-数据分析看板",
       subtitle: "BangBet Data Intelligence System",
       owner: "用户增长部-Jerry Lyu",
       rememberAdminText: "记住我 (30天免登录)",
