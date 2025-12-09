@@ -16,51 +16,17 @@
     { key: 'line', label: '日级折线图' }
   ];
 
-  const NOSPLIT_VALUE = '__ALL_NOSPLIT__';
-
-  function readGlobal(name) {
-    try {
-      // eslint-disable-next-line no-new-func
-      return Function(`return (typeof ${name} !== "undefined") ? ${name} : undefined;`)();
-    } catch (_) {
-      return undefined;
-    }
-  }
-
-  function cssVar(name, fallback) {
-    try {
-      const v = getComputedStyle(document.documentElement).getPropertyValue(name);
-      return (v && v.trim()) ? v.trim() : fallback;
-    } catch (_) {
-      return fallback;
-    }
-  }
-
+  // --- Helpers
   function clamp(n, min, max) {
-    if (!Number.isFinite(n)) return min;
-    return Math.min(max, Math.max(min, n));
+    return Math.max(min, Math.min(max, n));
   }
 
-  function num(v) {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
+  function uniq(arr) {
+    return Array.from(new Set(arr));
   }
 
-  function escapeHtml(s) {
-    return String(s ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function sortMonths(arr) {
-    return (Array.isArray(arr) ? arr.slice() : []).sort((a, b) => String(a).localeCompare(String(b)));
-  }
-
-  function parseMonthKey(m) {
-    const s = String(m || '');
+  function parseMonthKey(s) {
+    if (!s || typeof s !== 'string' || s.length < 7) return { y: null, mo: null };
     const y = Number(s.slice(0, 4));
     const mo = Number(s.slice(5, 7));
     return { y: Number.isFinite(y) ? y : null, mo: Number.isFinite(mo) ? mo : null };
@@ -77,173 +43,250 @@
 
   function monthLabel(m, yearsSet) {
     const { y, mo } = parseMonthKey(m);
-    if (!mo) return String(m || '');
-    const onlyOneYear = yearsSet && yearsSet.size <= 1;
-    return onlyOneYear ? `${mo}月` : `${y}年${mo}月`;
+    if (!y || !mo) return m || '';
+    const multiYear = yearsSet && yearsSet.size > 1;
+    return multiYear ? `${y}-${String(mo).padStart(2, '0')}` : `${mo}月`;
+  }
+
+  function formatPct(v) {
+    if (v === null || v === undefined || !Number.isFinite(v)) return '-';
+    return (v * 100).toFixed(1) + '%';
   }
 
   function fmtInt(v) {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return '—';
-    return String(Math.round(n));
+    if (v === null || v === undefined || !Number.isFinite(v)) return '-';
+    return Math.round(v).toLocaleString('en-US');
   }
 
-  function fmtPct01(v, digits = 1) {
-    if (v === null || v === undefined) return '—';
-    const n = Number(v);
-    if (!Number.isFinite(n)) return '—';
-    return `${(n * 100).toFixed(digits)}%`;
+  function safeNum(x) {
+    const v = Number(x);
+    return Number.isFinite(v) ? v : 0;
   }
 
-  function dispMedia(v) {
-    return String(v || '').toLowerCase();
+  function toKey(x) {
+    return String(x || '').trim();
   }
 
-  function dispProduct(v) {
-    return String(v || '').toLowerCase();
+  // Chips helpers
+  function buildChipsHtml(options, group, cfg) {
+    const labelFn = (cfg && cfg.labelFn) || ((x) => x);
+    const extraClass = (cfg && cfg.className) || '';
+    return options
+      .map((opt) => {
+        const v = toKey(opt);
+        const id = `${MODULE_ID}-${group}-${v}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const label = labelFn(opt);
+        return `
+          <label class="paid-sg-chip ${extraClass}">
+            <input type="checkbox" data-group="${group}" data-value="${v}" id="${id}" />
+            <span>${label}</span>
+          </label>
+        `;
+      })
+      .join('');
   }
 
-  // Split TOTAL bet placed users into:
-  // onlySports, onlyGames, both (sports & games), ensuring sum == total.
-  function splitUnion(total, sports, games) {
-    const t = Math.max(0, num(total));
-    const s = Math.max(0, num(sports));
-    const g = Math.max(0, num(games));
-
-    const onlySports = clamp(t - g, 0, t);
-    const onlyGames = clamp(t - s, 0, t);
-    const both = clamp(t - onlySports - onlyGames, 0, t);
-
-    return { total: t, sports: s, games: g, onlySports, onlyGames, both };
+  function buildRadiosHtml(options, group, cfg) {
+    const labelFn = (cfg && cfg.labelFn) || ((x) => x);
+    const extraClass = (cfg && cfg.className) || '';
+    return options
+      .map((opt) => {
+        const v = toKey(opt.key || opt);
+        const label = labelFn(opt.label || opt);
+        const id = `${MODULE_ID}-${group}-${v}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+        return `
+          <label class="paid-sg-chip ${extraClass}">
+            <input type="radio" name="${MODULE_ID}-${group}" data-group="${group}" data-value="${v}" id="${id}" />
+            <span>${label}</span>
+          </label>
+        `;
+      })
+      .join('');
   }
 
+  function setChecks(container, group, selectedSet, isRadio = false) {
+    if (!container) return;
+    const inputs = container.querySelectorAll(`input[data-group="${group}"]`);
+    inputs.forEach((inp) => {
+      const v = inp.getAttribute('data-value');
+      if (isRadio) {
+        inp.checked = selectedSet.has(v);
+      } else {
+        inp.checked = selectedSet.has(v);
+      }
+      const lab = inp.closest('label');
+      if (lab) lab.classList.toggle('is-active', inp.checked);
+    });
+  }
+
+  function syncChipActive(container) {
+    if (!container) return;
+    const inputs = container.querySelectorAll('input[data-group]');
+    inputs.forEach((inp) => {
+      const lab = inp.closest('label');
+      if (lab) lab.classList.toggle('is-active', !!inp.checked);
+    });
+  }
+
+  function ensureAtLeastOne(set, fallback) {
+    if (set.size > 0) return;
+    if (fallback !== undefined && fallback !== null) set.add(toKey(fallback));
+  }
+
+  function selectAll(set, options) {
+    set.clear();
+    options.forEach((o) => set.add(toKey(o)));
+  }
+
+  function toggleSet(set, val, checked, fallback, isLineMode) {
+    if (checked) {
+      set.add(val);
+      return;
+    }
+    set.delete(val);
+    if (isLineMode) {
+      // in line mode we always keep 1
+      ensureAtLeastOne(set, fallback);
+    } else {
+      ensureAtLeastOne(set, fallback);
+    }
+  }
+
+  // Data access helpers (paid-data.js)
+  function getRawPaidByMonth() {
+    return window.RAW_PAID_BY_MONTH || window.RAW || {};
+  }
+
+  function getAnalysisTextRoot() {
+    return window.PAID_ANALYSIS_TEXT || window.ANALYSIS_TEXT || {};
+  }
+
+  function getPaidInsightText(monthKey) {
+    const root = getAnalysisTextRoot();
+    const bucket = root && root[MODULE_KEY];
+    const s = bucket && typeof bucket[monthKey] === 'string' ? bucket[monthKey].trim() : '';
+    return s || '';
+  }
+
+  // --- Inject CSS (module-local)
   function ensureStyle() {
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
       .paid-sg-filters{
-        border:1px solid rgba(148, 163, 184, 0.60);
-        border-radius:12px;
-        background: rgba(249, 250, 251, 0.90);
-        padding:10px 10px 8px;
         display:flex;
         flex-wrap:wrap;
-        gap:12px 14px;
-        margin-bottom: 10px;
+        gap:10px 14px;
+        padding: 10px 12px;
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        border-radius: 12px;
+        background: rgba(248, 250, 252, 0.85);
+        margin: 8px 0 10px;
       }
       .paid-sg-filter-group{
         display:flex;
         flex-direction:column;
         gap:6px;
-        min-width: 200px;
+        min-width: 220px;
       }
       .paid-sg-filter-label{
-        font-size:11px;
-        color: var(--muted, #64748b);
-        line-height:1.2;
+        font-size: 12px;
+        color: var(--text-sub, #475569);
         display:flex;
         align-items:center;
         gap:8px;
+        font-weight: 600;
       }
-      .paid-sg-filter-label .paid-sg-badge{
-        display:inline-flex;
-        align-items:center;
-        padding:1px 8px;
-        border-radius:999px;
-        border:1px solid rgba(148, 163, 184, 0.55);
-        background: rgba(255,255,255,0.9);
-        color: var(--muted, #64748b);
-        font-size:10px;
+      .paid-sg-badge{
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(148,163,184,0.5);
+        color: var(--text-sub, #475569);
+        background: rgba(255,255,255,0.7);
+        font-weight: 500;
       }
       .paid-sg-options{
         display:flex;
         flex-wrap:wrap;
-        gap:6px;
+        gap:8px;
       }
       .paid-sg-chip{
         display:inline-flex;
         align-items:center;
         gap:6px;
-        padding:4px 10px;
-        border-radius:999px;
-        border:1px solid rgba(148, 163, 184, 0.55);
-        background: rgba(255,255,255,0.92);
-        font-size:12px;
-        color: var(--text, #0f172a);
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(148,163,184,0.55);
+        background: rgba(255,255,255,0.9);
         cursor:pointer;
         user-select:none;
+        white-space:nowrap;
       }
       .paid-sg-chip input{
-        margin:0;
-        width:14px;
-        height:14px;
-        accent-color: var(--ovp-blue, #2563eb);
         cursor:pointer;
+        accent-color: rgba(37, 99, 235, 0.95);
       }
-      .paid-sg-chip.is-checked{
-        border-color: rgba(37, 99, 235, 0.55);
-        background: rgba(37, 99, 235, 0.08);
-      }
-      .paid-sg-chip.is-disabled{
-        opacity: 0.55;
-        cursor: not-allowed;
-      }
-      .paid-sg-hint{
-        margin-top:2px;
-        font-size:11px;
-        color: var(--muted, #64748b);
-        line-height:1.4;
-        white-space: pre-wrap;
-      }
-
-      .paid-sg-chart-note,
-      .paid-sg-table-note{
-        margin-top: 6px;
-        font-size:11px;
-        color: var(--muted, #64748b);
-        line-height:1.4;
-        text-align:center;
-      }
-
-      .paid-sg-table-wrap{
-        margin-top: 10px;
-        display:flex;
-        flex-direction:column;
-        gap:8px;
-      }
-      .paid-sg-table-title{
-        font-size:12px;
-        color: var(--text, #0f172a);
+      .paid-sg-chip.is-active{
+        border-color: rgba(37,99,235,0.9);
+        background: rgba(37,99,235,0.08);
+        color: rgba(37,99,235,0.95);
         font-weight: 600;
       }
+      .paid-sg-hint{
+        font-size: 12px;
+        color: var(--text-sub, #475569);
+        line-height: 1.55;
+        white-space: pre-wrap;
+        word-break: break-word;
+        min-height: 22px;
+      }
+      .paid-sg-chart-note{
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--text-sub, #475569);
+        line-height: 1.55;
+        white-space: pre-wrap;
+      }
+      .paid-sg-table-wrap{
+        margin-top: 10px;
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        border-radius: 12px;
+        background: rgba(255,255,255,0.9);
+        overflow:hidden;
+      }
+      .paid-sg-table-title{
+        padding: 10px 12px;
+        border-bottom: 1px dashed rgba(148,163,184,0.6);
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text-main, #0f172a);
+        background: rgba(248, 250, 252, 0.9);
+      }
       .paid-sg-table-scroll{
-        width:100%;
         overflow:auto;
-        border:1px solid rgba(148, 163, 184, 0.60);
-        border-radius:12px;
-        background:#ffffff;
+        max-height: 340px;
       }
       .paid-sg-table{
         width:100%;
-        border-collapse:collapse;
-        min-width: 980px;
+        border-collapse: collapse;
+        font-size: 12px;
       }
-      .paid-sg-table th,
-      .paid-sg-table td{
-        border:1px solid rgba(148, 163, 184, 0.35);
-        padding:10px 10px;
-        font-size:12px;
-        color: var(--text, #0f172a);
+      .paid-sg-table th, .paid-sg-table td{
+        border-bottom: 1px solid rgba(226,232,240,0.9);
+        padding: 7px 8px;
+        text-align: center;
+        vertical-align: middle;
       }
       .paid-sg-table thead th{
-        background: rgba(249, 250, 251, 0.95);
-        font-size:11px;
-        color: var(--muted, #64748b);
-        text-align:center;
-        position:sticky;
-        top:0;
-        z-index:2;
+        position: sticky;
+        top: 0;
+        background: rgba(248, 250, 252, 0.98);
+        z-index: 2;
+        font-weight: 700;
+        color: var(--text-main, #0f172a);
       }
       .paid-sg-table tbody th{
         background: rgba(249, 250, 251, 0.65);
@@ -261,22 +304,41 @@
         display:flex;
         flex-direction:column;
         align-items:center;
-        justify-content:center;
-        min-height: 96px;
-        text-align:center;
-        white-space:pre-line;
-        line-height:1.5;
+        gap:2px;
       }
-
+      .paid-sg-cell .n{
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+        color: var(--text-main, #0f172a);
+      }
+      .paid-sg-cell .p{
+        font-size: 11px;
+        color: var(--text-sub, #475569);
+      }
+      .paid-sg-table-note{
+        padding: 8px 12px;
+        border-top: 1px dashed rgba(148,163,184,0.6);
+        font-size: 12px;
+        color: var(--text-sub, #475569);
+        background: rgba(248, 250, 252, 0.9);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
       .paid-sg-insight-title{
         margin-top: 10px;
-        font-size:11px;
-        color: var(--muted, #64748b);
-        margin-bottom:6px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text-main, #0f172a);
       }
       .paid-sg-insight-body{
-        font-size:12px;
-        line-height:1.65;
+        margin-top: 6px;
+        border: 1px solid rgba(226,232,240,0.9);
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: rgba(248, 250, 252, 0.85);
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--text-main, #0f172a);
         white-space: pre-wrap;
         word-break: break-word;
       }
@@ -291,38 +353,31 @@
     let card = document.getElementById(CARD_ID);
     if (card) return card;
 
-    const main = document.querySelector('main.content') || document.querySelector('main') || document.body;
+    const main = document.querySelector('main') || document.body;
+    const retention = document.getElementById('card-paid-retention');
     card = document.createElement('section');
     card.className = 'chart-card';
     card.id = CARD_ID;
 
-    const header = document.createElement('header');
-    header.className = 'chart-card-header';
-    header.innerHTML = `
-      <h2>模块8：体育玩家/游戏玩家占比</h2>
-      <div class="chart-controls">
-        <span class="badge">独立筛选</span>
-      </div>
+    card.innerHTML = `
+      <header class="chart-card-header">
+        <div class="chart-title-block">
+          <div class="chart-kicker">Mix</div>
+          <div class="chart-title">体育玩家 / 游戏玩家占比</div>
+          <div class="chart-sub">口径：总投注人数拆为「仅游戏」「双投」「仅体育」；支持 D0 / D7。</div>
+        </div>
+        <div class="chart-controls">
+          <span class="chart-badge">单位：人</span>
+        </div>
+      </header>
+      <div class="chart" style="display:none"></div>
     `;
-    card.appendChild(header);
 
-    // Insert before retention card if present
-    const anchor = document.getElementById('card-paid-retention');
-    if (anchor && anchor.parentNode) {
-      anchor.parentNode.insertBefore(card, anchor);
-    } else {
-      main.appendChild(card);
-    }
+    // Insert before retention card if exists; else append
+    if (retention && retention.parentNode) retention.parentNode.insertBefore(card, retention);
+    else main.appendChild(card);
+
     return card;
-  }
-
-  function clearCardBody(card) {
-    if (!card) return;
-    const children = Array.from(card.children);
-    for (const ch of children) {
-      if (ch && ch.tagName === 'HEADER') continue;
-      ch.remove();
-    }
   }
 
   function buildLayoutHTML() {
@@ -378,9 +433,14 @@
           <div class="paid-sg-table-note" id="sg-table-note-${MODULE_ID}"></div>
         </div>
 
-        <div>
-          <div class="paid-sg-insight-title" id="sg-insight-title-${MODULE_ID}"></div>
-          <div class="paid-sg-insight-body is-empty" id="sg-insight-${MODULE_ID}"></div>
+        <div class="chart-summary">
+          <div class="chart-analysis-box">
+            <div class="chart-analysis-months" id="sg-analysis-months-${MODULE_ID}"></div>
+            <div class="chart-analysis-body">
+              <div class="chart-analysis-title">数据分析</div>
+              <textarea class="chart-analysis-textarea" id="sg-analysis-text-${MODULE_ID}" readonly placeholder="暂未填写该月份的数据分析文案。"></textarea>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -403,77 +463,647 @@
     }
 
     return {
-      medias: Array.from(medias).sort((a, b) => String(a).localeCompare(String(b))),
-      products: Array.from(products).sort((a, b) => String(a).localeCompare(String(b))),
-      countries
+      months: months.sort(),
+      medias: Array.from(medias).sort(),
+      products: Array.from(products).sort(),
+      countries: Array.from(countries).sort()
     };
   }
 
-  function buildChipsHtml(values, group, opts) {
-    const options = opts || {};
-    const labelFn = typeof options.labelFn === 'function' ? options.labelFn : (v) => String(v);
-    const includeNoSplit = !!options.includeNoSplit;
-    const noSplitLabel = options.noSplitLabel || '全选但不区分';
+  function getAllMonthKeys(rawByMonth) {
+    const months = Object.keys(rawByMonth || {}).filter(Boolean).sort();
+    return months;
+  }
 
-    let html = '';
-    if (includeNoSplit) {
-      html += `
-        <label class="paid-sg-chip" data-chip="1">
-          <input type="checkbox" data-group="${escapeHtml(group)}" data-value="${NOSPLIT_VALUE}" data-nosplit="1" />
-          <span>${escapeHtml(noSplitLabel)}</span>
-        </label>
-      `;
+  // =============== Aggregation for bar chart ===============
+  // We build counts by (month, country, media?, product?, window)
+  // For bar chart, stack composition within each (month,country,window,media?,product?) group:
+  // - onlyGame
+  // - both (sport + game - total, floored to >=0)
+  // - onlySport
+  function aggMonthly(rawByMonth, state, dims) {
+    const out = [];
+    const monthsSel = Array.from(state.months);
+    const countriesSel = Array.from(state.countries);
+    const mediasSel = Array.from(state.medias);
+    const productsSel = Array.from(state.products);
+    const windowsSel = Array.from(state.windows);
+
+    const splitCountry = !state.noSplitCountries;
+    const splitMedia = !state.noSplitMedias;
+    const splitProduct = !state.noSplitProducts;
+
+    for (const mo of monthsSel) {
+      const rows = Array.isArray(rawByMonth[mo]) ? rawByMonth[mo] : [];
+
+      const filtered = rows.filter((r) => {
+        if (!r) return false;
+        const c = toKey(r.country);
+        const media = toKey(r.media);
+        const p = toKey(r.productType);
+        const w = toKey(r.dayType || r.window || r.day || r.d || r.windowType);
+
+        // Month already by key
+        if (countriesSel.length && countriesSel.indexOf(c) === -1) return false;
+        if (mediasSel.length && mediasSel.indexOf(media) === -1) return false;
+        if (productsSel.length && productsSel.indexOf(p) === -1) return false;
+        if (windowsSel.length && windowsSel.indexOf(w) === -1) return false;
+        return true;
+      });
+
+      // Group
+      const map = new Map();
+      for (const r of filtered) {
+        const c = toKey(r.country);
+        const media = toKey(r.media);
+        const p = toKey(r.productType);
+        const w = toKey(r.dayType || r.window || r.day || r.d || r.windowType);
+
+        const keyParts = [
+          mo,
+          splitCountry ? c : 'ALL_COUNTRY',
+          splitMedia ? media : 'ALL_MEDIA',
+          splitProduct ? p : 'ALL_PRODUCT',
+          w
+        ];
+        const key = keyParts.join('|');
+        const prev = map.get(key) || {
+          month: mo,
+          country: splitCountry ? c : 'ALL',
+          media: splitMedia ? media : 'ALL',
+          productType: splitProduct ? p : 'ALL',
+          window: w,
+          total: 0,
+          sport: 0,
+          game: 0
+        };
+
+        // Try known fields; fallback
+        prev.total += safeNum(r.total_bet_users || r.totalBetUsers || r.totalUsers || r.total);
+        prev.sport += safeNum(r.sport_bet_users || r.sportBetUsers || r.sportUsers || r.sport);
+        prev.game += safeNum(r.game_bet_users || r.gameBetUsers || r.gameUsers || r.game);
+
+        map.set(key, prev);
+      }
+
+      for (const v of map.values()) {
+        const both = Math.max(0, v.sport + v.game - v.total);
+        const onlySport = Math.max(0, v.sport - both);
+        const onlyGame = Math.max(0, v.game - both);
+        out.push({
+          ...v,
+          both,
+          onlySport,
+          onlyGame
+        });
+      }
     }
 
-    html += (values || []).map((v) => {
-      const val = String(v);
-      return `
-        <label class="paid-sg-chip" data-chip="1">
-          <input type="checkbox" data-group="${escapeHtml(group)}" data-value="${escapeHtml(val)}" />
-          <span>${escapeHtml(labelFn(val))}</span>
-        </label>
-      `;
-    }).join('');
+    // Sort by month, then country fixed order
+    const countryRank = (c) => {
+      const idx = COUNTRY_ORDER.indexOf(c);
+      return idx >= 0 ? idx : 999;
+    };
 
-    return html;
+    out.sort((a, b) => {
+      if (a.month !== b.month) return a.month < b.month ? -1 : 1;
+      if (a.country !== b.country) return countryRank(a.country) - countryRank(b.country);
+      if (a.window !== b.window) return WINDOW_ORDER.indexOf(a.window) - WINDOW_ORDER.indexOf(b.window);
+      if (a.media !== b.media) return a.media < b.media ? -1 : 1;
+      if (a.productType !== b.productType) return a.productType < b.productType ? -1 : 1;
+      return 0;
+    });
+
+    return out;
   }
 
-  function getPaidInsightText(month) {
-    const all = readGlobal('PAID_ANALYSIS_TEXT') || window.PAID_ANALYSIS_TEXT || readGlobal('ANALYSIS_TEXT') || window.ANALYSIS_TEXT || {};
-    const bucket = (all && all[MODULE_KEY]) ? all[MODULE_KEY] : null;
-    if (!bucket || typeof bucket !== 'object') return '';
-    const t = bucket[month] || bucket[String(month)] || bucket.__default__ || '';
-    return String(t || '').trim();
+  // =============== Daily for line (stacked area) ===============
+  // Line mode forbids multi-select; we render stacked area with:
+  // - onlySport (bottom)
+  // - onlyGame (middle)
+  // - both (top)
+  function buildDailySeries(rawByMonth, state) {
+    const monthKey = Array.from(state.months)[0];
+    const country = Array.from(state.countries)[0];
+    const media = Array.from(state.medias)[0];
+    const product = Array.from(state.products)[0];
+    const windowKey = Array.from(state.windows)[0];
+
+    const rows = Array.isArray(rawByMonth[monthKey]) ? rawByMonth[monthKey] : [];
+    const filtered = rows
+      .filter((r) => {
+        if (!r) return false;
+        if (toKey(r.country) !== toKey(country)) return false;
+        if (toKey(r.media) !== toKey(media)) return false;
+        if (toKey(r.productType) !== toKey(product)) return false;
+        if (toKey(r.dayType || r.window || r.day || r.d || r.windowType) !== toKey(windowKey)) return false;
+        return true;
+      })
+      .map((r) => {
+        const d = r.date || r.day || r.dt;
+        const total = safeNum(r.total_bet_users || r.totalBetUsers || r.totalUsers || r.total);
+        const sport = safeNum(r.sport_bet_users || r.sportBetUsers || r.sportUsers || r.sport);
+        const game = safeNum(r.game_bet_users || r.gameBetUsers || r.gameUsers || r.game);
+        const both = Math.max(0, sport + game - total);
+        const onlySport = Math.max(0, sport - both);
+        const onlyGame = Math.max(0, game - both);
+        return { date: d, total, sport, game, both, onlySport, onlyGame };
+      })
+      .filter((x) => x.date);
+
+    // Sort date asc
+    filtered.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+    const x = filtered.map((r) => r.date);
+    const s1 = filtered.map((r) => r.onlySport);
+    const s2 = filtered.map((r) => r.onlyGame);
+    const s3 = filtered.map((r) => r.both);
+
+    return { x, s1, s2, s3 };
   }
 
+  // =============== ECharts configs ===============
+  function makeBaseOption() {
+    return {
+      grid: { left: 58, right: 20, top: 18, bottom: 42 },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: 'rgba(15, 23, 42, 0.92)',
+        borderWidth: 0,
+        textStyle: { fontSize: 11 },
+        axisPointer: { type: 'shadow' }
+      },
+      legend: {
+        top: 4,
+        right: 6,
+        textStyle: { fontSize: 11, color: '#475569' }
+      },
+      xAxis: {
+        type: 'category',
+        axisTick: { show: false },
+        axisLine: { lineStyle: { color: 'rgba(148,163,184,0.6)' } },
+        axisLabel: { color: '#334155', fontSize: 11 }
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { lineStyle: { color: 'rgba(226,232,240,0.9)' } },
+        axisLabel: { color: '#64748b', fontSize: 11 }
+      }
+    };
+  }
+
+  function buildBarOption(monthsSel, rows, state, yearsSet) {
+    // rows: aggregated objects for selected months
+    // Bar axis is country; for each month and window create bars (D0/D7 not stacked, but each bar itself is stacked composition by sport/game/both)
+    // We need per (month, window) series, each series is stacked with three segments:
+    // - onlyGame (blue), both (green), onlySport (yellow)
+    const countries = state.noSplitCountries ? ['ALL'] : COUNTRY_ORDER.filter((c) => state.countries.has(c));
+    const xAxis = countries;
+
+    // Colors fixed
+    const COLOR_GAME = '#3b82f6';
+    const COLOR_BOTH = '#22c55e';
+    const COLOR_SPORT = '#f59e0b';
+
+    // Ensure stable order: monthsSel sorted asc, windows order D0 then D7 within month
+    const monthsSorted = monthsSel.slice().sort();
+    const windowsSorted = Array.from(state.windows).sort((a, b) => WINDOW_ORDER.indexOf(a) - WINDOW_ORDER.indexOf(b));
+
+    const series = [];
+
+    // Helper to get group record
+    function findRec(month, country, windowKey) {
+      // If noSplit for media/product, row uses 'ALL'
+      const cKey = state.noSplitCountries ? 'ALL' : country;
+      const wKey = windowKey;
+      // We already applied noSplit selections by selecting all; group may be split or not, but for bar we always aggregate within selected medias/products unless splits disabled? Here spec says: bar mode allows multi and "全选不区分" merges.
+      // We will aggregate across all media/product in chosen set, so we need to sum them for this (month,country,window) regardless of media/product.
+      let total = 0, sport = 0, game = 0, both = 0, onlySport = 0, onlyGame = 0;
+      for (const r of rows) {
+        if (r.month !== month) continue;
+        if (toKey(r.window) !== toKey(wKey)) continue;
+        if (state.noSplitCountries) {
+          if (r.country !== 'ALL') continue;
+        } else {
+          if (toKey(r.country) !== toKey(cKey)) continue;
+        }
+        // aggregate across dims
+        total += safeNum(r.total);
+        sport += safeNum(r.sport);
+        game += safeNum(r.game);
+        both += safeNum(r.both);
+        onlySport += safeNum(r.onlySport);
+        onlyGame += safeNum(r.onlyGame);
+      }
+      return { total, sport, game, both, onlySport, onlyGame };
+    }
+
+    // Build stacked series: For each month+window, create three series segments with same stack id per month+window, but we want them grouped per country.
+    // Also need visual: D7 should have hatch. In ECharts, use decal in itemStyle for each series (applies to segments).
+    const monthColorMap = {};
+    const palette = ['#60a5fa', '#34d399', '#fbbf24']; // month distinct colors for border? We'll instead use opacity? Spec doesn't require month color here; the stacked colors are fixed (game/sport/both). We'll use month color for border maybe.
+    monthsSorted.forEach((m, i) => { monthColorMap[m] = palette[i % palette.length]; });
+
+    const groupLabels = [];
+    for (const m of monthsSorted) {
+      for (const w of windowsSorted) {
+        groupLabels.push({ m, w, label: `${monthLabel(m, yearsSet)} ${w}` });
+      }
+    }
+
+    // For grouped bars, we can create multiple stacks; ECharts will render each stack as separate bar per category per series index.
+    // We'll add series in order: for each group, add onlyGame, both, onlySport.
+    groupLabels.forEach(({ m, w, label }, gi) => {
+      const stack = `${m}-${w}`;
+      const isD7 = String(w).toUpperCase() === 'D7';
+      const decal = isD7 ? { symbol: 'rect', dashArrayX: [4, 2], dashArrayY: [4, 2], rotation: Math.PI / 4, color: 'rgba(15,23,42,0.12)' } : null;
+
+      const borderColor = monthColorMap[m];
+
+      series.push({
+        name: `${label}·仅游戏`,
+        type: 'bar',
+        stack,
+        barGap: '20%',
+        barCategoryGap: '40%',
+        emphasis: { focus: 'series' },
+        itemStyle: {
+          color: COLOR_GAME,
+          borderColor,
+          borderWidth: 0.5,
+          decal
+        },
+        data: xAxis.map((c) => findRec(m, c, w).onlyGame)
+      });
+      series.push({
+        name: `${label}·双投`,
+        type: 'bar',
+        stack,
+        emphasis: { focus: 'series' },
+        itemStyle: {
+          color: COLOR_BOTH,
+          borderColor,
+          borderWidth: 0.5,
+          decal
+        },
+        data: xAxis.map((c) => findRec(m, c, w).both)
+      });
+      series.push({
+        name: `${label}·仅体育`,
+        type: 'bar',
+        stack,
+        emphasis: { focus: 'series' },
+        itemStyle: {
+          color: COLOR_SPORT,
+          borderColor,
+          borderWidth: 0.5,
+          decal
+        },
+        data: xAxis.map((c) => findRec(m, c, w).onlySport)
+      });
+    });
+
+    const opt = makeBaseOption();
+    opt.tooltip.axisPointer.type = 'shadow';
+    opt.xAxis.data = xAxis;
+    opt.legend = { show: false };
+    opt.yAxis.name = '人数';
+    opt.series = series;
+
+    // Provide custom tooltip
+    opt.tooltip.formatter = function (params) {
+      // params is array of segments at that axis category
+      if (!Array.isArray(params) || !params.length) return '';
+      const c = params[0].axisValueLabel || params[0].name || '';
+      // Group by month+window
+      const groupMap = new Map();
+      params.forEach((p) => {
+        const name = p.seriesName || '';
+        const m = name.split(' ')[0] || '';
+        const w = (name.split(' ')[1] || '').split('·')[0] || '';
+        const key = `${m} ${w}`;
+        const g = groupMap.get(key) || { m, w, onlyGame: 0, both: 0, onlySport: 0 };
+        if (name.indexOf('仅游戏') !== -1) g.onlyGame += safeNum(p.value);
+        if (name.indexOf('双投') !== -1) g.both += safeNum(p.value);
+        if (name.indexOf('仅体育') !== -1) g.onlySport += safeNum(p.value);
+        groupMap.set(key, g);
+      });
+
+      const lines = [`<div style="font-weight:700;margin-bottom:4px;">${c}</div>`];
+      Array.from(groupMap.values()).forEach((g) => {
+        const total = g.onlyGame + g.both + g.onlySport;
+        lines.push(`<div style="margin:4px 0 2px;opacity:.9;">${g.m} ${g.w} · 总计 ${fmtInt(total)}</div>`);
+        lines.push(`<div>仅游戏：${fmtInt(g.onlyGame)}；双投：${fmtInt(g.both)}；仅体育：${fmtInt(g.onlySport)}</div>`);
+      });
+      return lines.join('');
+    };
+
+    return opt;
+  }
+
+  function buildLineOption(daily, meta) {
+    const opt = makeBaseOption();
+    opt.grid = { left: 58, right: 20, top: 26, bottom: 52 };
+    opt.xAxis = {
+      type: 'category',
+      data: daily.x,
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: 'rgba(148,163,184,0.6)' } },
+      axisLabel: {
+        color: '#334155',
+        fontSize: 11,
+        formatter: (v) => {
+          // show day part if YYYY-MM-DD
+          const s = String(v);
+          return s.length >= 10 ? s.slice(8, 10) : s;
+        }
+      }
+    };
+    opt.yAxis = {
+      type: 'value',
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: 'rgba(226,232,240,0.9)' } },
+      axisLabel: { color: '#64748b', fontSize: 11 },
+      name: '人数'
+    };
+    opt.legend = {
+      top: 2,
+      left: 58,
+      textStyle: { fontSize: 11, color: '#475569' }
+    };
+
+    // Colors fixed: sport yellow bottom, game blue middle, both green top
+    opt.series = [
+      {
+        name: '仅体育',
+        type: 'line',
+        stack: 'stack',
+        areaStyle: {},
+        emphasis: { focus: 'series' },
+        symbol: 'none',
+        lineStyle: { width: 1.5 },
+        itemStyle: { color: '#f59e0b' },
+        data: daily.s1
+      },
+      {
+        name: '仅游戏',
+        type: 'line',
+        stack: 'stack',
+        areaStyle: {},
+        emphasis: { focus: 'series' },
+        symbol: 'none',
+        lineStyle: { width: 1.5 },
+        itemStyle: { color: '#3b82f6' },
+        data: daily.s2
+      },
+      {
+        name: '双投',
+        type: 'line',
+        stack: 'stack',
+        areaStyle: {},
+        emphasis: { focus: 'series' },
+        symbol: 'none',
+        lineStyle: { width: 1.5 },
+        itemStyle: { color: '#22c55e' },
+        data: daily.s3
+      }
+    ];
+
+    opt.tooltip = {
+      trigger: 'axis',
+      backgroundColor: 'rgba(15, 23, 42, 0.92)',
+      borderWidth: 0,
+      textStyle: { fontSize: 11 },
+      axisPointer: { type: 'line' },
+      formatter: function (params) {
+        if (!Array.isArray(params) || !params.length) return '';
+        const d = params[0].axisValueLabel || params[0].name || '';
+        let onlySport = 0, onlyGame = 0, both = 0;
+        params.forEach((p) => {
+          if (p.seriesName === '仅体育') onlySport = safeNum(p.value);
+          if (p.seriesName === '仅游戏') onlyGame = safeNum(p.value);
+          if (p.seriesName === '双投') both = safeNum(p.value);
+        });
+        const total = onlySport + onlyGame + both;
+        return [
+          `<div style="font-weight:700;margin-bottom:4px;">${d}</div>`,
+          `<div style="opacity:.9;">总计：${fmtInt(total)}</div>`,
+          `<div>仅体育：${fmtInt(onlySport)}；仅游戏：${fmtInt(onlyGame)}；双投：${fmtInt(both)}</div>`
+        ].join('');
+      }
+    };
+
+    return opt;
+  }
+
+  // =============== Table building ===============
+  function buildTableTitle(state, medias, products) {
+    const mediaPart = state.noSplitMedias ? '' : medias.join('+');
+    const prodPart = state.noSplitProducts ? '' : products.join('+');
+    const inside = [mediaPart, prodPart].filter(Boolean).join('，');
+    return inside ? `数据表（${inside}）` : `数据表`;
+  }
+
+  function buildTable(rows, state, monthsSel, yearsSet, dims) {
+    // Rows are aggregated per month, country, window, media, product (depending on noSplit flags)
+    const monthsSorted = monthsSel.slice().sort();
+    const windowsSorted = Array.from(state.windows).sort((a, b) => WINDOW_ORDER.indexOf(a) - WINDOW_ORDER.indexOf(b));
+
+    const showMediaCol = !state.noSplitMedias;
+    const showProductCol = !state.noSplitProducts;
+
+    const countries = state.noSplitCountries ? ['ALL'] : COUNTRY_ORDER.filter((c) => state.countries.has(c));
+
+    // Build row keys
+    const keyMap = new Map();
+
+    function rowKey(country, media, product) {
+      return [country, showMediaCol ? media : '', showProductCol ? product : ''].join('|');
+    }
+
+    function ensureRow(country, media, product) {
+      const k = rowKey(country, media, product);
+      if (keyMap.has(k)) return keyMap.get(k);
+      const obj = { country };
+      if (showMediaCol) obj.media = media;
+      if (showProductCol) obj.productType = product;
+      keyMap.set(k, obj);
+      return obj;
+    }
+
+    // Get unique combos from rows
+    const combos = new Set();
+    if (showMediaCol || showProductCol) {
+      rows.forEach((r) => {
+        combos.add(rowKey(r.country, r.media, r.productType));
+      });
+    } else {
+      countries.forEach((c) => combos.add(rowKey(c, '', '')));
+    }
+
+    // Fill
+    rows.forEach((r) => {
+      const country = r.country;
+      const media = r.media;
+      const product = r.productType;
+      const row = ensureRow(country, media, product);
+      const m = r.month;
+      const w = r.window;
+      const both = safeNum(r.both);
+      const onlySport = safeNum(r.onlySport);
+      const onlyGame = safeNum(r.onlyGame);
+      const total = onlySport + onlyGame + both;
+
+      const suffix = `${m}_${w}`;
+      row[`onlyGame_${suffix}`] = (row[`onlyGame_${suffix}`] || 0) + onlyGame;
+      row[`both_${suffix}`] = (row[`both_${suffix}`] || 0) + both;
+      row[`onlySport_${suffix}`] = (row[`onlySport_${suffix}`] || 0) + onlySport;
+      row[`total_${suffix}`] = (row[`total_${suffix}`] || 0) + total;
+    });
+
+    // Build headers
+    const headers = [];
+    headers.push({ key: 'country', label: '国家' });
+    if (showMediaCol) headers.push({ key: 'media', label: '媒体' });
+    if (showProductCol) headers.push({ key: 'productType', label: '产品类型' });
+
+    monthsSorted.forEach((m) => {
+      windowsSorted.forEach((w) => {
+        const top = `${monthLabel(m, yearsSet)} ${w}`;
+        headers.push({ key: `onlyGame_${m}_${w}`, label: `${top} 仅游戏：人数 (占比)` });
+        headers.push({ key: `both_${m}_${w}`, label: `${top} 双投：人数 (占比)` });
+        headers.push({ key: `onlySport_${m}_${w}`, label: `${top} 仅体育：人数 (占比)` });
+        headers.push({ key: `total_${m}_${w}`, label: `${top} 总计：人数` });
+      });
+    });
+
+    // Build rows list
+    const list = Array.from(keyMap.values());
+
+    // Sort
+    const countryRank = (c) => {
+      const idx = COUNTRY_ORDER.indexOf(c);
+      return idx >= 0 ? idx : 999;
+    };
+    list.sort((a, b) => {
+      if (a.country !== b.country) return countryRank(a.country) - countryRank(b.country);
+      if (showMediaCol && a.media !== b.media) return a.media < b.media ? -1 : 1;
+      if (showProductCol && a.productType !== b.productType) return a.productType < b.productType ? -1 : 1;
+      return 0;
+    });
+
+    // Render HTML table
+    const thead = `
+      <thead>
+        <tr>
+          ${headers
+            .map((h) => {
+              // Wrap long header: make second line small
+              if (h.label.indexOf('：') !== -1) {
+                const parts = h.label.split('：');
+                const main = parts[0];
+                const sub = parts.slice(1).join('：');
+                return `<th><div>${main}</div><div class="paid-sg-th-sub">${sub}</div></th>`;
+              }
+              return `<th>${h.label}</th>`;
+            })
+            .join('')}
+        </tr>
+      </thead>
+    `;
+
+    function cellHtml(n, p) {
+      return `<div class="paid-sg-cell"><div class="n">${fmtInt(n)}</div><div class="p">${formatPct(p)}</div></div>`;
+    }
+
+    const tbody = `
+      <tbody>
+        ${list
+          .map((r) => {
+            const cells = headers.map((h, idx) => {
+              const k = h.key;
+              if (k === 'country') return `<th>${r.country}</th>`;
+              if (k === 'media') return `<td>${r.media || '-'}</td>`;
+              if (k === 'productType') return `<td>${r.productType || '-'}</td>`;
+
+              // data cell
+              const val = safeNum(r[k]);
+              if (k.startsWith('total_')) {
+                return `<td><div class="paid-sg-cell"><div class="n">${fmtInt(val)}</div></div></td>`;
+              }
+              // ratio uses same total in same suffix
+              const suffix = k.replace(/^(onlyGame_|both_|onlySport_)/, '');
+              const totalKey = `total_${suffix}`;
+              const total = safeNum(r[totalKey]);
+              const pct = total > 0 ? val / total : 0;
+              return `<td>${cellHtml(val, pct)}</td>`;
+            });
+
+            return `<tr>${cells.join('')}</tr>`;
+          })
+          .join('')}
+      </tbody>
+    `;
+
+    return `<table class="paid-sg-table">${thead}${tbody}</table>`;
+  }
+
+  // =============== Filters / State ===============
   function init() {
     ensureStyle();
-
-    // 1) Data
-    const rawByMonth =
-      readGlobal('RAW_PAID_BY_MONTH') ||
-      window.RAW_PAID_BY_MONTH ||
-      readGlobal('RAW_PAID_MONTHLY') ||
-      window.RAW_PAID_MONTHLY ||
-      {};
-
-    const allMonths = sortMonths(Object.keys(rawByMonth || {}));
-    const latestMonth = allMonths.length ? allMonths[allMonths.length - 1] : null;
-    const yearsSetAll = yearsOfMonths(allMonths);
-
-    const { medias: ALL_MEDIAS, products: ALL_PRODUCTS, countries: ALL_COUNTRY_SET } = collectDistinct(rawByMonth);
-
-    // Country options: fixed order, only show those that exist in data if data has countries
-    const countryOptions = COUNTRY_ORDER.filter((c) => !ALL_COUNTRY_SET.size || ALL_COUNTRY_SET.has(c));
-
-    // 2) Card mount
     const card = ensureCard();
-    clearCardBody(card);
-    card.insertAdjacentHTML('beforeend', buildLayoutHTML());
+
+    // Replace placeholder chart div with module layout
+    const chartHolder = card.querySelector('.chart');
+    if (chartHolder) chartHolder.style.display = 'none';
+    // Clear old body
+    const existedRoot = card.querySelector(`#${ROOT_ID}`);
+    if (existedRoot) existedRoot.remove();
+
+    // Append layout
+    const body = document.createElement('div');
+    body.innerHTML = buildLayoutHTML();
+    card.appendChild(body);
 
     const root = card.querySelector(`#${ROOT_ID}`);
-    const filtersEl = root.querySelector(`#sg-filters-${MODULE_ID}`);
+    if (!root) return;
 
+    // Data
+    const RAW = getRawPaidByMonth();
+    const distinct = collectDistinct(RAW);
+    const allMonths = getAllMonthKeys(RAW);
+
+    // Month options
+    const yearsSetAll = yearsOfMonths(allMonths);
+    const latestMonth = allMonths[allMonths.length - 1] || null;
+
+    // Derive media/product options from data; if empty, fallback expected defaults
+    const ALL_MEDIAS = distinct.medias.length ? distinct.medias : ['fb', 'gg'];
+    const ALL_PRODUCTS = distinct.products.length ? distinct.products : ['app', 'h5'];
+    const countryOptions = distinct.countries.length ? distinct.countries : COUNTRY_ORDER.slice();
+
+    // Add "全选但不区分" option for country/media/product
+    const NOSPLIT_COUNTRY = '__ALL_NOSPLIT_COUNTRY__';
+    const NOSPLIT_MEDIA = '__ALL_NOSPLIT_MEDIA__';
+    const NOSPLIT_PRODUCT = '__ALL_NOSPLIT_PRODUCT__';
+
+    // State
+    const state = {
+      chartType: 'bar',
+      months: new Set([latestMonth].filter(Boolean)),
+      countries: new Set([countryOptions[0] || COUNTRY_ORDER[0]]),
+      medias: new Set([ALL_MEDIAS[0]]),
+      products: new Set([ALL_PRODUCTS[0]]),
+      windows: new Set(['D0']),
+      noSplitCountries: false,
+      noSplitMedias: false,
+      noSplitProducts: false
+    };
+
+    // Elements
     const monthsEl = root.querySelector(`#sg-months-${MODULE_ID}`);
     const countriesEl = root.querySelector(`#sg-countries-${MODULE_ID}`);
     const chartTypeEl = root.querySelector(`#sg-chartType-${MODULE_ID}`);
@@ -481,13 +1111,13 @@
     const productsEl = root.querySelector(`#sg-products-${MODULE_ID}`);
     const windowsEl = root.querySelector(`#sg-windows-${MODULE_ID}`);
 
-    const badgeMonthsEl = root.querySelector(`#sg-badge-months-${MODULE_ID}`);
-    const badgeCountriesEl = root.querySelector(`#sg-badge-countries-${MODULE_ID}`);
-    const badgeMediasEl = root.querySelector(`#sg-badge-medias-${MODULE_ID}`);
-    const badgeProductsEl = root.querySelector(`#sg-badge-products-${MODULE_ID}`);
-    const badgeWindowsEl = root.querySelector(`#sg-badge-windows-${MODULE_ID}`);
-    const hintEl = root.querySelector(`#sg-hint-${MODULE_ID}`);
+    const badgeMonths = root.querySelector(`#sg-badge-months-${MODULE_ID}`);
+    const badgeCountries = root.querySelector(`#sg-badge-countries-${MODULE_ID}`);
+    const badgeMedias = root.querySelector(`#sg-badge-medias-${MODULE_ID}`);
+    const badgeProducts = root.querySelector(`#sg-badge-products-${MODULE_ID}`);
+    const badgeWindows = root.querySelector(`#sg-badge-windows-${MODULE_ID}`);
 
+    const hintEl = root.querySelector(`#sg-hint-${MODULE_ID}`);
     const chartEl = root.querySelector(`#sg-chart-${MODULE_ID}`);
     const chartNoteEl = root.querySelector(`#sg-chart-note-${MODULE_ID}`);
 
@@ -495,290 +1125,64 @@
     const tableEl = root.querySelector(`#sg-table-${MODULE_ID}`);
     const tableNoteEl = root.querySelector(`#sg-table-note-${MODULE_ID}`);
 
-    const insightTitleEl = root.querySelector(`#sg-insight-title-${MODULE_ID}`);
-    const insightEl = root.querySelector(`#sg-insight-${MODULE_ID}`);
+    const analysisMonthsEl = root.querySelector(`#sg-analysis-months-${MODULE_ID}`);
+    const analysisTextareaEl = root.querySelector(`#sg-analysis-text-${MODULE_ID}`);
 
     // 3) Build filter UI
     monthsEl.innerHTML = buildChipsHtml(allMonths, 'months', {
       labelFn: (m) => monthLabel(m, yearsSetAll)
     });
 
-    countriesEl.innerHTML = buildChipsHtml(countryOptions, 'countries', {
-      includeNoSplit: true,
-      noSplitLabel: '全选但不区分'
-    });
+    // Countries: inject extra "全选但不区分"
+    countriesEl.innerHTML =
+      `
+      <label class="paid-sg-chip">
+        <input type="checkbox" data-group="countries" data-value="${NOSPLIT_COUNTRY}" />
+        <span>全选但不区分</span>
+      </label>
+    ` + buildChipsHtml(countryOptions, 'countries');
 
-    chartTypeEl.innerHTML = buildChipsHtml(CHART_TYPES.map((x) => x.key), 'chartType', {
-      labelFn: (k) => {
-        const hit = CHART_TYPES.find((x) => x.key === k);
-        return hit ? hit.label : k;
-      }
-    });
+    chartTypeEl.innerHTML = buildRadiosHtml(CHART_TYPES, 'chartType');
 
-    mediasEl.innerHTML = buildChipsHtml(ALL_MEDIAS, 'medias', {
-      includeNoSplit: true,
-      noSplitLabel: '全选但不区分',
-      labelFn: (m) => dispMedia(m)
-    });
+    mediasEl.innerHTML =
+      `
+      <label class="paid-sg-chip">
+        <input type="checkbox" data-group="medias" data-value="${NOSPLIT_MEDIA}" />
+        <span>全选但不区分</span>
+      </label>
+    ` + buildChipsHtml(ALL_MEDIAS, 'medias');
 
-    productsEl.innerHTML = buildChipsHtml(ALL_PRODUCTS, 'products', {
-      includeNoSplit: true,
-      noSplitLabel: '全选但不区分',
-      labelFn: (p) => dispProduct(p)
-    });
+    productsEl.innerHTML =
+      `
+      <label class="paid-sg-chip">
+        <input type="checkbox" data-group="products" data-value="${NOSPLIT_PRODUCT}" />
+        <span>全选但不区分</span>
+      </label>
+    ` + buildChipsHtml(ALL_PRODUCTS, 'products');
 
-    windowsEl.innerHTML = buildChipsHtml(WINDOW_ORDER, 'windows', {
-      labelFn: (w) => w
-    });
+    windowsEl.innerHTML = buildChipsHtml(WINDOW_ORDER, 'windows', { labelFn: (w) => w });
 
-    // 4) State
-    const state = {
-      chartType: 'bar',
-      months: new Set(latestMonth ? [String(latestMonth)] : []),
-      countries: new Set(countryOptions.length ? countryOptions : COUNTRY_ORDER.slice(0, 1)),
-      medias: new Set(ALL_MEDIAS),
-      products: new Set(ALL_PRODUCTS),
-      windows: new Set(WINDOW_ORDER),
+    // Initialize radio
+    const ctRadio = chartTypeEl.querySelector(`input[data-group="chartType"][data-value="${state.chartType}"]`);
+    if (ctRadio) ctRadio.checked = true;
+    syncChipActive(chartTypeEl);
 
-      noSplitCountries: false,
-      noSplitMedias: true,
-      noSplitProducts: true
-    };
+    // Initialize checks
+    setChecks(monthsEl, 'months', state.months);
+    setChecks(countriesEl, 'countries', state.countries);
+    setChecks(mediasEl, 'medias', state.medias);
+    setChecks(productsEl, 'products', state.products);
+    setChecks(windowsEl, 'windows', state.windows);
 
-    // default: “全选但不区分” for media/products
-    if (ALL_MEDIAS.length) state.noSplitMedias = true;
-    if (ALL_PRODUCTS.length) state.noSplitProducts = true;
-
-    function selectAll(set, values) {
-      set.clear();
-      for (const v of values || []) set.add(String(v));
+    // Default badges
+    function setBadge(el, txt) {
+      if (!el) return;
+      el.textContent = txt;
     }
 
-    if (state.noSplitMedias) selectAll(state.medias, ALL_MEDIAS);
-    if (state.noSplitProducts) selectAll(state.products, ALL_PRODUCTS);
-
-    function ensureAtLeastOne(set, fallback) {
-      if (set.size) return;
-      if (fallback !== undefined && fallback !== null && String(fallback)) set.add(String(fallback));
-    }
-
-    function monthList() {
-      return sortMonths(Array.from(state.months));
-    }
-
-    function countryList() {
-      // keep fixed order
-      const list = [];
-      for (const c of countryOptions) {
-        if (state.countries.has(String(c))) list.push(String(c));
-      }
-      return list;
-    }
-
-    function mediaList() {
-      const list = [];
-      for (const m of ALL_MEDIAS) {
-        if (state.medias.has(String(m))) list.push(String(m));
-      }
-      return list;
-    }
-
-    function productList() {
-      const list = [];
-      for (const p of ALL_PRODUCTS) {
-        if (state.products.has(String(p))) list.push(String(p));
-      }
-      return list;
-    }
-
-    function windowList() {
-      const list = [];
-      for (const w of WINDOW_ORDER) {
-        if (state.windows.has(String(w))) list.push(String(w));
-      }
-      return list;
-    }
-
-    function enforceMonthMax() {
-      const ms = monthList();
-      if (ms.length <= MONTH_MAX) return null;
-
-      const keep = ms.slice(-MONTH_MAX); // keep latest 3
-      state.months.clear();
-      for (const m of keep) state.months.add(m);
-      return `月份最多选${MONTH_MAX}个，已自动保留最近${MONTH_MAX}个月：${keep.map((m) => monthLabel(m, yearsSetAll)).join('、')}`;
-    }
-
-    function enforceLineSingles() {
-      // noSplit in line mode: disable & clear
-      state.noSplitCountries = false;
-      state.noSplitMedias = false;
-      state.noSplitProducts = false;
-
-      // month single: pick latest
-      ensureAtLeastOne(state.months, latestMonth);
-      const ms = monthList();
-      state.months.clear();
-      state.months.add(ms[ms.length - 1]);
-
-      // country single: pick first in fixed order
-      ensureAtLeastOne(state.countries, countryOptions[0] || COUNTRY_ORDER[0]);
-      const cs = countryList();
-      state.countries.clear();
-      state.countries.add(cs[0]);
-
-      // media single: pick first
-      ensureAtLeastOne(state.medias, ALL_MEDIAS[0]);
-      const ms2 = mediaList();
-      state.medias.clear();
-      state.medias.add(ms2[0]);
-
-      // product single: pick first
-      ensureAtLeastOne(state.products, ALL_PRODUCTS[0]);
-      const ps = productList();
-      state.products.clear();
-      state.products.add(ps[0]);
-
-      // window single: prefer D0 then D7
-      ensureAtLeastOne(state.windows, 'D0');
-      const ws = windowList();
-      const pick = ws.includes('D0') ? 'D0' : ws[0];
-      state.windows.clear();
-      state.windows.add(pick);
-    }
-
-    function setChipState() {
-      const inputs = filtersEl.querySelectorAll('input[data-group][data-value]');
-      for (const input of inputs) {
-        const group = input.getAttribute('data-group');
-        const val = input.getAttribute('data-value');
-        const isNoSplit = input.getAttribute('data-nosplit') === '1';
-
-        let checked = false;
-        let disabled = false;
-
-        if (group === 'chartType') {
-          checked = (state.chartType === val);
-          disabled = false;
-        } else if (group === 'months') {
-          checked = state.months.has(val);
-        } else if (group === 'countries') {
-          if (isNoSplit) checked = !!state.noSplitCountries;
-          else checked = state.countries.has(val);
-          disabled = !isNoSplit && state.noSplitCountries;
-        } else if (group === 'medias') {
-          if (isNoSplit) checked = !!state.noSplitMedias;
-          else checked = state.medias.has(val);
-          disabled = !isNoSplit && state.noSplitMedias;
-        } else if (group === 'products') {
-          if (isNoSplit) checked = !!state.noSplitProducts;
-          else checked = state.products.has(val);
-          disabled = !isNoSplit && state.noSplitProducts;
-        } else if (group === 'windows') {
-          checked = state.windows.has(val);
-        }
-
-        // In line mode: disable noSplit options (per spec: single select by concrete value)
-        if (state.chartType === 'line' && isNoSplit && (group === 'countries' || group === 'medias' || group === 'products')) {
-          disabled = true;
-          checked = false;
-        }
-
-        input.checked = checked;
-        input.disabled = disabled;
-
-        const label = input.closest('.paid-sg-chip');
-        if (label) {
-          label.classList.toggle('is-checked', !!checked);
-          label.classList.toggle('is-disabled', !!disabled);
-        }
-      }
-
-      if (badgeMonthsEl) badgeMonthsEl.textContent = (state.chartType === 'line') ? '单选' : '多选≤3';
-      if (badgeCountriesEl) badgeCountriesEl.textContent = (state.chartType === 'line') ? '单选' : (state.noSplitCountries ? '全选不拆' : '多选');
-      if (badgeMediasEl) badgeMediasEl.textContent = (state.chartType === 'line') ? '单选' : (state.noSplitMedias ? '全选不拆' : '多选');
-      if (badgeProductsEl) badgeProductsEl.textContent = (state.chartType === 'line') ? '单选' : (state.noSplitProducts ? '全选不拆' : '多选');
-      if (badgeWindowsEl) badgeWindowsEl.textContent = (state.chartType === 'line') ? '单选' : '多选';
-    }
-
-    function rowsPassBaseFilters(r) {
-      if (!r) return false;
-      const c = String(r.country || '');
-      const m = String(r.media || '');
-      const p = String(r.productType || '');
-
-      if (state.countries.size && !state.countries.has(c)) return false;
-      if (state.medias.size && !state.medias.has(m)) return false;
-      if (state.products.size && !state.products.has(p)) return false;
-      return true;
-    }
-
-    function getMonthlySeg(month, group, win) {
-      const rows = Array.isArray(rawByMonth[month]) ? rawByMonth[month] : [];
-      const fTotal = `${win}_TOTAL_BET_PLACED_USER`;
-      const fSports = `${win}_SPORTS_BET_PLACED_USER`;
-      const fGames = `${win}_GAMES_BET_PLACED_USER`;
-
-      let total = 0, sports = 0, games = 0;
-      for (const r of rows) {
-        if (!rowsPassBaseFilters(r)) continue;
-
-        if (group && group.country && String(r.country) !== String(group.country)) continue;
-        if (group && group.media && String(r.media) !== String(group.media)) continue;
-        if (group && group.productType && String(r.productType) !== String(group.productType)) continue;
-
-        total += num(r[fTotal]);
-        sports += num(r[fSports]);
-        games += num(r[fGames]);
-      }
-      return splitUnion(total, sports, games);
-    }
-
-    function getDailySeries(month, group, win) {
-      const rows = Array.isArray(rawByMonth[month]) ? rawByMonth[month] : [];
-      const fTotal = `${win}_TOTAL_BET_PLACED_USER`;
-      const fSports = `${win}_SPORTS_BET_PLACED_USER`;
-      const fGames = `${win}_GAMES_BET_PLACED_USER`;
-
-      const map = new Map(); // date -> sums
-      for (const r of rows) {
-        if (!rowsPassBaseFilters(r)) continue;
-
-        if (group && group.country && String(r.country) !== String(group.country)) continue;
-        if (group && group.media && String(r.media) !== String(group.media)) continue;
-        if (group && group.productType && String(r.productType) !== String(group.productType)) continue;
-
-        const d = String(r.date || '');
-        if (!d) continue;
-
-        if (!map.has(d)) map.set(d, { total: 0, sports: 0, games: 0 });
-        const o = map.get(d);
-        o.total += num(r[fTotal]);
-        o.sports += num(r[fSports]);
-        o.games += num(r[fGames]);
-      }
-
-      const dates = Array.from(map.keys()).sort((a, b) => String(a).localeCompare(String(b)));
-      const onlySports = [];
-      const onlyGames = [];
-      const both = [];
-      const totals = [];
-
-      for (const d of dates) {
-        const v = map.get(d);
-        const seg = splitUnion(v.total, v.sports, v.games);
-        totals.push(seg.total);
-        onlySports.push(seg.onlySports);
-        onlyGames.push(seg.onlyGames);
-        both.push(seg.both);
-      }
-
-      return { dates, totals, onlySports, onlyGames, both };
-    }
-
-    // 5) Chart init
+    // ECharts
     let chart = null;
-    if (window.echarts && chartEl) {
+    if (chartEl && window.echarts) {
       chart = echarts.init(chartEl);
       const onResize = () => { try { chart.resize(); } catch (_) { } };
       if (typeof ResizeObserver !== 'undefined') {
@@ -794,282 +1198,118 @@
 
       // If paid dashboard has registerChart, use it
       if (window.PaidDashboard && typeof window.PaidDashboard.registerChart === 'function') {
-        try { window.PaidDashboard.registerChart(chart); } catch (_) { }
+        try {
+          window.PaidDashboard.registerChart(chart);
+        } catch (_) { }
       }
     }
 
-    function renderChartBar(monthsSel, countriesSel, winsSel) {
-      if (!chart) return;
+    // ========= Enforce line singles =========
+    function enforceLineSingles() {
+      // line mode forbids multi select for: month/country/media/product/window
+      // and also forbids "noSplit" toggles; force them off
+      state.noSplitCountries = false;
+      state.noSplitMedias = false;
+      state.noSplitProducts = false;
 
-      const blue = cssVar('--ovp-blue', '#2563eb');
-      const yellow = cssVar('--ovp-yellow', '#F6C344');
-      const green = '#86efac';
-
-      const d7Decal = {
-        symbol: 'rect',
-        dashArrayX: [4, 2],
-        dashArrayY: [1, 0],
-        rotation: Math.PI / 4
+      const keepOne = (set, fallback) => {
+        if (set.size === 1) return;
+        const arr = Array.from(set);
+        set.clear();
+        // Keep last selected if any; else fallback
+        set.add(arr[arr.length - 1] || fallback);
       };
 
-      const stacks = [];
-      const ms = sortMonths(monthsSel);
-      const ws = WINDOW_ORDER.filter((w) => winsSel.includes(w));
-      for (const m of ms) {
-        for (const w of ws) {
-          stacks.push({
-            month: m,
-            win: w,
-            label: `${monthLabel(m, yearsSetAll)} ${w}`,
-            key: `${m}|${w}`
-          });
+      keepOne(state.months, latestMonth);
+      keepOne(state.countries, countryOptions[0] || COUNTRY_ORDER[0]);
+      keepOne(state.medias, ALL_MEDIAS[0]);
+      keepOne(state.products, ALL_PRODUCTS[0]);
+      keepOne(state.windows, 'D0');
+
+      // Update UI checkboxes: disable multi? We'll keep enabled but state enforces single
+      // Also uncheck "全选但不区分"
+      const noSplitInputs = [
+        countriesEl.querySelector(`input[data-value="${NOSPLIT_COUNTRY}"]`),
+        mediasEl.querySelector(`input[data-value="${NOSPLIT_MEDIA}"]`),
+        productsEl.querySelector(`input[data-value="${NOSPLIT_PRODUCT}"]`)
+      ];
+      noSplitInputs.forEach((inp) => { if (inp) inp.checked = false; });
+
+      // Set radio active highlight
+      syncChipActive(countriesEl);
+      syncChipActive(mediasEl);
+      syncChipActive(productsEl);
+      syncChipActive(monthsEl);
+      syncChipActive(windowsEl);
+    }
+
+    function enforceMonthMax() {
+      const arr = Array.from(state.months).sort();
+      if (arr.length <= MONTH_MAX) return null;
+      // Keep last MONTH_MAX (most recent)
+      const keep = arr.slice(-MONTH_MAX);
+      state.months.clear();
+      keep.forEach((m) => state.months.add(m));
+      return `月份最多选 ${MONTH_MAX} 个，已自动保留最近 ${MONTH_MAX} 个：${keep.join(', ')}`;
+    }
+
+    // ========= Render =========
+    function renderHint(note) {
+      const parts = [];
+      if (state.chartType === 'line') {
+        parts.push('折线图模式：月份/国家/媒体/产品类型/D0-D7 均为单选；图为日级堆积面积图。');
+      } else {
+        if (state.noSplitCountries) parts.push('国家：全选但不区分（图/表聚合）。');
+        if (state.noSplitMedias) parts.push('媒体：全选但不区分（图/表聚合）。');
+        if (state.noSplitProducts) parts.push('产品类型：全选但不区分（图/表聚合）。');
+        parts.push('柱状图：每根柱子内部堆叠为「仅游戏/双投/仅体育」，同一月份 D0/D7 用相同颜色；D7 使用斜线阴影。');
+      }
+      if (note) parts.push(note);
+      if (hintEl) hintEl.textContent = parts.join('\n');
+    }
+
+    function renderChart(monthsSel, rows, yearsSet) {
+      if (!chart || !chartEl) return;
+      if (state.chartType === 'bar') {
+        const opt = buildBarOption(monthsSel, rows, state, yearsSet);
+        chart.setOption(opt, true);
+        if (chartNoteEl) {
+          chartNoteEl.textContent =
+            `纵轴：人数；每根柱子为总投注人数拆分（仅游戏/双投/仅体育）。\n双投人数 = 体育人数 + 游戏人数 - 总投注人数（若小于 0 则置 0）。`;
+        }
+      } else {
+        const daily = buildDailySeries(RAW, state);
+        const opt = buildLineOption(daily);
+        chart.setOption(opt, true);
+        if (chartNoteEl) {
+          chartNoteEl.textContent =
+            `折线：日级堆积面积图（仅体育/仅游戏/双投）。\n双投人数 = 体育人数 + 游戏人数 - 总投注人数（若小于 0 则置 0）。`;
         }
       }
-
-      const numStacks = stacks.length;
-      const barWidth = numStacks <= 2 ? 18 : (numStacks <= 4 ? 14 : 10);
-
-      const metaBySeriesIndex = [];
-      const series = [];
-
-      function addSegSeries(stack, segKey, name, color) {
-        const isD7 = stack.win === 'D7';
-        const data = (countriesSel || []).map((country) => {
-          const group = {
-            country: country === 'ALL' ? null : country,
-            media: null,
-            productType: null
-          };
-          const seg = getMonthlySeg(stack.month, group, stack.win);
-          return seg[segKey] || 0;
-        });
-
-        const s = {
-          name,
-          type: 'bar',
-          stack: stack.key,
-          barWidth,
-          emphasis: { focus: 'series' },
-          itemStyle: {
-            color,
-            decal: isD7 ? d7Decal : null
-          },
-          data
-        };
-
-        metaBySeriesIndex.push({ stackKey: stack.key, stackLabel: stack.label, segKey });
-        series.push(s);
-      }
-
-      // Stack order per requirement: bottom onlyGames, middle both, top onlySports
-      for (const st of stacks) {
-        addSegSeries(st, 'onlyGames', '仅游戏', blue);
-        addSegSeries(st, 'both', '双投', green);
-        addSegSeries(st, 'onlySports', '仅体育', yellow);
-      }
-
-      const option = {
-        animation: false,
-        grid: { left: 42, right: 18, top: 56, bottom: 52, containLabel: true },
-        legend: { top: 14, left: 12, data: ['仅游戏', '双投', '仅体育'], textStyle: { fontSize: 11 } },
-        tooltip: {
-          trigger: 'axis',
-          axisPointer: { type: 'shadow' },
-          formatter: function (params) {
-            const items = Array.isArray(params) ? params : [];
-            const axis = items.length ? items[0].axisValue : '';
-
-            const byStack = new Map();
-            for (const it of items) {
-              if (!it || it.seriesIndex === undefined) continue;
-              const meta = metaBySeriesIndex[it.seriesIndex];
-              if (!meta) continue;
-
-              if (!byStack.has(meta.stackKey)) {
-                byStack.set(meta.stackKey, {
-                  label: meta.stackLabel,
-                  onlyGames: 0,
-                  both: 0,
-                  onlySports: 0
-                });
-              }
-              const o = byStack.get(meta.stackKey);
-              o[meta.segKey] = num(it.value);
-            }
-
-            let html = `<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(axis)}</div>`;
-            for (const st of stacks) {
-              const o = byStack.get(st.key);
-              if (!o) continue;
-              const t = num(o.onlyGames) + num(o.both) + num(o.onlySports);
-              const pG = t > 0 ? o.onlyGames / t : null;
-              const pB = t > 0 ? o.both / t : null;
-              const pS = t > 0 ? o.onlySports / t : null;
-
-              html += `<div style="margin-top:8px;"><span style="font-weight:600;">${escapeHtml(o.label)}</span></div>`;
-              html += `<div>仅游戏：${fmtInt(o.onlyGames)} (${fmtPct01(pG, 1)})</div>`;
-              html += `<div>双投：${fmtInt(o.both)} (${fmtPct01(pB, 1)})</div>`;
-              html += `<div>仅体育：${fmtInt(o.onlySports)} (${fmtPct01(pS, 1)})</div>`;
-              html += `<div>总计：${fmtInt(t)}</div>`;
-            }
-            return html;
-          }
-        },
-        xAxis: {
-          type: 'category',
-          data: countriesSel,
-          axisLabel: { fontSize: 11 }
-        },
-        yAxis: {
-          type: 'value',
-          axisLabel: { fontSize: 11 }
-        },
-        series
-      };
-
-      chart.setOption(option, { notMerge: true });
-
-      if (chartNoteEl) {
-        const mediaPart = state.noSplitMedias ? '媒体：全选不拆' : `媒体：${mediaList().map(dispMedia).join('+') || '—'}`;
-        const productPart = state.noSplitProducts ? '产品：全选不拆' : `产品：${productList().map(dispProduct).join('+') || '—'}`;
-        const countryPart = state.noSplitCountries ? '国家：全选不拆' : `国家：${countriesSel.join('/') || '—'}`;
-        chartNoteEl.textContent = `说明：每根柱子=总投注人数（人）；内部分段：仅游戏(蓝)/双投(绿)/仅体育(黄)；D7柱子带斜线阴影。当前：${ms.map((m) => monthLabel(m, yearsSetAll)).join('、')} · ${countryPart} · ${mediaPart} · ${productPart} · ${winsSel.join('+')}`;
-      }
     }
 
-    function renderChartLine(month, country, media, productType, win) {
-      if (!chart) return;
-
-      const blue = cssVar('--ovp-blue', '#2563eb');
-      const yellow = cssVar('--ovp-yellow', '#F6C344');
-      const green = '#86efac';
-
-      const group = {
-        country: country,
-        media: media,
-        productType: productType
-      };
-
-      const daily = getDailySeries(month, group, win);
-
-      const option = {
-        animation: false,
-        grid: { left: 42, right: 18, top: 56, bottom: 52, containLabel: true },
-        legend: { top: 14, left: 12, data: ['仅体育', '仅游戏', '双投'], textStyle: { fontSize: 11 } },
-        tooltip: { trigger: 'axis', axisPointer: { type: 'line' } },
-        xAxis: {
-          type: 'category',
-          data: daily.dates,
-          axisLabel: {
-            fontSize: 10,
-            formatter: function (v) { return String(v || '').slice(5); } // MM-DD
-          }
-        },
-        yAxis: { type: 'value', axisLabel: { fontSize: 11 } },
-        series: [
-          // order: bottom onlySports, middle onlyGames, top both
-          { name: '仅体育', type: 'line', stack: 'total', symbol: 'none', data: daily.onlySports, lineStyle: { width: 2 }, areaStyle: { opacity: 0.35 }, itemStyle: { color: yellow } },
-          { name: '仅游戏', type: 'line', stack: 'total', symbol: 'none', data: daily.onlyGames, lineStyle: { width: 2 }, areaStyle: { opacity: 0.35 }, itemStyle: { color: blue } },
-          { name: '双投', type: 'line', stack: 'total', symbol: 'none', data: daily.both, lineStyle: { width: 2 }, areaStyle: { opacity: 0.35 }, itemStyle: { color: green } }
-        ]
-      };
-
-      chart.setOption(option, { notMerge: true });
-
-      if (chartNoteEl) {
-        chartNoteEl.textContent = `说明：日级堆积面积图（底：仅体育 / 中：仅游戏 / 顶：双投）。当前选择：${monthLabel(month, yearsSetAll)} · ${country} · ${dispMedia(media)} · ${dispProduct(productType)} · ${win}`;
-      }
-    }
-
-    function renderTable(monthsSel, countriesSel, winsSel) {
+    function renderTable(rows, monthsSel, yearsSet) {
       if (!tableEl) return;
 
-      const cols = [];
-      for (const m of monthsSel) {
-        for (const w of winsSel) {
-          cols.push({ month: m, win: w, label: `${monthLabel(m, yearsSetAll)} ${w}` });
-        }
-      }
+      const mediasSel = Array.from(state.medias);
+      const productsSel = Array.from(state.products);
 
-      const showMediaCol = !state.noSplitMedias;
-      const showProductCol = !state.noSplitProducts;
+      const title = buildTableTitle(state, mediasSel, productsSel);
+      if (tableTitleEl) tableTitleEl.textContent = title;
 
-      const headFixed = [
-        `<th>国家</th>`,
-        showMediaCol ? `<th>媒体</th>` : '',
-        showProductCol ? `<th>产品类型</th>` : ''
-      ].filter(Boolean).join('');
+      // Build table from rows
+      const html = buildTable(rows, state, monthsSel, yearsSet);
+      tableEl.outerHTML = html;
 
-      const thead = `
-        <thead>
-          <tr>
-            ${headFixed}
-            ${cols.map((c) => `<th>${escapeHtml(c.label)}<div class="paid-sg-th-sub">仅游戏/双投/仅体育/总计</div></th>`).join('')}
-          </tr>
-        </thead>
-      `;
-
-      const rowCountries = state.noSplitCountries ? ['ALL'] : countriesSel;
-      const rowMedias = state.noSplitMedias ? ['ALL'] : mediaList();
-      const rowProducts = state.noSplitProducts ? ['ALL'] : productList();
-
-      const tbodyRows = [];
-      for (const country of rowCountries) {
-        for (const media of rowMedias) {
-          for (const prod of rowProducts) {
-            const rowHead = [
-              `<th>${escapeHtml(country)}</th>`,
-              showMediaCol ? `<td style="text-align:center;">${escapeHtml(dispMedia(media))}</td>` : '',
-              showProductCol ? `<td style="text-align:center;">${escapeHtml(dispProduct(prod))}</td>` : ''
-            ].filter(Boolean).join('');
-
-            const tds = cols.map((c) => {
-              const group = {
-                country: country === 'ALL' ? null : country,
-                media: media === 'ALL' ? null : media,
-                productType: prod === 'ALL' ? null : prod
-              };
-              const seg = getMonthlySeg(c.month, group, c.win);
-              const t = seg.total;
-
-              const pOnlyGames = t > 0 ? seg.onlyGames / t : null;
-              const pBoth = t > 0 ? seg.both / t : null;
-              const pOnlySports = t > 0 ? seg.onlySports / t : null;
-
-              const cell = `
-                <div class="paid-sg-cell">
-                  <div>仅游戏：${fmtInt(seg.onlyGames)} (${fmtPct01(pOnlyGames, 1)})</div>
-                  <div>双投：${fmtInt(seg.both)} (${fmtPct01(pBoth, 1)})</div>
-                  <div>仅体育：${fmtInt(seg.onlySports)} (${fmtPct01(pOnlySports, 1)})</div>
-                  <div>总计：${fmtInt(seg.total)}</div>
-                </div>
-              `;
-              return `<td>${cell}</td>`;
-            }).join('');
-
-            tbodyRows.push(`<tr>${rowHead}${tds}</tr>`);
-          }
-        }
-      }
-
-      tableEl.innerHTML = `${thead}<tbody>${tbodyRows.join('')}</tbody>`;
-
-      // Title with media/product selections
-      const titleParts = [];
-      if (!state.noSplitMedias) {
-        const m = mediaList().map(dispMedia).join('+');
-        if (m) titleParts.push(m);
-      }
-      if (!state.noSplitProducts) {
-        const p = productList().map(dispProduct).join('+');
-        if (p) titleParts.push(p);
-      }
-
-      if (tableTitleEl) {
-        tableTitleEl.textContent = titleParts.length ? `数据表（${titleParts.join('，')}）` : '数据表';
+      // Re-select after outerHTML replacement
+      const tableNew = root.querySelector('.paid-sg-table');
+      if (tableNew) {
+        // no-op
       }
 
       if (tableNoteEl) {
+        const showMediaCol = !state.noSplitMedias;
+        const showProductCol = !state.noSplitProducts;
         const dimNote = [
           `占比口径：分组人数 / 总投注人数`,
           `维度：${state.noSplitCountries ? '国家全选不拆' : '按国家'}${showMediaCol ? ' + 媒体' : ''}${showProductCol ? ' + 产品类型' : ''}`,
@@ -1080,22 +1320,34 @@
     }
 
     function renderInsight(monthsSel) {
-      if (!insightTitleEl || !insightEl) return;
+      if (!analysisMonthsEl || !analysisTextareaEl) return;
 
       const ys = yearsOfMonths(monthsSel);
       const blocks = [];
-      let hasAny = false;
+
+      // 左侧月份（随筛选变化；多选时全部高亮）
+      analysisMonthsEl.innerHTML = '';
+      for (const m of monthsSel) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'chart-analysis-month-btn active';
+        btn.dataset.month = m;
+        btn.textContent = monthLabel(m, ys);
+        btn.title = m;
+        analysisMonthsEl.appendChild(btn);
+      }
 
       for (const m of monthsSel) {
         const t = getPaidInsightText(m);
         const label = monthLabel(m, ys);
-        if (t) hasAny = true;
         blocks.push(`${label}\n${t || '（该月暂无文案）'}`);
       }
 
-      insightTitleEl.textContent = '解读（随所选月份展示）';
-      insightEl.textContent = blocks.join('\n\n');
-      insightEl.classList.toggle('is-empty', !hasAny);
+      analysisTextareaEl.value = blocks.join('\n\n');
+
+      // 自动撑高：跟 paid-module-retention 同款“数据分析”一致
+      analysisTextareaEl.style.height = 'auto';
+      analysisTextareaEl.style.height = analysisTextareaEl.scrollHeight + 'px';
     }
 
     function renderAll() {
@@ -1119,122 +1371,76 @@
         note = enforceMonthMax();
       }
 
-      const monthsSel = monthList();
-      const winsSel = windowList();
+      const monthsSel = Array.from(state.months).sort();
+      const yearsSet = yearsOfMonths(monthsSel);
 
-      // Countries for chart (x-axis): fixed order + selection
-      const countriesSel = state.noSplitCountries
-        ? ['ALL']
-        : countryOptions.filter((c) => state.countries.has(String(c)));
+      // Update badges
+      setBadge(badgeMonths, state.chartType === 'line' ? '单选' : `多选≤${MONTH_MAX}`);
+      setBadge(badgeCountries, state.chartType === 'line' ? '单选' : '多选');
+      setBadge(badgeMedias, state.chartType === 'line' ? '单选' : '多选');
+      setBadge(badgeProducts, state.chartType === 'line' ? '单选' : '多选');
+      setBadge(badgeWindows, state.chartType === 'line' ? '单选' : '多选');
 
-      // For hint
-      const mediaSelDisp = state.noSplitMedias ? '全选但不区分' : (mediaList().map(dispMedia).join('+') || '—');
-      const prodSelDisp = state.noSplitProducts ? '全选但不区分' : (productList().map(dispProduct).join('+') || '—');
+      // Sync UI selections
+      setChecks(monthsEl, 'months', state.months);
+      setChecks(countriesEl, 'countries', state.countries);
+      setChecks(mediasEl, 'medias', state.medias);
+      setChecks(productsEl, 'products', state.products);
+      setChecks(windowsEl, 'windows', state.windows);
 
-      const hintLines = [];
-      if (state.chartType === 'line') {
-        hintLines.push('折线图模式：月份/国家/媒体/产品类型/D0-D7均单选；日级堆积面积图。');
+      // active highlight
+      syncChipActive(monthsEl);
+      syncChipActive(countriesEl);
+      syncChipActive(mediasEl);
+      syncChipActive(productsEl);
+      syncChipActive(windowsEl);
+      syncChipActive(chartTypeEl);
+
+      renderHint(note);
+
+      if (state.chartType === 'bar') {
+        // Aggregate monthly
+        const rows = aggMonthly(RAW, state, distinct);
+        renderChart(monthsSel, rows, yearsSet);
+        renderTable(rows, monthsSel, yearsSet);
       } else {
-        hintLines.push(`柱状图模式：月份多选≤${MONTH_MAX}；D0/D7多选；D7柱子带斜线阴影。`);
-      }
-      hintLines.push(`当前筛选：${monthsSel.map((m) => monthLabel(m, yearsSetAll)).join('、')} · 国家${state.noSplitCountries ? '全选不拆' : `=${countriesSel.join('/') || '—'}`} · 媒体=${mediaSelDisp} · 产品=${prodSelDisp} · 窗口=${winsSel.join('+') || '—'}`);
-
-      if (hintEl) hintEl.textContent = hintLines.join('\n');
-      setChipState();
-
-      // Render chart
-      if (!window.echarts || !chart) {
-        if (chartNoteEl) chartNoteEl.textContent = '未检测到 ECharts：请确认 echarts 已加载。';
-      } else {
-        if (state.chartType === 'line') {
-          const m = monthsSel[monthsSel.length - 1];
-          const c = countryList()[0];
-          const md = mediaList()[0];
-          const pr = productList()[0];
-          const w = winsSel.includes('D0') ? 'D0' : (winsSel[0] || 'D0');
-          renderChartLine(m, c, md, pr, w);
-        } else {
-          renderChartBar(monthsSel, countriesSel, winsSel);
-        }
+        renderChart(monthsSel, [], yearsSet);
+        // For line mode, table still shows monthly aggregated for chosen single month? Spec says table should still be interactive; we can show monthly aggregated within that month only.
+        const rows = aggMonthly(RAW, state, distinct);
+        renderTable(rows, monthsSel, yearsSet);
       }
 
-      // Render table
-      renderTable(monthsSel, countriesSel, winsSel);
-
-      // Render insight
       renderInsight(monthsSel);
-
-      // Extra note if month trimmed
-      if (note && chartNoteEl && state.chartType !== 'line') {
-        chartNoteEl.textContent = `${chartNoteEl.textContent}\n${note}`;
-      }
     }
 
-    // 6) Events
-    filtersEl.addEventListener('change', function (e) {
-      const t = e && e.target;
-      if (!t || t.tagName !== 'INPUT') return;
+    // ========= Bind events =========
+    root.addEventListener('change', (e) => {
+      const t = e.target;
+      if (!t || !t.matches || !t.matches('input[data-group]')) return;
 
       const group = t.getAttribute('data-group');
       const val = t.getAttribute('data-value');
-      const isNoSplit = t.getAttribute('data-nosplit') === '1';
-      if (!group || !val) return;
-
       const isLine = state.chartType === 'line';
 
       if (group === 'chartType') {
-        if (t.checked) {
-          state.chartType = val;
-        } else {
-          // keep as radio-like
-          t.checked = true;
-        }
+        // Radio
+        state.chartType = val;
         renderAll();
         return;
       }
 
-      // In line mode: noSplit options disabled, but double-guard
-      if (isLine && isNoSplit && (group === 'countries' || group === 'medias' || group === 'products')) {
-        t.checked = false;
-        renderAll();
-        return;
-      }
-
-      // Toggle helpers
-      function toggleSet(set, v, checked, fallback, single) {
-        const s = set;
-        const vv = String(v);
-
-        if (single) {
-          if (checked) {
-            s.clear();
-            s.add(vv);
-          } else {
-            // disallow uncheck in single mode
-            s.add(vv);
-          }
-          return;
-        }
-
-        if (checked) s.add(vv);
-        else s.delete(vv);
-
-        if (!s.size) s.add(String(fallback ?? vv));
-      }
-
-      // Group actions
-      if (group === 'months') {
-        toggleSet(state.months, val, t.checked, latestMonth, isLine);
-      } else if (group === 'countries') {
-        if (isNoSplit) {
+      if (group === 'countries') {
+        if (val === NOSPLIT_COUNTRY) {
           state.noSplitCountries = !!t.checked;
           if (state.noSplitCountries) selectAll(state.countries, countryOptions);
         } else {
           if (state.noSplitCountries) return;
           toggleSet(state.countries, val, t.checked, countryOptions[0] || COUNTRY_ORDER[0], isLine);
         }
+      } else if (group === 'months') {
+        toggleSet(state.months, val, t.checked, latestMonth, isLine);
       } else if (group === 'medias') {
-        if (isNoSplit) {
+        if (val === NOSPLIT_MEDIA) {
           state.noSplitMedias = !!t.checked;
           if (state.noSplitMedias) selectAll(state.medias, ALL_MEDIAS);
         } else {
@@ -1242,7 +1448,7 @@
           toggleSet(state.medias, val, t.checked, ALL_MEDIAS[0], isLine);
         }
       } else if (group === 'products') {
-        if (isNoSplit) {
+        if (val === NOSPLIT_PRODUCT) {
           state.noSplitProducts = !!t.checked;
           if (state.noSplitProducts) selectAll(state.products, ALL_PRODUCTS);
         } else {
