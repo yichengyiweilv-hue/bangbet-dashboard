@@ -5,12 +5,7 @@
    * BangBet Dashboard Auth (Front-end only)
    * - Admin: jerry / admin  | remember: 30d | default: 24h
    * - Users: Jessica/Randy/WeiHailey/Winning/Normal | pwd same as username | remember: 7d | default: 24h
-   * - Hidden command: jerry666 / logout -> force logout (this browser + all open tabs)
    *
-   * 注意：
-   * 1) 纯前端鉴权不等于真正安全（源码可见），适合内部低敏看板。
-   * 2) “全员强制登出（跨所有人的浏览器）”在纯静态前端无法远程实现；
-   *    最靠谱的方式：改下面 buildId 并发布一次，让所有旧 token 在用户刷新后失效。
    */
 
   // =================配置区=================
@@ -50,7 +45,7 @@
       },
     },
     ui: {
-      title: "自然量与买量增长分析看板",
+      title: "用户增长部-买量&自然量数据分析看板",
       subtitle: "BangBet Data Intelligence System",
       owner: "用户增长部-Jerry Lyu",
       rememberAdminText: "记住我 (30天免登录)",
