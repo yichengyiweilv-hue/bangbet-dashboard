@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GGR ROI · 充值 ROI 关系看板</title>
+
+  <!--
+    设计说明
+    - 本页默认用一套“兜底主题”（保证单文件也能跑）
+    - 若同站点存在 ../organic-monthly/index.html，则会自动继承其样式、页眉页脚与 Logo（header/footer 注入）
+    - 这样可以保证：多个看板视觉统一，只改业务逻辑即可
+  -->
+
+  <!-- Fallback minimalist theme (will be overridden if organic-monthly theme is loaded) -->
+  <style>
+  :root{
+    /* organic-monthly 的浅色体系（兜底：即使没注入样式也好看） */
+    --bg-main:#f3f5f9;
+    --bg-card:#ffffff;
+    --border-subtle:rgba(148, 163, 184, 0.40);
+    --text-main:#0f172a;
+    --text-sub:#6b7280;
+    --shadow-soft:0 18px 45px rgba(15, 23, 42, 0.10);
+    --radius-lg:18px;
+    --radius-md:12px;
+
+    /* 兼容模块变量名 */
+    --bg: var(--bg-main);
+    --card: rgba(255,255,255,0.97);
+    --text: var(--text-main);
+    --muted: var(--text-sub);
+    --border: rgba(148, 163, 184, 0.60);
+    --shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+    --radius: var(--radius-lg);
+    --container: 1400px;
+
+    /* 图表配色（备用） */
+    --ovp-yellow:#F6C344;
+    --ovp-blue:#2563eb;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial,sans-serif;
+    background: radial-gradient(circle at 0 0, #f9fbff 0, #edf1f9 45%, #e5ebf7 100%);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a{ color:inherit; text-decoration:none; }
+  a:hover{ text-decoration:underline; }
+
+  /* 页面内容区：对齐 organic-monthly 的宽度/留白 */
+  .ovp-shell{
+    max-width: var(--container);
+    margin: 0 auto;
+    padding: 0 24px 22px;
+  }
+
+  .ovp-page-title{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:12px;
+    margin: 0 0 12px;
+  }
+  .ovp-page-title h1{
+    margin:0;
+    font-size:18px;
+    letter-spacing:.2px;
+    color:var(--text);
+  }
+  .ovp-page-title .ovp-meta{
+    font-size:11px;
+    color:var(--muted);
+  }
+  .ovp-note{
+    margin:0 0 18px;
+    color:var(--muted);
+    font-size:11px;
+    line-height:1.55;
+  }
+
+  /* 模块布局：单列卡片（从上到下） */
+  .ovp-grid{
+    display:grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+    align-items:flex-start;
+  }
+
+  /* 卡片：白底 + 细边框 + 柔阴影 */
+  .ovp-card{
+    background: var(--card);
+    border: 1px solid rgba(148, 163, 184, 0.60);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+    border-radius: var(--radius);
+    overflow:hidden;
+  }
+  .ovp-card-head{
+    padding: 18px 18px 0;
+    border-bottom:none;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+  }
+  .ovp-card-title{ font-size:14px; margin:0; color:var(--text); }
+  .ovp-card-sub{ font-size:11px; color:var(--muted); margin:4px 0 0; line-height:1.45; }
+  .ovp-card-body{ padding: 12px 18px 16px; }
+
+  .ovp-placeholder{
+    border:1px dashed rgba(148, 163, 184, 0.60);
+    border-radius:12px;
+    padding:14px;
+    color:var(--muted);
+    line-height:1.55;
+    background: rgba(249, 250, 251, 0.90);
+  }
+  .ovp-skeleton{
+    margin-top:10px;
+    height:180px;
+    border-radius:10px;
+    background: linear-gradient(90deg,
+      rgba(148, 163, 184, 0.12),
+      rgba(148, 163, 184, 0.22),
+      rgba(148, 163, 184, 0.12)
+    );
+  }
+  .ovp-alert{
+    padding:10px 12px;
+    border:1px solid rgba(148, 163, 184, 0.60);
+    border-radius:12px;
+    background: rgba(249, 250, 251, 0.90);
+    color: var(--muted);
+    font-size:11px;
+    line-height:1.5;
+  }
+
+  /* 模块内部：图表 + 文案（自动换行，自动增高） */
+  .ovp-module-stack{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+
+  .ovp-chart{
+    width:100%;
+    border:1px solid rgba(148, 163, 184, 0.60);
+    border-radius:12px;
+    background: rgba(249, 250, 251, 0.90);
+    overflow:hidden;
+  }
+  .ovp-chart.is-empty{
+    display:flex;
+    align-items:stretch;
+  }
+  .ovp-chart.is-empty .ovp-skeleton{
+    margin:0;
+    width:100%;
+    height:100%;
+    border-radius:0;
+  }
+  .ovp-chart-note{
+    margin-top:8px;
+    font-size:11px;
+    color:var(--muted);
+    line-height:1.5;
+  }
+
+  .ovp-insight{
+    background:#ffffff;
+    border:1px solid rgba(148, 163, 184, 0.60);
+    border-radius:12px;
+    padding:12px;
+    color:var(--text);
+    font-size:12px;
+    line-height:1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .ovp-insight.is-empty{
+    color: var(--muted);
+  }
+
+  /* 小控件：模块内筛选器 */
+  .ovp-controls{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+    padding:10px 12px;
+    border:1px solid rgba(148, 163, 184, 0.60);
+    border-radius:12px;
+    background: rgba(255,255,255,0.85);
+  }
+  .ovp-control{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:11px;
+    color:var(--muted);
+  }
+  .ovp-control select{
+    font-size:12px;
+    padding:6px 8px;
+    border-radius:10px;
+    border:1px solid rgba(148, 163, 184, 0.60);
+    background:#fff;
+    color:var(--text);
+    outline:none;
+  }
+  </style>
+</head>
+
+<body>
+  <!-- Will be replaced by organic-monthly header if available -->
+  <div id="header-slot"></div>
+
+  <div class="ovp-shell">
+    <div class="ovp-page-title">
+      <h1>GGR ROI · 充值 ROI 关系看板</h1>
+      <div class="ovp-meta" id="ovp-meta">数据加载中…</div>
+    </div>
+
+    <p class="ovp-note">
+      当前模块：1）GGR ROI 与充值 ROI 增长分析。<br/>
+      说明：本页只负责“结构 + 模块编排 + 统一样式继承”；数据与计算逻辑在同级 JS 里拆开，后续扩展更省事。
+    </p>
+
+    <div id="ovp-data-status" class="ovp-alert" style="display:none;"></div>
+
+    <div id="modules-grid" class="ovp-grid"></div>
+  </div>
+
+  <!-- Will be replaced by organic-monthly footer if available -->
+  <div id="footer-slot"></div>
+
+  <script>
+    // Namespace + registry
+    window.OVP = window.OVP || {};
+    OVP.modules = OVP.modules || [];
+    OVP.registerModule = function registerModule(mod) {
+      if (!mod || !mod.id) return;
+      OVP.modules.push(mod);
+    };
+
+    OVP.utils = {
+      safeNumber(v){ const n = Number(v); return Number.isFinite(n) ? n : null; },
+      safeDiv(num, den){
+        const a = this.safeNumber(num);
+        const b = this.safeNumber(den);
+        if (a===null || b===null || b===0) return null;
+        return a / b;
+      },
+      sum(rows, field){
+        if (!Array.isArray(rows)) return 0;
+        let s = 0;
+        for (const r of rows){
+          const n = this.safeNumber(r && r[field]);
+          if (n!==null) s += n;
+        }
+        return s;
+      },
+      fmtInt(v){
+        const n = this.safeNumber(v);
+        return n===null ? '—' : n.toLocaleString('en-US');
+      },
+      fmtPct(v, digits=2){
+        const n = this.safeNumber(v);
+        return n===null ? '—' : `${(n*100).toFixed(digits)}%`;
+      },
+      fmtMoney(v, currency='USD', digits=0){
+        const n = this.safeNumber(v);
+        if (n===null) return '—';
+        try{
+          return new Intl.NumberFormat('en-US',{style:'currency',currency,maximumFractionDigits:digits}).format(n);
+        }catch(_){
+          return `${n.toLocaleString('en-US',{maximumFractionDigits:digits})} ${currency}`;
+        }
+      },
+      sortMonths(ms){
+        return (Array.isArray(ms) ? ms.slice() : []).sort((a,b)=>String(a).localeCompare(String(b)));
+      }
+    };
+
+    // Insights helpers (optional, loaded from ./ggr-insights.js)
+    OVP.insights = {};
+    OVP.getInsight = function getInsight(moduleId, month){
+      const src = OVP.insights || {};
+      if (month && src[month] && src[month][moduleId]) return src[month][moduleId];
+      if (src.__default__ && src.__default__[moduleId]) return src.__default__[moduleId];
+      return '';
+    };
+
+    // UI helpers (module internal layout)
+    OVP.ui = {
+      mountModule(mountEl, opts){
+        const moduleId = (opts && opts.moduleId) ? String(opts.moduleId) : 'unknown';
+        const chartHeight = (opts && Number(opts.chartHeight)) ? Number(opts.chartHeight) : 380;
+
+        mountEl.innerHTML = `
+          <div class="ovp-module-stack">
+            <div>
+              <div class="ovp-chart is-empty" id="chart-${moduleId}" style="height:${chartHeight}px;">
+                <div class="ovp-skeleton" aria-hidden="true"></div>
+              </div>
+              <div class="ovp-chart-note" id="chart-note-${moduleId}">图表待接入：先占位，下一步再填计算与渲染。</div>
+            </div>
+
+            <div class="ovp-insight is-empty" id="insight-${moduleId}">文案待填写：./ggr-insights.js</div>
+          </div>
+        `;
+
+        return {
+          chartEl: mountEl.querySelector(`#chart-${moduleId}`),
+          chartNoteEl: mountEl.querySelector(`#chart-note-${moduleId}`),
+          insightEl: mountEl.querySelector(`#insight-${moduleId}`)
+        };
+      },
+
+      renderInsight({ moduleId, month, el }){
+        if (!el) return;
+        const text = (OVP.getInsight(moduleId, month) || '').trim();
+        if (!text){
+          el.textContent = '文案待填写：./ggr-insights.js';
+          el.classList.add('is-empty');
+          return;
+        }
+        el.textContent = text;
+        el.classList.remove('is-empty');
+      }
+    };
+
+    // Inherit theme/header/footer from organic-monthly at runtime (GitHub Pages friendly)
+    (async function inheritOrganicMonthlyTheme(){
+      // ✅ 如果你的目录结构不是 “../organic-monthly/index.html”，改这里就行
+      const target = '../organic-monthly/index.html';
+
+      try{
+        const res = await fetch(target, { cache:'no-store' });
+        if(!res.ok) return;
+
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const base = new URL('../organic-monthly/', location.href);
+        const isAbs = (u)=>/^(https?:|data:|blob:|mailto:|tel:|\/)/i.test(u);
+
+        const rewriteCssUrls = (cssText)=>cssText.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g,(m,q,url)=>{
+          const raw = (url||'').trim();
+          if(!raw || raw.startsWith('#') || isAbs(raw)) return m;
+          return `url(${q}${new URL(raw, base).href}${q})`;
+        });
+
+        // Copy external style links
+        for (const link of doc.querySelectorAll('link[rel="stylesheet"]')){
+          const href = link.getAttribute('href');
+          if(!href) continue;
+          const cloned = document.createElement('link');
+          cloned.rel = 'stylesheet';
+          cloned.href = isAbs(href) ? href : new URL(href, base).href;
+          cloned.setAttribute('data-inherited-from','organic-monthly');
+          document.head.appendChild(cloned);
+        }
+
+        // Copy inline styles
+        const styles = [...doc.querySelectorAll('style')].map(s=>s.textContent||'').join('\n\n');
+        if(styles.trim()){
+          const styleEl = document.createElement('style');
+          styleEl.setAttribute('data-inherited-from','organic-monthly');
+          styleEl.textContent = rewriteCssUrls(styles);
+          document.head.appendChild(styleEl);
+        }
+
+        // Fix relative src/href in injected header/footer
+        const fixRelativeAttrs = (root)=>{
+          for (const el of root.querySelectorAll('[src],[href],[poster]')){
+            for (const attr of ['src','href','poster']){
+              const val = el.getAttribute(attr);
+              if(!val || val.startsWith('#') || isAbs(val)) continue;
+              el.setAttribute(attr, new URL(val, base).href);
+            }
+          }
+        };
+
+        const header = doc.querySelector('header');
+        if(header){
+          const injected = header.cloneNode(true);
+          fixRelativeAttrs(injected);
+          const slot = document.getElementById('header-slot');
+          slot.innerHTML = '';
+          slot.appendChild(injected);
+        }
+
+        const footer = doc.querySelector('footer');
+        if(footer){
+          const injected = footer.cloneNode(true);
+          fixRelativeAttrs(injected);
+          const slot = document.getElementById('footer-slot');
+          slot.innerHTML = '';
+          slot.appendChild(injected);
+        }
+      }catch(_e){
+        // keep fallback theme silently
+      }
+    })();
+  </script>
+
+  <!-- Chart library (ECharts) : load BEFORE modules render -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
+  <script>
+    // fallback if cdnjs is blocked/unavailable
+    if (!window.echarts) {
+      document.write('<script src="https://unpkg.com/echarts@5.5.0/dist/echarts.min.js"><\/script>');
+    }
+  </script>
+
+  <!-- Data source + core calc (same folder) -->
+  <script src="./ggr-module-data.js"></script>
+  <script src="./ggr-dashboard-core.js"></script>
+  <!-- Optional: module insights copywriting -->
+  <!-- <script src="./ggr-insights.js"></script> -->
+
+  <!-- Modules (same folder) -->
+  <script src="./module-ggrroi-purchase-roi-growth.js"></script>
+
+  <!--
+    ✅ 新增模块怎么加：
+    1) 在本目录新建 module-xxx.js，并在里面调用 OVP.registerModule({ id, title, render })
+    2) 在这里追加：<script src="./module-xxx.js"></script>
+    3) 刷新页面：卡片顺序 = script 引入顺序（从上到下）
+  -->
+
+  <script>
+    (function initDashboard(){
+      const statusEl = document.getElementById('ovp-data-status');
+      const metaEl = document.getElementById('ovp-meta');
+      const grid = document.getElementById('modules-grid');
+
+      function readGlobal(name){
+        // Works for global var/let/const in non-module scripts
+        try{
+          return Function(`return (typeof ${name} !== "undefined") ? ${name} : undefined;`)();
+        }catch(_){
+          return undefined;
+        }
+      }
+
+      // 1) Data
+      const rawByMonth = readGlobal('RAW_GGR_BY_MONTH')
+        || readGlobal('RAW_GGR_ROI_BY_MONTH')
+        || readGlobal('GGR_RAW_BY_MONTH');
+
+      // 2) Insights (optional)
+      OVP.insights = readGlobal('INSIGHTS_GGR_ROI_DASHBOARD')
+        || readGlobal('OVP_INSIGHTS_BY_MONTH')
+        || readGlobal('OVP_INSIGHTS')
+        || readGlobal('INSIGHTS_BY_MONTH')
+        || {};
+
+      // 3) Status + meta
+      const problems = [];
+      if (rawByMonth === undefined) problems.push('未检测到源数据：ggr-module-data.js 需暴露 RAW_GGR_BY_MONTH（全局常量/变量名）');
+
+      let months = [];
+      let latestMonth = null;
+
+      if (problems.length){
+        statusEl.style.display = '';
+        statusEl.textContent = problems.join('；');
+        metaEl.textContent = '数据未就绪';
+      } else {
+        months = OVP.utils.sortMonths(Object.keys(rawByMonth || {}));
+        latestMonth = months.length ? months[months.length - 1] : null;
+        const totalRows = months.reduce((sum,m)=>sum + (Array.isArray(rawByMonth[m]) ? rawByMonth[m].length : 0), 0);
+
+        metaEl.textContent = months.length
+          ? `数据区间：${months[0]} ~ ${latestMonth} · ${months.length} 个月 · ${totalRows.toLocaleString('en-US')} 行（date×country×media×Product_type）`
+          : '数据已加载，但未检测到月份 key（建议用 YYYY-MM）';
+      }
+
+      // 4) Render modules
+      const modules = Array.isArray(OVP.modules) ? OVP.modules : [];
+      if (!modules.length){
+        const empty = document.createElement('div');
+        empty.className = 'ovp-alert';
+        empty.textContent = '模块未注册：请检查 module-*.js 是否正常加载。';
+        grid.appendChild(empty);
+        return;
+      }
+
+      const ctxBase = {
+        rawByMonth: rawByMonth || {},
+        months,
+        latestMonth,
+        utils: OVP.utils
+      };
+
+      for (const m of modules){
+        const card = document.createElement('section');
+        card.className = 'ovp-card';
+        card.id = `card-${m.id}`;
+
+        const head = document.createElement('div');
+        head.className = 'ovp-card-head';
+        head.innerHTML = `
+          <div>
+            <h2 class="ovp-card-title">${m.title || m.id}</h2>
+            <div class="ovp-card-sub">${m.subtitle || '模块占位：下一步接入图表与计算逻辑'}</div>
+          </div>
+        `;
+
+        const body = document.createElement('div');
+        body.className = 'ovp-card-body';
+        const mount = document.createElement('div');
+        mount.id = `mount-${m.id}`;
+        body.appendChild(mount);
+
+        card.appendChild(head);
+        card.appendChild(body);
+        grid.appendChild(card);
+
+        try{
+          if (typeof m.render === 'function'){
+            m.render({ mountEl: mount, ...ctxBase });
+          } else {
+            mount.innerHTML = `
+              <div class="ovp-placeholder">
+                <div>本模块未提供 render()。</div>
+                <div class="ovp-skeleton"></div>
+              </div>
+            `;
+          }
+        }catch(e){
+          mount.innerHTML = `
+            <div class="ovp-placeholder">
+              <div>模块渲染出错：${(e && e.message) ? e.message : 'unknown error'}</div>
+            </div>
+          `;
+        }
+      }
+    })();
+  </script>
+</body>
+</html>
