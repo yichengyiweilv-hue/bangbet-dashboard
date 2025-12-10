@@ -197,7 +197,9 @@
         gap: 8px;
       }
       .chart-filter-panel .hero-filter-row{
+        display: grid; /* 确保原本的 grid 布局生效 */
         grid-template-columns: 68px minmax(0, 1fr);
+        align-items: center; /* 垂直居中 */
       }
       .chart-filter-panel .hero-filter-row .label{
         font-size: 11px;
@@ -205,7 +207,52 @@
         line-height: 22px;
       }
 
-      .filter-chip.filter-chip-special{ border-style: dashed; }
+      /* === 新增/修改：Filter Chip 按钮样式 === */
+      .filter-chip {
+        display: inline-flex;
+        align-items: center;
+        cursor: pointer;
+        margin-right: 6px;
+        margin-bottom: 4px;
+        user-select: none;
+      }
+      
+      /* 隐藏原本丑陋的复选框，用 span 来模拟按钮 */
+      .filter-chip input {
+        display: none;
+      }
+
+      /* 默认状态（未选中） */
+      .filter-chip span {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 6px;
+        border: 1px solid #cbd5e1; /* 浅灰边框 */
+        background-color: #ffffff;
+        color: #475569;
+        font-size: 11px;
+        transition: all 0.2s ease;
+      }
+
+      /* 悬停效果 */
+      .filter-chip:hover span {
+        border-color: #94a3b8;
+        background-color: #f8fafc;
+      }
+
+      /* 选中状态：变成蓝色背景，白字 */
+      .filter-chip input:checked + span {
+        background-color: #2563eb; /* 蓝色 */
+        color: #ffffff;
+        border-color: #2563eb;
+        box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+      }
+
+      /* 特殊按钮（全选但不区分）的虚线样式适配 */
+      .filter-chip.filter-chip-special span {
+        border-style: dashed;
+      }
+      /* === 样式结束 === */
 
       .chart-table-section{
         margin-top: 10px;
