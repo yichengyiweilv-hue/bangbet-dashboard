@@ -253,34 +253,38 @@
     const productsSet = new Set((globalState.products || []).map(canonProduct));
 
     cards.forEach((card) => {
+      // 1. 国家：增加 [id$='-countries'] 通配，自动匹配 pay-rate/arppu 等模块
       applySelectionToOneGroup(
         () =>
           findFilterRowChips(
             card,
             ["国家"],
-            "#roi-filter-countries,#cpp-countries,#paid-reg-countries,#regcpa-countries,#retention-countries,#flow-countries,#sg-share-countries"
+            "#roi-filter-countries,#cpp-countries,#paid-reg-countries,#regcpa-countries,#retention-countries,#flow-countries,#sg-share-countries,[id$='-countries']"
           ),
         countriesSet,
         canonCountry
       );
 
+      // 2. 媒体：增加 [id$='-medias'] 通配
       applySelectionToOneGroup(
         () =>
           findFilterRowChips(
             card,
             ["媒体"],
-            "#roi-filter-medias,#cpp-medias,#paid-reg-medias,#regcpa-medias,#retention-medias,#flow-medias,#sg-share-medias"
+            "#roi-filter-medias,#cpp-medias,#paid-reg-medias,#regcpa-medias,#retention-medias,#flow-medias,#sg-share-medias,[id$='-medias']"
           ),
         mediasSet,
         canonMedia
       );
 
+      // 3. 产品类型：增加 [id$='-types'] 等通配
+      // 修复：registrations 模块实际 ID 是 paid-reg-types，原代码匹配不到
       applySelectionToOneGroup(
         () =>
           findFilterRowChips(
             card,
             ["形态", "产品类型"],
-            "#roi-filter-products,#cpp-products,#paid-reg-productTypes,#regcpa-pts,#retention-productTypes,#flow-productTypes,#sg-share-productTypes"
+            "#roi-filter-products,#cpp-products,#paid-reg-productTypes,#regcpa-pts,#retention-productTypes,#flow-productTypes,#sg-share-productTypes,[id$='-productTypes'],[id$='-types'],[id$='-products'],[id$='-pts']"
           ),
         productsSet,
         canonProduct
