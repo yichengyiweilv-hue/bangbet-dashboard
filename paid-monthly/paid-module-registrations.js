@@ -122,6 +122,15 @@
     return COLORS[hashString(monthKey) % COLORS.length];
   }
 
+    // 新增：折线图专用颜色生成（保证一张图内不重复）
+  function getLineColorByIndex(index, totalCount) {
+    const t = totalCount && totalCount > 0 ? totalCount : 1;
+    // 0 ~ 330 度之间均匀分布色相，避免完全重合
+    const hue = Math.round((index / t) * 330);
+    const saturation = 70;
+    const lightness = 50;
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  }
   function getColorForSeriesKey(key) {
     return COLORS[hashString(key) % COLORS.length];
   }
@@ -331,11 +340,13 @@
       return pa.localeCompare(pb);
     });
 
-    const series = entries.map(([key, entry]) => {
+       const totalSeries = entries.length;
+
+    const series = entries.map(([key, entry], index) => {
       const data = new Array(dates.length).fill(null);
       entry.dateMap.forEach((v, d) => {
-        const idx = dateIndex.get(d);
-        if (idx != null) data[idx] = v;
+        const idx = dates.indexOf(d);
+        if (idx !== -1 && v != null) data[idx] = v;
       });
 
       const nameParts = [];
@@ -344,7 +355,8 @@
       if (!noSplitType) nameParts.push(entry.productType);
 
       const name = nameParts.join(" · ");
-      const color = getColorForSeriesKey(key);
+      // 关键修改：按系列索引生成颜色，而不是按 key hash
+      const color = getLineColorByIndex(index, totalSeries);
 
       return {
         name,
