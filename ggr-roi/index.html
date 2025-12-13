@@ -85,6 +85,31 @@
     line-height:1.55;
   }
 
+      /* 顶部返回目录按钮：标题右侧 */
+  .ovp-title-row{
+    display:flex;
+    align-items:flex-end;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .ovp-back-btn{
+    display:inline-flex;
+    align-items:center;
+    padding:6px 10px;
+    border-radius:999px;
+    border:1px solid rgba(148, 163, 184, 0.60);
+    background: rgba(255,255,255,0.85);
+    font-size:11px;
+    line-height:1;
+    color:var(--text);
+    text-decoration:none;
+  }
+  .ovp-back-btn:hover{
+    text-decoration:none;
+    border-color: rgba(37,99,235,0.35);
+    background: rgba(37,99,235,0.08);
+  }
+
   /* 模块布局：单列卡片（从上到下） */
   .ovp-grid{
     display:grid;
@@ -221,11 +246,13 @@
   <!-- Will be replaced by organic-monthly header if available -->
   <div id="header-slot"></div>
 
-  <div class="ovp-shell">
-    <div class="ovp-page-title">
-      <h1>GGR ROI · 充值 ROI 关系看板</h1>
-      <div class="ovp-meta" id="ovp-meta">数据加载中…</div>
-    </div>
+<div class="ovp-page-title">
+  <div class="ovp-title-row">
+    <h1>GGR ROI · 充值 ROI 关系看板</h1>
+    <a class="ovp-back-btn" href="../index.html">返回目录</a>
+  </div>
+  <div class="ovp-meta" id="ovp-meta">数据加载中…</div>
+</div>
 
     <p class="ovp-note">
       当前模块：1）GGR ROI 与充值 ROI 增长分析。<br/>
