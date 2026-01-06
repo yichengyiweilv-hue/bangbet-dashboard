@@ -144,6 +144,24 @@
     const mm = s.slice(5, 7);
     return mm ? `${Number(mm)}月` : s;
   }
+// 月份筛选器显示用：固定输出 YYYY-MM（例如 2025-09），避免只显示“9月”
+function formatMonthOptionYYYYMM(m) {
+  const s = String(m == null ? "" : m).trim();
+  if (!s) return s;
+
+  // already YYYY-MM
+  if (/^\d{4}-\d{2}$/.test(s)) return s;
+
+  // YYYY-M / YYYY/MM -> pad
+  let m1 = s.match(/^(\d{4})[-\/](\d{1,2})$/);
+  if (m1) return `${m1[1]}-${String(m1[2]).padStart(2, "0")}`;
+
+  // YYYY-MM-DD -> YYYY-MM
+  m1 = s.match(/^(\d{4})-(\d{2})-\d{2}$/);
+  if (m1) return `${m1[1]}-${m1[2]}`;
+
+  return s;
+}
 
   function formatInteger(v) {
     if (window.PaidDashboard && typeof window.PaidDashboard.formatInteger === "function") {
@@ -857,7 +875,7 @@
         values: opts.months,
         stateArray: state.months,
         max: 3,
-        getLabel: (v) => formatMonthLabel(v),
+        getLabel: (v) => formatMonthOptionYYYYMM(v),
         allowEmpty: false,
         specialAllNoBreakdown: false,
       });
