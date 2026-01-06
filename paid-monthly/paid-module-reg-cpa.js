@@ -364,7 +364,7 @@ function formatMonthOptionYYYYMM(m) {
       const blocks = months.map((m) => {
         const t = (src && typeof src[m] === "string") ? src[m] : "";
         const body = t && t.trim() ? t.trim() : "暂未填写该月份的数据分析文案。";
-        return `【${formatMonthLabel(m)}】\n${body}`;
+        return `【${formatMonthOptionYYYYMM(m)}】\n${body}`;
       });
       textarea.value = blocks.join("\n\n");
     }
@@ -610,7 +610,7 @@ function formatMonthOptionYYYYMM(m) {
         });
 
         return {
-          name: formatMonthLabel(monthKey),
+          name: formatMonthOptionYYYYMM(monthKey),
           type: "bar",
           data,
           barMaxWidth: 26,
@@ -830,8 +830,8 @@ function formatMonthOptionYYYYMM(m) {
       if (!state.collapse.productTypes) trh.appendChild(th("产品类型"));
 
       monthsSel.forEach((m) => {
-        trh.appendChild(th(`${formatMonthLabel(m)} 注册数`));
-        trh.appendChild(th(`${formatMonthLabel(m)} 注册单价`));
+        trh.appendChild(th(`${formatMonthOptionYYYYMM(m)} 注册数`));
+        trh.appendChild(th(`${formatMonthOptionYYYYMM(m)} 注册单价`));
       });
 
       thead.appendChild(trh);
