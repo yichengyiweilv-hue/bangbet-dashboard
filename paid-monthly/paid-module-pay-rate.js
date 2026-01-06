@@ -70,6 +70,24 @@
     const mNum = parseInt(mm, 10) || 0;
     return (mNum > 0 ? mNum : mm) + "月";
   }
+  // 月份筛选器显示用：固定输出 YYYY-MM（例如 2025-09），避免只显示“9月”
+  function formatMonthOptionYYYYMM(m) {
+    const s = String(m == null ? "" : m).trim();
+    if (!s) return s;
+
+    // already YYYY-MM
+    if (/^\d{4}-\d{2}$/.test(s)) return s;
+
+    // YYYY-M / YYYY/MM -> pad
+    let m1 = s.match(/^(\d{4})[-\/](\d{1,2})$/);
+    if (m1) return `${m1[1]}-${String(m1[2]).padStart(2, "0")}`;
+
+    // YYYY-MM-DD -> YYYY-MM
+    m1 = s.match(/^(\d{4})-(\d{2})-\d{2}$/);
+    if (m1) return `${m1[1]}-${m1[2]}`;
+
+    return s;
+  }
 
   function formatPct01(v, digits) {
     if (window.PaidDashboard && typeof window.PaidDashboard.formatPct01 === "function") {
@@ -356,7 +374,7 @@
     // months chips (max 3)
     ui.elMonths.innerHTML = "";
     opts.allMonths.forEach((m) => {
-      const chip = createChip(formatMonthLabel(m), state.months.includes(m), (checked) => {
+      const chip = createChip(formatMonthOptionYYYYMM(m), state.months.includes(m), (checked) => {
         const exists = state.months.includes(m);
         if (checked && !exists) {
           if (state.months.length >= 3) {
@@ -722,7 +740,8 @@
       const monthColor = palette[mi % palette.length];
       windows.forEach((w) => {
         const isD7 = w === "D7";
-        const name = `${formatMonthLabel(m)} ${w}`;
+        const name = `${formatMonthOptionYYYYMM(m)} ${w}`;
+
 
         const data = categories.map((c) => {
           const f = {
@@ -840,7 +859,7 @@
 
     const mediaText = state.mediaNoSplit ? "媒体：全选但不区分" : "媒体：" + state.medias.join("+");
     const prodText = state.productNoSplit ? "形态：全选但不区分" : "形态：" + state.productTypes.join("+");
-    const monthText = "月份：" + months.map(formatMonthLabel).join("+");
+    const monthText = "月份：" + months.map(formatMonthOptionYYYYMM).join("+");
     ui.tableMeta.textContent = `${monthText}｜${mediaText}｜${prodText}`;
 
     const dimCols = ["国家"];
