@@ -45,6 +45,24 @@
     if (!m) return s;
     return `${Number(m[2])}月`;
   }
+// 月份筛选器显示用：固定输出 YYYY-MM（例如 2025-09），避免只显示“9月”
+function formatMonthOptionYYYYMM(monthKey) {
+  const s = String(monthKey == null ? "" : monthKey).trim();
+  if (!s) return s;
+
+  // already YYYY-MM
+  if (/^\d{4}-\d{2}$/.test(s)) return s;
+
+  // YYYY-M / YYYY/MM -> pad
+  let m1 = s.match(/^(\d{4})[-\/](\d{1,2})$/);
+  if (m1) return `${m1[1]}-${String(m1[2]).padStart(2, "0")}`;
+
+  // YYYY-MM-DD -> YYYY-MM
+  m1 = s.match(/^(\d{4})-(\d{2})-\d{2}$/);
+  if (m1) return `${m1[1]}-${m1[2]}`;
+
+  return s;
+}
 
   function formatUSD(v, decimals) {
     const n = Number(v);
@@ -466,7 +484,7 @@
         const checked = state.months.includes(m);
         const chip = createChip({
           value: m,
-          label: formatMonthLabel(m),
+          label: formatMonthOptionYYYYMM(m),
           checked,
           disabled: false,
           onChange: (value, isChecked) => {
@@ -742,7 +760,7 @@
 
         if (selD.has("D0")) {
           series.push({
-            name: `${formatMonthLabel(m)} D0`,
+            name: `${formatMonthOptionYYYYMM(m)} D0`,
             type: "bar",
             data: xCats.map((c) => getVal(c, "D0")),
             barMaxWidth: 34,
@@ -752,7 +770,7 @@
 
         if (selD.has("D7")) {
           series.push({
-            name: `${formatMonthLabel(m)} D7`,
+            name: `${formatMonthOptionYYYYMM(m)} D7`,
             type: "bar",
             data: xCats.map((c) => getVal(c, "D7")),
             barMaxWidth: 34,
@@ -987,7 +1005,7 @@
           colHeaders.push({
             month: m,
             dFlag: d,
-            label: `${formatMonthLabel(m)} ${d} ARPPU`,
+            label: `${formatMonthOptionYYYYMM(m)} ${d} ARPPU`,
           });
         });
       });
