@@ -188,6 +188,13 @@
     if (yearsSet && yearsSet.size > 1 && p.y) return `${p.y}年${mon}`;
     return mon;
   }
+  // 月份筛选器专用：固定显示 YYYY-MM（例如 2025-09），避免仅显示“9月”造成歧义
+  function monthFilterLabel(m){
+    const p = parseMonth(m);
+    if (!p.y || !p.m) return String(m || '');
+    const mm = String(p.m).padStart(2, '0');
+    return `${p.y}-${mm}`;
+  }
 
   function yearsOfMonths(ms){
     const ys = new Set();
@@ -493,7 +500,7 @@
       : (rawByMonth ? Object.keys(rawByMonth) : []).sort((a,b)=>String(a).localeCompare(String(b)));
 
     const defaultMonth = latestMonth || (allMonths.length ? allMonths[allMonths.length - 1] : null);
-    const yearsSetAll = yearsOfMonths(allMonths);
+    
 
     const defaultMetrics = ['D0', 'D7'];
 
@@ -507,7 +514,7 @@
                 <div class="ovp-arppu-items">
                   ${allMonths.map(m=>{
                     const checked = (m === defaultMonth) ? 'checked' : '';
-                    return `<label class="ovp-arppu-check"><input type="checkbox" data-role="month" value="${m}" ${checked} /><span>${monthLabel(m, yearsSetAll)}</span></label>`;
+                    return `<label class="ovp-arppu-check"><input type="checkbox" data-role="month" value="${m}" ${checked} /><span>${monthFilterLabel(m)}</span></label>`;
                   }).join('')}
                 </div>
               </div>
