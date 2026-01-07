@@ -225,6 +225,11 @@
     if (!mn) return String(m || '');
     return withYear ? `${y}年${mn}月` : `${mn}月`;
   }
+function fmtMonthYM(m) {
+  const { y, mn } = monthParts(m);
+  if (!y || mn == null) return String(m || '');
+  return `${y}-${String(mn).padStart(2, '0')}`;
+}
 
   function orderedFromSet(order, set) {
     const out = [];
@@ -670,7 +675,7 @@
       input.addEventListener('change', () => onToggle(m, input.checked, input));
 
       const span = document.createElement('span');
-      span.textContent = fmtMonthCN(m, withYear);
+      span.textContent = fmtMonthYM(m);
 
       label.appendChild(input);
       label.appendChild(span);
