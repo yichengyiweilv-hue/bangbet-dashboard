@@ -174,6 +174,33 @@
     if (!Number.isFinite(n) || n <= 0) return ym;
     return `${n}月`;
   }
+function monthToYMLabel(ym){
+  // 用于筛选器显示：统一输出 YYYY-MM（如 2025-09）
+  const s = String(ym == null ? '' : ym).trim();
+  if (!s) return '';
+
+  // 2025-09 / 2025-9 / 2025/09 / 2025/9
+  const m1 = s.match(/^(\d{4})[-\/](\d{1,2})$/);
+  if (m1){
+    const y = m1[1];
+    const mm = String(m1[2]).padStart(2, '0');
+    return `${y}-${mm}`;
+  }
+
+  // 2025-09-xx / 2025/09/xx -> 2025-09
+  const m2 = s.match(/^(\d{4})[-\/](\d{1,2})[-\/]/);
+  if (m2){
+    const y = m2[1];
+    const mm = String(m2[2]).padStart(2, '0');
+    return `${y}-${mm}`;
+  }
+
+  // 202509 -> 2025-09
+  const m3 = s.match(/^(\d{4})(\d{2})$/);
+  if (m3) return `${m3[1]}-${m3[2]}`;
+
+  return s;
+}
 
   function uniq(arr){
     const out = [];
@@ -620,7 +647,7 @@
         type: 'checkbox',
         name: 'month',
         value: m,
-        label: monthToShortLabel(m),
+        label: monthToYMLabel(m),
         checked: state.months.includes(m)
       })).join('');
 
