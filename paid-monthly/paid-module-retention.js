@@ -168,6 +168,22 @@
     if (!isFinite(n)) return m;
     return `${n}月`;
   }
+// 月份筛选器专用：始终展示 YYYY-MM（补零）
+function formatMonthLabelYYYYMM(monthKey) {
+  const s = String(monthKey || "").trim();
+  if (!s) return "";
+
+  // 兼容：如果传入是 YYYY-MM-DD，直接取前 7 位
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 7);
+
+  const parts = s.split("-");
+  if (parts.length >= 2 && /^\d{4}$/.test(parts[0])) {
+    const y = parts[0];
+    const m = String(parts[1]).padStart(2, "0").slice(0, 2);
+    return `${y}-${m}`;
+  }
+  return s;
+}
 
   function sumFields(rows, fields) {
     const out = {};
@@ -943,7 +959,7 @@
         values: opts.months,
         stateArray: state.months,
         max: 3,
-        getLabel: (v) => formatMonthLabel(v),
+        getLabel: (v) => formatMonthLabelYYYYMM(v),
         allowEmpty: false,
       });
 
