@@ -151,6 +151,22 @@
     if (Number.isFinite(mNum)) return `${mNum}月`;
     return `${m}月`;
   }
+// 月份筛选器专用：始终展示 YYYY-MM（补零）
+function monthLabelYYYYMM(monthKey) {
+  if (!monthKey) return "";
+  const s = String(monthKey).trim();
+
+  // 兼容：如果传入是 YYYY-MM-DD，直接取前 7 位
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 7);
+
+  const parts = s.split("-");
+  if (parts.length === 2 && /^\d{4}$/.test(parts[0])) {
+    const y = parts[0];
+    const m = String(parts[1]).padStart(2, "0");
+    return `${y}-${m}`;
+  }
+  return s;
+}
 
   function formatPct01(v, digits = 1) {
     if (v === null || v === undefined) return "-";
@@ -974,7 +990,7 @@
         values: opts.months,
         selected: state.months,
         maxSelect: 3,
-        getLabel: (v) => monthLabel(v, new Set(opts.months.map((m) => String(m).slice(0, 4)))),
+        getLabel: (v) => monthLabelYYYYMM(v),
       });
 
       renderChipGroup({
