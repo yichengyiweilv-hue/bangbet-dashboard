@@ -75,12 +75,14 @@
     return set;
   }
 
-  function monthLabel(m, yearsSet) {
-    const { y, mo } = parseMonthKey(m);
-    if (!mo) return String(m || '');
-    const onlyOneYear = yearsSet && yearsSet.size <= 1;
-    return onlyOneYear ? `${mo}月` : `${y}年${mo}月`;
-  }
+  // 统一月份展示为 YYYY-MM（例如 2025-09）
+function monthLabel(m, yearsSet) {
+  const { y, mo } = parseMonthKey(m);
+  if (y == null || mo == null) return String(m || '');
+  const mm = mo < 10 ? `0${mo}` : String(mo);
+  return `${y}-${mm}`;
+}
+
 
   function fmtInt(v) {
     const n = Number(v);
