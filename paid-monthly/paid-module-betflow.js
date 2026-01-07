@@ -131,6 +131,22 @@
     if (!isFinite(n)) return m;
     return n + "月";
   }
+// 仅用于“月份筛选器”的展示：强制显示 YYYY-MM（例如 2025-09）
+function formatMonthYYYYMM(monthKey) {
+  const s = String(monthKey == null ? "" : monthKey).trim();
+  if (!s) return "";
+
+  // 兼容 "YYYY-M" / "YYYY-MM" / "YYYY/MM"
+  const m = s.match(/^(\d{4})[-\/](\d{1,2})$/);
+  if (m) {
+    const yy = m[1];
+    const mm = m[2].length === 1 ? "0" + m[2] : m[2];
+    return `${yy}-${mm}`;
+  }
+
+  // 兜底：原样返回（如果数据本身已经是 YYYY-MM，这里不会改变）
+  return s;
+}
 
   function formatNumber(v, digits) {
     const n = Number(v);
@@ -964,7 +980,7 @@
       values: (opts.months || []).slice().sort(),
       stateArray: state.months,
       max: 3,
-      getLabel: (m) => formatMonthLabel(m),
+      getLabel: (m) => formatMonthYYYYMM(m),
       allowEmpty: false,
     });
 
